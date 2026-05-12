@@ -12,13 +12,13 @@ import {
   AIEngine, 
   createJiraClient,
   PipelineIQConfigSchema
-} from "pipelineiq-core";
+} from "../core/index.js";
 import type {
   FailureEvent,
   PipelineIQConfig,
   FailureSource,
   LogFormat,
-} from "pipelineiq-core";
+} from "../core/index.js";
 
 const program = new Command();
 
@@ -36,6 +36,19 @@ program
   .option("-s, --source <source>", "Failure source (github, azure-devops)", "github")
   .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
   .option("--dry-run", "Show what would be done without creating Jira issues", false)
+  .option("--github-token <token>", "GitHub token for API access")
+  .option("--environment <env>", "Deployment environment (dev/staging/production)")
+  .option("--repository <repo>", "Repository name (owner/repo)")
+  .option("--branch <branch>", "Branch name")
+  .option("--commit <sha>", "Commit SHA")
+  .option("--pipeline <name>", "Pipeline/workflow name")
+  .option("--run-id <id>", "Run ID or build number")
+  .option("--run-url <url>", "Run URL or pipeline URL")
+  .option("--issue-type <type>", "Jira issue type to create (default from config)")
+  .option("--dedup-window <hours>", "Deduplication window in hours (default from config)")
+  .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
+  .option("--ai-api-key <key>", "AI API key")
+  .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai)")
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -80,6 +93,13 @@ async function handleAnalyze(options: any) {
     // Load configuration
     const config = await loadConfig(options.config);
     
+    // Override config with CLI options if provided
+    if (options.issueType) config.issueType = options.issueType;
+    if (options.dedupWindow) config.dedup.windowHours = parseInt(options.dedupWindow);
+    if (options.aiMode) config.ai.mode = options.aiMode;
+    if (options.aiApiKey) config.ai.apiKey = options.aiApiKey;
+    if (options.aiProvider) config.ai.provider = options.aiProvider;
+    
     // Read and parse logs
     const logContent = await readLogs(options.logs);
     const parsedLogs = parseLogs(logContent, {
@@ -95,7 +115,7 @@ async function handleAnalyze(options: any) {
     
     // Process with PipelineIQ
     const result = await processFailureEvent(event, config, {
-      extraEnrichers: config.ai.mode !== "disabled" ? [await createAIEnricher(config.ai)] : [],
+      extraEnrichers: config.ai.mode !== "disabled" ? [] : [],
     });
 
     spinner.succeed();
@@ -335,67 +355,232 @@ async function createFailureEvent(
   parsedLogs: any,
   options: any
 ): Promise<FailureEvent> {
+  // Check for built-in CI/CD environment variables
+  const githubToken = options.githubToken || process.env.GITHUB_TOKEN || process.env.GITHUB_TOKEN;
+  const environment = options.environment || process.env.ENVIRONMENT || process.env.DEPLOYMENT_ENVIRONMENT || process.env.ENVIRONMENT_NAME;
+  
+  // GitHub Actions built-in variables
+  const githubRepo = process.env.GITHUB_REPOSITORY || options.repository;
+  const githubRef = process.env.GITHUB_REF || options.branch;
+  const githubSha = process.env.GITHUB_SHA || options.commit;
+  const githubRunId = process.env.GITHUB_RUN_ID || options.runId;
+  const githubRunNumber = process.env.GITHUB_RUN_NUMBER || options.runId;
+  const githubWorkflow = process.env.GITHUB_WORKFLOW || options.pipeline;
+  const githubActor = process.env.GITHUB_ACTOR;
+  const githubServerUrl = process.env.GITHUB_SERVER_URL;
+  const githubActorId = process.env.GITHUB_ACTOR_ID;
+  const githubApiUrl = process.env.GITHUB_API_URL;
+  const githubBaseRef = process.env.GITHUB_BASE_REF;
+  const githubHeadRef = process.env.GITHUB_HEAD_REF;
+  const githubJob = process.env.GITHUB_JOB;
+  const githubRefName = process.env.GITHUB_REF_NAME;
+  const githubRefProtected = process.env.GITHUB_REF_PROTECTED;
+  const githubRefType = process.env.GITHUB_REF_TYPE;
+  const githubRepositoryId = process.env.GITHUB_REPOSITORY_ID;
+  const githubRepositoryOwner = process.env.GITHUB_REPOSITORY_OWNER;
+  const githubRepositoryOwnerId = process.env.GITHUB_REPOSITORY_OWNER_ID;
+  const githubRunAttempt = process.env.GITHUB_RUN_ATTEMPT;
+  const githubTriggeringActor = process.env.GITHUB_TRIGGERING_ACTOR;
+  const githubWorkflowRef = process.env.GITHUB_WORKFLOW_REF;
+  const githubWorkflowSha = process.env.GITHUB_WORKFLOW_SHA;
+  const githubWorkspace = process.env.GITHUB_WORKSPACE;
+  const githubEventName = process.env.GITHUB_EVENT_NAME;
+  
+  // GitHub Actions Runner variables
+  const runnerArch = process.env.RUNNER_ARCH;
+  const runnerDebug = process.env.RUNNER_DEBUG;
+  const runnerEnvironment = process.env.RUNNER_ENVIRONMENT;
+  const runnerName = process.env.RUNNER_NAME;
+  const runnerOs = process.env.RUNNER_OS;
+  const runnerTemp = process.env.RUNNER_TEMP;
+  const runnerToolCache = process.env.RUNNER_TOOL_CACHE;
+  
+  // Azure DevOps built-in variables
+  const adoRepo = process.env.BUILD_REPOSITORY_NAME || options.repository;
+  const adoSourceBranch = process.env.BUILD_SOURCEBRANCH || options.branch;
+  const adoSourceVersion = process.env.BUILD_SOURCEVERSION || options.commit;
+  const adoBuildId = process.env.BUILD_BUILDID || options.runId;
+  const adoBuildNumber = process.env.BUILD_BUILDNUMBER || options.runId;
+  const adoPipeline = process.env.BUILD_DEFINITIONNAME || options.pipeline;
+  const adoCollectionUri = process.env.SYSTEM_COLLECTIONURI;
+  const adoTeamProject = process.env.SYSTEM_TEAMPROJECT;
+  const adoRequestedFor = process.env.BUILD_REQUESTEDFOR;
+  const adoSourceVersionMessage = process.env.BUILD_SOURCEVERSIONMESSAGE;
+  const adoBuildReason = process.env.BUILD_REASON;
+  const adoBuildUri = process.env.BUILD_BUILDURI;
+  const adoRepositoryUri = process.env.BUILD_REPOSITORY_URI;
+  const adoRepositoryId = process.env.BUILD_REPOSITORY_ID;
+  const adoRepositoryProvider = process.env.BUILD_REPOSITORY_PROVIDER;
+  const adoSourceBranchName = process.env.BUILD_SOURCEBRANCHNAME;
+  
+  // Azure DevOps System variables
+  const adoSystemCollectionId = process.env.SYSTEM_COLLECTIONID;
+  const adoSystemDefinitionId = process.env.SYSTEM_DEFINITIONID;
+  const adoSystemTeamProjectId = process.env.SYSTEM_TEAMPROJECTID;
+  const adoSystemTimelineId = process.env.SYSTEM_TIMELINEID;
+  
+  // Azure DevOps Environment variables (deployment jobs)
+  const adoEnvironmentName = process.env.ENVIRONMENT_NAME;
+  const adoEnvironmentId = process.env.ENVIRONMENT_ID;
+  const adoEnvironmentResourceName = process.env.ENVIRONMENT_RESOURCENAME;
+  const adoEnvironmentResourceId = process.env.ENVIRONMENT_RESOURCEID;
+  
+  // Azure DevOps Pull Request variables
+  const adoPrIsFork = process.env.SYSTEM_PULLREQUEST_ISFORK;
+  const adoPrId = process.env.SYSTEM_PULLREQUEST_PULLREQUESTID;
+  const adoPrNumber = process.env.SYSTEM_PULLREQUEST_PULLREQUESTNUMBER;
+  const adoPrTargetBranch = process.env.SYSTEM_PULLREQUEST_TARGETBRANCHNAME;
+  const adoPrSourceBranch = process.env.SYSTEM_PULLREQUEST_SOURCEBRANCH;
+  const adoPrSourceCommit = process.env.SYSTEM_PULLREQUEST_SOURCECOMMITID;
+  const adoPrSourceRepoUri = process.env.SYSTEM_PULLREQUEST_SOURCEREPOSITORYURI;
+  
+  // Use environment variables if available, otherwise use CLI options
+  const repository = githubRepo || adoRepo || options.repository;
+  const branch = githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || options.branch;
+  const commit = githubSha || adoSourceVersion || options.commit;
+  const pipeline = githubWorkflow || adoPipeline || options.pipeline;
+  const runId = githubRunId || adoBuildId || options.runId;
+  const runNumber = githubRunNumber || adoBuildNumber || options.runId;
+  const triggeredBy = githubActor || adoRequestedFor || "cli-user";
+  
+  // Pull request information
+  const isPullRequest = githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber;
+  const pullRequestNumber = githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId;
+  const pullRequestBranch = adoPrSourceBranch?.replace('refs/heads/', '');
+  
+  // Use PR branch if available, otherwise use main branch
+  const finalBranch = pullRequestBranch || branch;
+  
+  // Build proper URLs based on platform
+  let runUrl = options.runUrl;
+  if (!runUrl) {
+    if (githubServerUrl && githubRepo && runId) {
+      runUrl = `${githubServerUrl}/${githubRepo}/actions/runs/${runId}`;
+    } else if (adoCollectionUri && adoTeamProject && runId) {
+      runUrl = `${adoCollectionUri}/${adoTeamProject}/_build/results?buildId=${runId}`;
+    } else if (adoBuildUri) {
+      runUrl = adoBuildUri;
+    }
+  }
+  
+  // Repository URL for Azure DevOps
+  let repositoryUrl = options.repository ? (githubServerUrl ? `${githubServerUrl}/${repository}` : `https://github.com/${repository}`) : "https://github.com/cli-user/unknown-repo";
+  if (adoRepositoryUri && !githubServerUrl) {
+    repositoryUrl = adoRepositoryUri;
+  }
+  
+  // Use CLI options if provided, otherwise use environment variables
+  const hasAllOptions = pipeline && repository && finalBranch && commit;
+  
+  if (hasAllOptions) {
+    const event: FailureEvent = {
+      source,
+      startedAt: new Date().toISOString(),
+      failedAt: new Date().toISOString(),
+      pipeline: {
+        name: pipeline,
+        url: runUrl || "https://example.com/pipeline",
+        runId: runId || "cli-run",
+        runNumber: parseInt(runNumber) || 1,
+        step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+      },
+      repository: {
+        owner: repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        name: repository?.split("/")[1] || repository || "unknown-repo",
+        url: repositoryUrl,
+        defaultBranch: "main",
+      },
+      commit: {
+        sha: commit,
+        url: repository && commit ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : "https://github.com/cli-user/unknown-repo/commit/unknown",
+        message: adoSourceVersionMessage || "CLI analysis",
+        author: triggeredBy,
+      },
+      branch: finalBranch,
+      environment: environment,
+      triggeredBy: triggeredBy,
+      failure: {
+        exitCode: parsedLogs.exitCodes[0],
+        errorMessage: parsedLogs.errorMessages[0],
+        failedStep: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        logs: parsedLogs.entries.map((e: any) => `${e.timestamp || ""} [${e.level?.toUpperCase() || "INFO"}] ${e.message}`).join("\n"),
+        logsTruncated: parsedLogs.truncated,
+      },
+    };
+    
+    // Add pull request information if available
+    if (isPullRequest && pullRequestNumber) {
+      (event as any).pullRequest = {
+        number: parseInt(pullRequestNumber),
+        url: githubServerUrl ? `${githubServerUrl}/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pullrequest/${pullRequestNumber}`,
+      };
+    }
+    
+    return event;
+  }
+
   // Interactive prompts for missing information
   const questions = [
     {
       type: "input",
       name: "pipelineName",
       message: "Pipeline/workflow name:",
-      default: "unknown-pipeline",
+      default: pipeline || "unknown-pipeline",
     },
     {
       type: "input",
       name: "repositoryName",
       message: "Repository name:",
-      default: "unknown-repo",
+      default: repository || "unknown-repo",
     },
     {
       type: "input",
       name: "branch",
       message: "Branch:",
-      default: "main",
+      default: finalBranch || "main",
     },
     {
       type: "input",
       name: "commitSha",
       message: "Commit SHA:",
-      default: "unknown",
+      default: commit || "unknown",
     },
     {
       type: "input",
       name: "environment",
       message: "Environment (optional):",
+      default: environment,
     },
   ];
 
   const answers = await inquirer.prompt(questions as any);
 
-  return {
+  const event: FailureEvent = {
     source,
     startedAt: new Date().toISOString(),
     failedAt: new Date().toISOString(),
     pipeline: {
-      name: answers.pipelineName,
-      url: "https://example.com/pipeline", // Would be populated from context
-      runId: "cli-run",
-      runNumber: 1,
+      name: pipeline || answers.pipelineName,
+      url: runUrl || "https://example.com/pipeline",
+      runId: runId || "cli-run",
+      runNumber: parseInt(runNumber) || 1,
       step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
     },
     repository: {
-      owner: "cli-user",
-      name: answers.repositoryName,
-      url: "https://github.com/cli-user/unknown-repo",
+      owner: repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+      name: repository?.split("/")[1] || answers.repositoryName,
+      url: repositoryUrl,
       defaultBranch: "main",
     },
     commit: {
-      sha: answers.commitSha,
-      url: `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
-      message: "CLI analysis",
-      author: "cli-user",
+      sha: commit || answers.commitSha,
+      url: (repository && commit) ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
+      message: adoSourceVersionMessage || "CLI analysis",
+      author: triggeredBy,
     },
-    branch: answers.branch,
-    environment: answers.environment,
-    triggeredBy: "cli-user",
+    branch: finalBranch || answers.branch,
+    environment: environment || answers.environment,
+    triggeredBy: triggeredBy,
     failure: {
       exitCode: parsedLogs.exitCodes[0],
       errorMessage: parsedLogs.errorMessages[0],
@@ -404,22 +589,16 @@ async function createFailureEvent(
       logsTruncated: parsedLogs.truncated,
     },
   };
-}
-
-async function createAIEnricher(aiConfig: any) {
-  return {
-    name: "ai-enricher",
-    source: "ai" as const,
-    async enrich(ctx: any) {
-      const aiEngine = AIEngine.create("assist" as any, aiConfig);
-      const results = await aiEngine.enrich(ctx.event, aiConfig);
-      
-      for (const result of results) {
-        ctx.fields[result.field] = result.value;
-        ctx.provenance[result.field] = result.provenance;
-      }
-    },
-  };
+  
+  // Add pull request information if available
+  if (isPullRequest && pullRequestNumber) {
+    (event as any).pullRequest = {
+      number: parseInt(pullRequestNumber),
+      url: githubServerUrl ? `${githubServerUrl}/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pullrequest/${pullRequestNumber}`,
+    };
+  }
+  
+  return event;
 }
 
 // Error handling

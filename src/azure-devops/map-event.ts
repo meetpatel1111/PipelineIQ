@@ -1,4 +1,4 @@
-import type { FailureEvent } from "pipelineiq-core";
+import type { FailureEvent } from "../core/index.js";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as azdev from "azure-devops-node-api";
 
@@ -24,6 +24,33 @@ export async function mapAzureDevOpsContext(
   const repositoryUri = required("Build.Repository.Uri");
   const requestedFor = tl.getVariable("Build.RequestedFor") ?? "unknown";
   const accessToken = tl.getVariable("System.AccessToken") ?? "";
+  
+  // Additional Azure DevOps variables
+  const sourceVersionMessage = tl.getVariable("Build.SourceVersionMessage");
+  const buildReason = tl.getVariable("Build.Reason");
+  const buildUri = tl.getVariable("Build.BuildUri");
+  const repositoryId = tl.getVariable("Build.Repository.ID");
+  const repositoryProvider = tl.getVariable("Build.Repository.Provider");
+  const sourceBranchName = tl.getVariable("Build.SourceBranchName");
+  const systemCollectionId = tl.getVariable("System.CollectionId");
+  const systemDefinitionId = tl.getVariable("System.DefinitionId");
+  const systemTeamProjectId = tl.getVariable("System.TeamProjectId");
+  const systemTimelineId = tl.getVariable("System.TimelineId");
+  
+  // Environment variables (deployment jobs)
+  const environmentName = tl.getVariable("Environment.Name");
+  const environmentId = tl.getVariable("Environment.Id");
+  const environmentResourceName = tl.getVariable("Environment.ResourceName");
+  const environmentResourceId = tl.getVariable("Environment.ResourceId");
+  
+  // Pull Request variables
+  const prIsFork = tl.getVariable("System.PullRequest.IsFork");
+  const prId = tl.getVariable("System.PullRequest.PullRequestId");
+  const prNumber = tl.getVariable("System.PullRequest.PullRequestNumber");
+  const prTargetBranch = tl.getVariable("System.PullRequest.targetBranchName");
+  const prSourceBranch = tl.getVariable("System.PullRequest.SourceBranch");
+  const prSourceCommit = tl.getVariable("System.PullRequest.SourceCommitId");
+  const prSourceRepoUri = tl.getVariable("System.PullRequest.SourceRepositoryUri");
 
   const handler = azdev.getPersonalAccessTokenHandler(accessToken);
   const connection = new azdev.WebApi(collectionUri, handler);
@@ -59,7 +86,7 @@ export async function mapAzureDevOpsContext(
     }
   }
 
-  const pipelineUrl = `${collectionUri}${teamProject}/_build/results?buildId=${buildId}`;
+  const pipelineUrl = buildUri || `${collectionUri}${teamProject}/_build/results?buildId=${buildId}`;
   const commitUrl = `${repositoryUri}/commit/${sourceVersion}`;
 
   const startedAt = (build.startTime ?? new Date()).toISOString();
@@ -69,7 +96,13 @@ export async function mapAzureDevOpsContext(
       ? build.finishTime.getTime() - build.startTime.getTime()
       : undefined;
 
-  return {
+  // Pull request information
+  const isPullRequest = prId || prNumber;
+  const pullRequestNumber = prNumber || prId;
+  const pullRequestBranch = prSourceBranch?.replace('refs/heads/', '');
+  const finalBranch = pullRequestBranch || sourceBranch;
+
+  const event: FailureEvent = {
     source: "azure-devops",
     startedAt,
     failedAt,
@@ -88,14 +121,17 @@ export async function mapAzureDevOpsContext(
       owner: teamProject,
       name: repositoryName,
       url: repositoryUri,
+      ...(repositoryId ? { id: repositoryId } : {}),
+      ...(repositoryProvider ? { provider: repositoryProvider } : {}),
     },
     commit: {
       sha: sourceVersion,
       url: commitUrl,
+      ...(sourceVersionMessage ? { message: sourceVersionMessage } : {}),
       ...(build.requestedFor?.displayName ? { author: build.requestedFor.displayName } : {}),
     },
-    branch: sourceBranch,
-    ...(environment ? { environment } : {}),
+    branch: finalBranch,
+    ...(environment || environmentName ? { environment: environment || environmentName } : {}),
     triggeredBy: requestedFor,
     failure: {
       ...(failedRecord?.name ? { failedStep: failedRecord.name } : {}),
@@ -106,6 +142,16 @@ export async function mapAzureDevOpsContext(
       logsTruncated,
     },
   };
+  
+  // Add pull request information if available
+  if (isPullRequest && pullRequestNumber) {
+    (event as any).pullRequest = {
+      number: parseInt(pullRequestNumber),
+      url: prSourceRepoUri || `${collectionUri}${teamProject}/_git/${repositoryName}/pullrequest/${pullRequestNumber}`,
+    };
+  }
+  
+  return event;
 }
 
 function required(name: string): string {

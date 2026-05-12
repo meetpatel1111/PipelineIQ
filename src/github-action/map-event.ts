@@ -1,4 +1,4 @@
-import type { FailureEvent } from "pipelineiq-core";
+import type { FailureEvent } from "../core/index.js";
 import type { Octokit } from "@octokit/rest";
 
 /**
@@ -31,6 +31,31 @@ export type GhContext = {
       author: { name: string; email: string };
     };
   };
+  // Additional GitHub Actions context fields
+  actorId?: string | undefined;
+  apiUrl?: string | undefined;
+  baseRef?: string | undefined;
+  headRef?: string | undefined;
+  job?: string | undefined;
+  refName?: string | undefined;
+  refProtected?: string | undefined;
+  refType?: string | undefined;
+  repositoryId?: string | undefined;
+  repositoryOwner?: string | undefined;
+  repositoryOwnerId?: string | undefined;
+  runAttempt?: number | undefined;
+  triggeringActor?: string | undefined;
+  workflowRef?: string | undefined;
+  workflowSha?: string | undefined;
+  workspace?: string | undefined;
+  // Runner information
+  runnerArch?: string | undefined;
+  runnerDebug?: string | undefined;
+  runnerEnvironment?: string | undefined;
+  runnerName?: string | undefined;
+  runnerOs?: string | undefined;
+  runnerTemp?: string | undefined;
+  runnerToolCache?: string | undefined;
 };
 
 export async function mapGithubContext(
@@ -43,6 +68,9 @@ export async function mapGithubContext(
   const pipelineUrl = `${repoUrl}/actions/runs/${ctx.runId}`;
   const commitUrl = `${repoUrl}/commit/${ctx.sha}`;
   const branch = ctx.ref.replace(/^refs\/heads\//, "");
+  
+  // Use headRef for PR builds if available
+  const finalBranch = ctx.headRef?.replace(/^refs\/heads\//, "") || branch;
 
   // Pull job/step info — find the failed step in the current run.
   const { data: runData } = await octokit.actions.getWorkflowRun({
@@ -88,7 +116,7 @@ export async function mapGithubContext(
   const durationMs =
     startedAt && failedAt ? Date.parse(failedAt) - Date.parse(startedAt) : undefined;
 
-  return {
+  const event: FailureEvent = {
     source: "github",
     startedAt,
     failedAt,
@@ -107,6 +135,7 @@ export async function mapGithubContext(
       owner,
       name: repo,
       url: repoUrl,
+      ...(ctx.repositoryId ? { id: ctx.repositoryId } : {}),
     },
     commit: {
       sha: ctx.sha,
@@ -121,7 +150,7 @@ export async function mapGithubContext(
         ? { authorEmail: ctx.payload.head_commit.author.email }
         : {}),
     },
-    branch,
+    branch: finalBranch,
     ...(ctx.payload.pull_request
       ? {
           pullRequest: {
@@ -133,11 +162,13 @@ export async function mapGithubContext(
         }
       : {}),
     ...(environment ? { environment } : {}),
-    triggeredBy: ctx.actor,
+    triggeredBy: ctx.triggeringActor || ctx.actor,
     failure: {
       ...(failedStep ? { failedStep: failedStep.name } : {}),
       logs,
       logsTruncated,
     },
   };
+  
+  return event;
 }

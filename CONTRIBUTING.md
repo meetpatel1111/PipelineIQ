@@ -7,7 +7,7 @@ We welcome contributions! This document provides guidelines for contributing to 
 ### Prerequisites
 
 - Node.js 20+
-- pnpm package manager
+- npm package manager
 - TypeScript knowledge
 - Familiarity with CI/CD systems
 
@@ -19,33 +19,38 @@ git clone https://github.com/your-org/pipelineiq.git
 cd pipelineiq
 
 # Install dependencies
-pnpm install
+npm install
 
-# Build all packages
-pnpm build
+# Build all components
+npm run build
 
 # Run tests
-pnpm test
+npm test
 ```
 
 ## 🏗 Architecture Overview
 
-PipelineIQ follows a modular monorepo architecture:
+PipelineIQ follows a unified package architecture:
 
 ```
 pipelineiq/
-├── packages/
+├── src/
 │   ├── core/                 # Main processing engine
-│   ├── jira-client/          # Jira REST API client
-│   ├── ai-engine/            # AI enrichment with fallbacks
-│   ├── log-parser/            # Multi-format log parsing
-│   ├── shared-types/          # TypeScript type definitions
-│   ├── github-action/         # GitHub Actions integration
-│   ├── azure-devops-extension/# Azure DevOps task
-│   └── cli/                  # Command-line interface
-├── apps/                     # Future dashboard and API
-├── examples/                  # Usage examples
-└── docs/                      # Documentation
+│   │   ├── pipeline/         # Pipeline processing logic
+│   │   ├── jira/             # Jira REST API client
+│   │   ├── ai/               # AI enrichment with fallbacks
+│   │   ├── parser/           # Multi-format log parsing
+│   │   ├── enrichers/        # Deterministic and computed enrichers
+│   │   └── signatures/      # Failure pattern library
+│   ├── cli/                  # Command-line interface
+│   ├── github-action/        # GitHub Actions integration
+│   ├── azure-devops/         # Azure DevOps integration
+│   └── index.ts              # Main entry point
+├── bin/pipelineiq           # CLI executable
+├── action.yml               # GitHub Action metadata
+├── task.json                # Azure DevOps task metadata
+├── examples/                # Usage examples
+└── docs/                    # Documentation
 ```
 
 ## 📝 Development Guidelines
@@ -85,7 +90,7 @@ Examples:
 
 ### Core Engine
 
-- **Signature Library**: Add new failure patterns to `packages/core/src/signatures.ts`
+- **Signature Library**: Add new failure patterns to `src/core/signatures.ts`
 - **Deduplication**: Improve signature matching algorithms
 - **Enrichment**: Add new deterministic enrichers
 - **Performance**: Optimize processing pipeline
@@ -124,35 +129,28 @@ Examples:
 
 ```bash
 # Run all tests
-pnpm test
-
-# Run tests for specific package
-pnpm test --filter pipelineiq-core
+npm test
 
 # Run tests in watch mode
-pnpm test --watch
+npm test --watch
 
 # Run tests with coverage
-pnpm test --coverage
+npm test --coverage
 ```
 
 ### Test Structure
 
 ```
-packages/
+src/
 ├── core/
-│   ├── src/
-│   │   ├── pipeline.test.ts
-│   │   ├── enrichers/
-│   │   │   ├── deterministic.test.ts
-│   │   │   └── computed.test.ts
-│   │   └── signatures.test.ts
-│   └── test/
-├── jira-client/
-│   ├── src/
-│   │   ├── client.test.ts
-│   │   └── adf.test.ts
-│   └── test/
+│   ├── pipeline.test.ts
+│   ├── enrichers/
+│   │   ├── deterministic.test.ts
+│   │   └── computed.test.ts
+│   └── signatures.test.ts
+├── jira/
+│   ├── client.test.ts
+│   └── adf.test.ts
 └── ...
 ```
 

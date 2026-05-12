@@ -23,14 +23,18 @@ PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tic
 Add to your workflow:
 
 ```yaml
-- uses: pipelineiq/action@0.2.1
+- name: Install PipelineIQ
+  run: npm install pipelineiq
+- name: PipelineIQ Analysis
   if: failure()
-  with:
-    jira-url: ${{ secrets.JIRA_URL }}
-    jira-email: ${{ secrets.JIRA_EMAIL }}
-    jira-token: ${{ secrets.JIRA_TOKEN }}
-    jira-project: DEVOPS
-    ai-summary: true
+  run: |
+    pipelineiq analyze --log-file build.log
+  env:
+    JIRA_URL: ${{ secrets.JIRA_URL }}
+    JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+    JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+    JIRA_PROJECT: ${{ secrets.JIRA_PROJECT || 'DEVOPS' }}
+    AI_API_KEY: ${{ secrets.AI_API_KEY }}
 ```
 
 ### Azure DevOps
@@ -38,13 +42,15 @@ Add to your workflow:
 Connect your Azure DevOps pipelines to Jira:
 
 ```yaml
-- task: PipelineIQ@0.2.1
-  condition: failed()
-  inputs:
-    jiraUrl: $(JIRA_URL)
-    jiraEmail: $(JIRA_EMAIL)
-    jiraToken: $(JIRA_TOKEN)
-    jiraProject: DEVOPS
+- script: |
+    npm install pipelineiq
+    pipelineiq analyze --log-file build.log
+  env:
+    JIRA_URL: $(JIRA_URL)
+    JIRA_EMAIL: $(JIRA_EMAIL)
+    JIRA_API_TOKEN: $(JIRA_API_TOKEN)
+    JIRA_PROJECT: $(JIRA_PROJECT)
+    AI_API_KEY: $(AI_API_KEY)
 ```
 
 ### CLI
@@ -52,7 +58,7 @@ Connect your Azure DevOps pipelines to Jira:
 Install and analyze logs locally:
 
 ```bash
-npm install -g pipelineiq-cli
+npm install -g pipelineiq
 pipelineiq analyze --logs ./build.log --config ./pipelineiq.json
 ```
 
@@ -86,7 +92,7 @@ graph LR
 ### From npm
 
 ```bash
-npm install pipelineiq-core pipelineiq-cli
+npm install pipelineiq
 ```
 
 ### From Source
@@ -94,8 +100,8 @@ npm install pipelineiq-core pipelineiq-cli
 ```bash
 git clone https://github.com/your-org/pipelineiq.git
 cd pipelineiq
-pnpm install
-pnpm build
+npm install
+npm run build
 ```
 
 ## 🏗 Architecture
@@ -242,31 +248,36 @@ pipelineiq parse --logs ./logs/ --format kubernetes --output k8s-parsed.json
 
 ```
 pipelineiq/
-├── packages/
-│   ├── core/                 # Main processing engine (pipelineiq-core)
-│   ├── cli/                  # Command-line interface (pipelineiq-cli)
-│   ├── github-action/         # GitHub Actions integration
-│   ├── azure-devops-extension/# Azure DevOps task
-│   └── ...                   # Additional utilities
-├── apps/                     # Future dashboard and API
-├── examples/                  # Usage examples and patterns
-└── docs/                      # Documentation
+├── src/
+│   ├── core/                 # Main processing engine
+│   ├── cli/                  # Command-line interface
+│   ├── github-action/        # GitHub Actions integration
+│   ├── azure-devops/         # Azure DevOps integration
+│   └── index.ts              # Main entry point
+├── bin/pipelineiq           # CLI executable
+├── action.yml               # GitHub Action metadata
+├── task.json                # Azure DevOps task metadata
+├── examples/                # Usage examples and patterns
+└── docs/                    # Documentation
 ```
 
 ### Building
 
 ```bash
-# Build all packages
-pnpm build
+# Build all components
+npm run build
 
 # Run tests
-pnpm test
+npm test
 
 # Type checking
-pnpm typecheck
+npm run typecheck
+
+# Lint code
+npm run lint
 
 # Clean build artifacts
-pnpm clean
+npm run clean
 ```
 
 ## 📚 Documentation
@@ -289,9 +300,9 @@ We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for gu
 5. Ensure all tests pass
 6. Submit a pull request
 
-## 📄 License
+## License
 
-Apache License 2.0 - see [LICENSE](./LICENSE) for details.
+Apache License 2.0 - see LICENSE file for details.
 
 ## 🔗 Links
 
