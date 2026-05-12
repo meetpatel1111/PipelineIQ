@@ -4,6 +4,22 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.2] - 2025-05-13
+
+### Changed
+- Updated all package versions to 0.2.2
+- Added `publishConfig.access: "public"` to enable unscoped publishing
+- Updated import statements across all packages
+- Updated documentation and examples to use unscoped package names
+
+### Added
+- Support for unscoped npm package publishing
+- Enhanced workspace dependency management
+- Updated build system for new package structure
+- First public release of `pipelineiq-core` and `pipelineiq-cli` packages
+
+---
+
 ## [0.2.1] - 2025-05-13
 
 ### Fixed

@@ -52,7 +52,7 @@ Connect your Azure DevOps pipelines to Jira:
 Install and analyze logs locally:
 
 ```bash
-npm install -g @pipelineiq/cli
+npm install -g pipelineiq-cli
 pipelineiq analyze --logs ./build.log --config ./pipelineiq.json
 ```
 
@@ -86,7 +86,7 @@ graph LR
 ### From npm
 
 ```bash
-npm install @pipelineiq/core @pipelineiq/jira-client @pipelineiq/ai-engine @pipelineiq/log-parser
+npm install pipelineiq-core pipelineiq-cli
 ```
 
 ### From Source
@@ -243,14 +243,11 @@ pipelineiq parse --logs ./logs/ --format kubernetes --output k8s-parsed.json
 ```
 pipelineiq/
 ├── packages/
-│   ├── core/                 # Main processing engine
-│   ├── jira-client/          # Jira REST API client
-│   ├── ai-engine/            # AI enrichment with fallbacks
-│   ├── log-parser/            # Multi-format log parsing
-│   ├── shared-types/          # TypeScript type definitions
+│   ├── core/                 # Main processing engine (pipelineiq-core)
+│   ├── cli/                  # Command-line interface (pipelineiq-cli)
 │   ├── github-action/         # GitHub Actions integration
 │   ├── azure-devops-extension/# Azure DevOps task
-│   └── cli/                  # Command-line interface
+│   └── ...                   # Additional utilities
 ├── apps/                     # Future dashboard and API
 ├── examples/                  # Usage examples and patterns
 └── docs/                      # Documentation

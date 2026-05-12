@@ -12,7 +12,7 @@
   "dependencies": {
     "azure-pipelines-task-lib": "^4.10.0",
     "azure-devops-node-api": "^13.0.0",
-    "@pipelineiq/core": "workspace:*"
+    "pipelineiq-core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

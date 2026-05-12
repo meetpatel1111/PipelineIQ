@@ -5,7 +5,7 @@ import {
   processFailureEvent,
   PipelineIQConfigSchema,
   type PipelineIQConfig,
-} from "@pipelineiq/core";
+} from "pipelineiq-core";
 import { mapGithubContext, type GhContext } from "./map-event.js";
 
 async function run(): Promise<void> {

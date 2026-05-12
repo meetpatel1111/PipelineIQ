@@ -1,5 +1,5 @@
 {
-  "name": "@pipelineiq/core",
+  "name": "pipelineiq-core",
   "version": "0.2.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,6 +27,9 @@
     "openai": "^4.38.0",
     "pino": "^9.0.0",
     "zod": "^3.23.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

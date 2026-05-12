@@ -13,7 +13,7 @@
   "dependencies": {
     "@actions/core": "^1.10.0",
     "@actions/github": "^6.0.0",
-    "@pipelineiq/core": "workspace:*",
+    "pipelineiq-core": "workspace:*",
     "@octokit/rest": "^20.0.0"
   },
   "devDependencies": {

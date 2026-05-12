@@ -12,13 +12,13 @@ import {
   AIEngine, 
   createJiraClient,
   PipelineIQConfigSchema
-} from "@pipelineiq/core";
+} from "pipelineiq-core";
 import type {
   FailureEvent,
   PipelineIQConfig,
   FailureSource,
   LogFormat,
-} from "@pipelineiq/core";
+} from "pipelineiq-core";
 
 const program = new Command();
 

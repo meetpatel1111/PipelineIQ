@@ -127,7 +127,7 @@ Examples:
 pnpm test
 
 # Run tests for specific package
-pnpm test --filter @pipelineiq/core
+pnpm test --filter pipelineiq-core
 
 # Run tests in watch mode
 pnpm test --watch
