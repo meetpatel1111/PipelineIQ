@@ -1,14 +1,12 @@
 import * as tl from "azure-pipelines-task-lib/task";
-import { 
-  processFailureEvent,
-  PipelineIQConfigSchema,
-  type PipelineIQConfig,
-} from "@pipelineiq/core";
 import { mapAzureDevOpsContext } from "./map-event.js";
+import type { PipelineIQConfig } from "@pipelineiq/core";
 
 async function run(): Promise<void> {
+  // Dynamic import for ES modules
+  const { processFailureEvent, PipelineIQConfigSchema } = await import("@pipelineiq/core");
   try {
-    const config = readConfig();
+    const config = await readConfig();
     const environment = tl.getInput("environment") || undefined;
 
     const event = await mapAzureDevOpsContext(environment);
@@ -27,23 +25,29 @@ async function run(): Promise<void> {
   }
 }
 
-function readConfig(): PipelineIQConfig {
-  const aiMode = (tl.getInput("aiMode") || "disabled") as
-    | "disabled"
-    | "assist"
-    | "full";
-
+async function readConfig(): Promise<PipelineIQConfig> {
+  // Dynamic import for schema validation
+  const { PipelineIQConfigSchema } = await import("@pipelineiq/core");
+  
   const raw = {
     jira: {
-      baseUrl: tl.getInput("jiraUrl", true) ?? "",
-      email: tl.getInput("jiraEmail", true) ?? "",
-      apiToken: tl.getInput("jiraToken", true) ?? "",
+      type: tl.getInput("jiraType") === "server" ? "server" : "cloud",
+      baseUrl: tl.getInput("jiraUrl")!,
+      email: tl.getInput("jiraEmail") || "",
+      apiToken: tl.getInput("jiraToken") || "",
+      username: tl.getInput("jiraUsername") || "",
+      password: tl.getInput("jiraPassword") || "",
+      accessToken: tl.getInput("jiraAccessToken") || "",
+      strictGDPR: tl.getBoolInput("jiraStrictGDPR"),
     },
-    jiraProject: tl.getInput("jiraProject", true) ?? "",
-    issueType: tl.getInput("issueType") || "Bug",
     ai: {
-      mode: aiMode,
-      ...(tl.getInput("aiApiKey") ? { apiKey: tl.getInput("aiApiKey") } : {}),
+      mode: tl.getInput("aiMode") as any || "disabled",
+      provider: tl.getInput("aiProvider") as any,
+      apiKey: tl.getInput("aiApiKey") || "",
+      model: tl.getInput("aiModel") || "",
+      temperature: Number.parseFloat(tl.getInput("aiTemperature") || "0.7"),
+      maxTokens: Number.parseInt(tl.getInput("aiMaxTokens") || "4000", 10),
+      confidence: Number.parseFloat(tl.getInput("aiConfidence") || "0.7"),
     },
     dedup: {
       enabled: true,

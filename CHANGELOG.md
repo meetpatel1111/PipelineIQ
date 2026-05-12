@@ -4,6 +4,29 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.1] - 2025-05-13
+
+### Fixed
+- Fixed TypeScript compilation errors in Jira client
+- Resolved JiraClient interface export issues
+- Fixed EnhancedJiraClient to use composition instead of inheritance
+- Corrected CLI JiraClient instantiation to use factory function
+- Fixed bulkFetchIssues API compatibility issues
+- Resolved getCreateIssueMeta parameter type issues
+
+### Changed
+- Updated all package versions to 0.2.1
+- Updated GitHub Action version from @0.2.0 to @0.2.1
+- Updated Azure DevOps task from PipelineIQ@0.2.0 to PipelineIQ@0.2.1
+- Improved Jira client error handling and API compatibility
+
+### Added
+- Enhanced build system compatibility
+- Improved TypeScript type safety across packages
+- Better error handling in Jira integration
+
+---
+
 ## [0.2.0] - 2025-05-13
 
 ### Changed

@@ -302,8 +302,11 @@ class JiraCloudClient implements JiraClient {
   async bulkFetchIssues(issueKeys: string[]): Promise<any[]> {
     if (issueKeys.length === 0) return [];
     try {
-      const res = await this.client.issueSearch.bulkFetchIssues({
-        issueIdsOrKeys: issueKeys,
+      // Use search with JQL instead of bulkFetchIssues which may not be available
+      const jql = `key in (${issueKeys.map((k) => `"${k}"`).join(",")})`;
+      const res = await this.client.issueSearch.searchForIssuesUsingJql({
+        jql,
+        maxResults: issueKeys.length,
       });
       return res.issues || [];
     } catch (error: any) {
@@ -341,8 +344,8 @@ class JiraCloudClient implements JiraClient {
   async getCreateIssueMeta(projectKeys?: string[], issueTypeNames?: string[]): Promise<any> {
     try {
       return await this.client.issues.getCreateIssueMeta({
-        projectKeys,
-        issuetypeNames: issueTypeNames,
+        projectKeys: projectKeys || [],
+        issuetypeNames: issueTypeNames || [],
         expand: "projects.issuetypes.fields",
       });
     } catch (error: any) {
@@ -610,7 +613,7 @@ class JiraServerClient implements JiraClient {
       // jira-client's getIssueCreateMetadata
       return await this.client.getIssueCreateMetadata({
         projectKeys: projectKeys,
-        issueTypeNames: issueTypeNames,
+        issuetypeNames: issueTypeNames,
         expand: "projects.issuetypes.fields",
       });
     } catch (error: any) {

@@ -1,16 +1,110 @@
 import type { JiraAuth, JiraTicketSpec, ExternalLink } from "../types/index.js";
-import { JiraClient } from "./client.js";
+import { createJiraClient, type JiraClient } from "./client.js";
 import { JiraApiError } from "./errors.js";
 import { markdownToAdf } from "./adf.js";
 
 /**
  * Enhanced Jira client with additional PRD features
- * Extends base client with custom fields, bulk operations, and advanced search
+ * Wraps base client with custom fields, bulk operations, and advanced search
  */
-export class EnhancedJiraClient extends JiraClient {
-  
+export class EnhancedJiraClient implements JiraClient {
+  private client: JiraClient;
+
   constructor(auth: JiraAuth) {
-    super(auth);
+    this.client = createJiraClient(auth);
+  }
+
+  // Required JiraClient interface methods - delegate to wrapped client
+  async createIssue(spec: JiraTicketSpec): Promise<any> {
+    return await this.client.createIssue(spec);
+  }
+
+  async updateIssue(issueKey: string, spec: JiraTicketSpec): Promise<void> {
+    return await this.client.updateIssue(issueKey, spec);
+  }
+
+  async addComment(issueKey: string, body: string): Promise<void> {
+    return await this.client.addComment(issueKey, body);
+  }
+
+  async findBySignature(projectKey: string, signature: string, windowHours: number): Promise<any> {
+    return await this.client.findBySignature(projectKey, signature, windowHours);
+  }
+
+  async attachFile(issueKey: string, filename: string, content: string | Buffer): Promise<void> {
+    return await this.client.attachFile(issueKey, filename, content);
+  }
+
+  async createRemoteLink(issueKey: string, title: string, url: string, globalId?: string): Promise<void> {
+    return await this.client.createRemoteLink(issueKey, title, url, globalId);
+  }
+
+  async fetchAll<T>(fetcher: (startAt: number) => Promise<{ values: T[]; isLast: boolean }>): Promise<T[]> {
+    return await this.client.fetchAll(fetcher);
+  }
+
+  async request<T>(method: string, url: string, data?: any, params?: any): Promise<T> {
+    return await this.client.request(method, url, data, params);
+  }
+
+  async requestFull<T>(method: string, url: string, data?: any, params?: any): Promise<any> {
+    return await this.client.requestFull(method, url, data, params);
+  }
+
+  async checkConnection(): Promise<boolean> {
+    return await this.client.checkConnection();
+  }
+
+  async getServerInfo(): Promise<any> {
+    return await this.client.getServerInfo();
+  }
+
+  async doTransition(issueKey: string, transitionId: string): Promise<void> {
+    return await this.client.doTransition(issueKey, transitionId);
+  }
+
+  async getTransitions(issueKey: string): Promise<any[]> {
+    return await this.client.getTransitions(issueKey);
+  }
+
+  async assignIssue(issueKey: string, assigneeId: string | null): Promise<void> {
+    return await this.client.assignIssue(issueKey, assigneeId);
+  }
+
+  async getIssue(issueKey: string): Promise<any> {
+    return await this.client.getIssue(issueKey);
+  }
+
+  async deleteIssue(issueKey: string): Promise<void> {
+    return await this.client.deleteIssue(issueKey);
+  }
+
+  async bulkFetchIssues(issueKeys: string[]): Promise<any[]> {
+    return await this.client.bulkFetchIssues(issueKeys);
+  }
+
+  async bulkCreateIssues(specs: JiraTicketSpec[]): Promise<any[]> {
+    return await this.client.bulkCreateIssues(specs);
+  }
+
+  async getCreateIssueMeta(projectKeys?: string[], issueTypeNames?: string[]): Promise<any> {
+    return await this.client.getCreateIssueMeta(projectKeys, issueTypeNames);
+  }
+
+  async getEditIssueMeta(issueKey: string): Promise<any> {
+    return await this.client.getEditIssueMeta(issueKey);
+  }
+
+  getApiPath(path: string): string {
+    return this.client.getApiPath(path);
+  }
+
+  formatDescription(text: string): any {
+    return this.client.formatDescription(text);
+  }
+
+  formatAssignee(assigneeId: string): any {
+    return this.client.formatAssignee(assigneeId);
   }
 
   /**

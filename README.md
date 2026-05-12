@@ -11,7 +11,7 @@ PipelineIQ is a developer-native DevOps intelligence platform that automatically
 Add to your workflow:
 
 ```yaml
-- uses: pipelineiq/action@0.2.0
+- uses: pipelineiq/action@0.2.1
   if: failure()
   with:
     jira-url: ${{ secrets.JIRA_URL }}
@@ -26,7 +26,7 @@ Add to your workflow:
 Add to your pipeline:
 
 ```yaml
-- task: PipelineIQ@0.2.0
+- task: PipelineIQ@0.2.1
   condition: failed()
   inputs:
     jiraUrl: $(JIRA_URL)

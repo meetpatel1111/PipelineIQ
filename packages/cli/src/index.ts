@@ -10,7 +10,7 @@ import {
   processFailureEvent, 
   parseLogs, 
   AIEngine, 
-  JiraClient,
+  createJiraClient,
   PipelineIQConfigSchema
 } from "@pipelineiq/core";
 import type {
@@ -187,7 +187,7 @@ async function handleTest(options: any) {
 
     if (options.jira) {
       const spinner = ora("Testing Jira connectivity...").start();
-      const jira = new JiraClient(config.jira);
+      const jira = createJiraClient(config.jira);
       
       try {
         // Test by getting project info
