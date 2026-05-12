@@ -1,4 +1,4 @@
-import type { FailureEvent } from "@pipelineiq/core";
+import type { FailureEvent } from "pipelineiq-core";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as azdev from "azure-devops-node-api";
 

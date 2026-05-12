@@ -17,7 +17,7 @@
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@pipelineiq/core": ["./packages/core/dist/index.d.ts"]
+      "pipelineiq-core": ["./packages/core/dist/index.d.ts"]
     }
   }
 }

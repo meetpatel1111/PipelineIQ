@@ -1,4 +1,4 @@
-import type { FailureEvent } from "@pipelineiq/core";
+import type { FailureEvent } from "pipelineiq-core";
 import type { Octokit } from "@octokit/rest";
 
 /**

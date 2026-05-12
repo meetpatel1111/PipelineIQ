@@ -11,12 +11,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Added `publishConfig.access: "public"` to enable unscoped publishing
 - Updated import statements across all packages
 - Updated documentation and examples to use unscoped package names
+- Fixed TypeScript path mappings in tsconfig.base.json
+- Updated private package imports to use new package names
+- Fixed GitHub Actions workflow installation commands
+- Updated Azure DevOps pipeline to use correct package names
 
 ### Added
 - Support for unscoped npm package publishing
 - Enhanced workspace dependency management
 - Updated build system for new package structure
 - First public release of `pipelineiq-core` and `pipelineiq-cli` packages
+- Complete migration from scoped to unscoped package names
+- Updated CI/CD workflows for new package structure
 
 ---
 
