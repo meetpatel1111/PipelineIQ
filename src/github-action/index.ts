@@ -5,7 +5,7 @@ import {
   processFailureEvent,
   PipelineIQConfigSchema,
   type PipelineIQConfig,
-} from "pipelineiq-core";
+} from "../core/index.js";
 import { mapGithubContext, type GhContext } from "./map-event.js";
 
 async function run(): Promise<void> {
@@ -27,6 +27,31 @@ async function run(): Promise<void> {
       eventName: github.context.eventName,
       serverUrl: github.context.serverUrl ?? "https://github.com",
       payload: github.context.payload as GhContext["payload"],
+      // Additional GitHub Actions context fields
+      actorId: process.env.GITHUB_ACTOR_ID,
+      apiUrl: process.env.GITHUB_API_URL,
+      baseRef: process.env.GITHUB_BASE_REF,
+      headRef: process.env.GITHUB_HEAD_REF,
+      job: process.env.GITHUB_JOB,
+      refName: process.env.GITHUB_REF_NAME,
+      refProtected: process.env.GITHUB_REF_PROTECTED,
+      refType: process.env.GITHUB_REF_TYPE,
+      repositoryId: process.env.GITHUB_REPOSITORY_ID,
+      repositoryOwner: process.env.GITHUB_REPOSITORY_OWNER,
+      repositoryOwnerId: process.env.GITHUB_REPOSITORY_OWNER_ID,
+      runAttempt: process.env.GITHUB_RUN_ATTEMPT ? Number.parseInt(process.env.GITHUB_RUN_ATTEMPT, 10) : undefined,
+      triggeringActor: process.env.GITHUB_TRIGGERING_ACTOR,
+      workflowRef: process.env.GITHUB_WORKFLOW_REF,
+      workflowSha: process.env.GITHUB_WORKFLOW_SHA,
+      workspace: process.env.GITHUB_WORKSPACE,
+      // Runner information
+      runnerArch: process.env.RUNNER_ARCH,
+      runnerDebug: process.env.RUNNER_DEBUG,
+      runnerEnvironment: process.env.RUNNER_ENVIRONMENT,
+      runnerName: process.env.RUNNER_NAME,
+      runnerOs: process.env.RUNNER_OS,
+      runnerTemp: process.env.RUNNER_TEMP,
+      runnerToolCache: process.env.RUNNER_TOOL_CACHE,
     };
 
     const event = await mapGithubContext(ghCtx, octokit, environment);

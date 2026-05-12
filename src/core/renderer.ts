@@ -86,6 +86,17 @@ export function renderDescription(
 
   // Links
   out.push("### Links");
+  // Pipeline/Workflow URL
+  out.push(`- [Pipeline Run](${event.pipeline.url})`);
+  // Repository URL
+  out.push(`- [Repository](${event.repository.url})`);
+  // Commit URL
+  out.push(`- [Commit](${event.commit.url})`);
+  // Pull Request URL (if available)
+  if ((event as any).pullRequest) {
+    out.push(`- [Pull Request #${(event as any).pullRequest.number}](${(event as any).pullRequest.url})`);
+  }
+  // Additional external links from fields
   for (const link of fields.externalLinks ?? []) {
     out.push(`- [${link.title}](${link.url})`);
   }

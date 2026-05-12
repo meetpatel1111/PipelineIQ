@@ -195,28 +195,28 @@ GitHub Action / Azure DevOps Extension
 
 ---
 
-# 9. Monorepo Architecture
+# 9. Unified Package Architecture
 
 ```txt
 pipelineiq/
-├── packages/
-│   ├── core/
-│   ├── github-action/
-│   ├── azure-devops-extension/
-│   ├── jira-client/
-│   ├── ai-engine/
-│   ├── log-parser/
-│   ├── shared-types/
-│   ├── markdown-renderer/
-│   └── cli/
-│
-├── apps/
-│   ├── dashboard/
-│   └── api/
-│
-├── examples/
-├── docs/
-└── templates/
+├── src/
+│   ├── core/                 # Main processing engine
+│   │   ├── pipeline/         # Pipeline processing logic
+│   │   ├── jira/             # Jira REST API client
+│   │   ├── ai/               # AI enrichment with fallbacks
+│   │   ├── parser/           # Multi-format log parsing
+│   │   ├── enrichers/        # Deterministic and computed enrichers
+│   │   ├── signatures/      # Failure pattern library
+│   │   └── markdown/         # Markdown to ADF conversion
+│   ├── cli/                  # Command-line interface
+│   ├── github-action/        # GitHub Actions integration
+│   ├── azure-devops/         # Azure DevOps integration
+│   └── index.ts              # Main entry point
+├── bin/pipelineiq           # CLI executable
+├── action.yml               # GitHub Action metadata
+├── task.json                # Azure DevOps task metadata
+├── examples/                # Usage examples
+└── docs/                    # Documentation
 ```
 
 ---

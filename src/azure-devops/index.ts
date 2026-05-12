@@ -1,10 +1,10 @@
 import * as tl from "azure-pipelines-task-lib/task";
 import { mapAzureDevOpsContext } from "./map-event.js";
-import type { PipelineIQConfig } from "pipelineiq-core";
+import type { PipelineIQConfig } from "../core/index.js";
 
 async function run(): Promise<void> {
   // Dynamic import for ES modules
-  const { processFailureEvent, PipelineIQConfigSchema } = await import("pipelineiq-core");
+  const { processFailureEvent, PipelineIQConfigSchema } = await import("../core/index.js");
   try {
     const config = await readConfig();
     const environment = tl.getInput("environment") || undefined;
@@ -27,7 +27,7 @@ async function run(): Promise<void> {
 
 async function readConfig(): Promise<PipelineIQConfig> {
   // Dynamic import for schema validation
-  const { PipelineIQConfigSchema } = await import("pipelineiq-core");
+  const { PipelineIQConfigSchema } = await import("../core/index.js");
   
   const raw = {
     jira: {
