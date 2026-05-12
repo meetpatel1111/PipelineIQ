@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "name": "PipelineIQ",
+  "friendlyName": "PipelineIQ — CI/CD Failure Intelligence",
+  "description": "Create intelligent Jira tickets from Azure DevOps pipeline failures",
+  "author": "PipelineIQ",
+  "category": "Utility",
+  "visibility": ["Build", "Release"],
+  "version": { "Major": 0, "Minor": 0, "Patch": 1 },
+  "instanceNameFormat": "PipelineIQ: $(jiraProject)",
+  "inputs": [
+    { "name": "jiraUrl", "type": "string", "label": "Jira URL", "required": true },
+    { "name": "jiraEmail", "type": "string", "label": "Jira Email", "required": true },
+    { "name": "jiraToken", "type": "string", "label": "Jira API Token", "required": true },
+    { "name": "jiraProject", "type": "string", "label": "Jira Project Key", "required": true },
+    { "name": "issueType", "type": "string", "label": "Issue Type", "defaultValue": "Bug" },
+    { "name": "environment", "type": "string", "label": "Environment", "required": false },
+    {
+      "name": "aiMode",
+      "type": "pickList",
+      "label": "AI Mode",
+      "defaultValue": "disabled",
+      "options": { "disabled": "Disabled", "assist": "Assist", "full": "Full" }
+    },
+    { "name": "aiApiKey", "type": "string", "label": "AI API Key", "required": false },
+    {
+      "name": "dedupWindowHours",
+      "type": "string",
+      "label": "Dedup window (hours)",
+      "defaultValue": "24"
+    }
+  ],
+  "execution": {
+    "Node20_1": {
+      "target": "dist/index.js"
+    }
+  }
+}

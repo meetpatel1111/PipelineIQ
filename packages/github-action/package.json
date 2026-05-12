@@ -1,0 +1,24 @@
+{
+  "name": "@pipelineiq/github-action",
+  "version": "0.2.0",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --no-dts --clean --target node20",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0",
+    "@actions/github": "^6.0.0",
+    "@pipelineiq/core": "workspace:*",
+    "@octokit/rest": "^20.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.5.0"
+  }
+}

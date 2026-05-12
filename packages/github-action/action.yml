@@ -1,0 +1,59 @@
+name: PipelineIQ
+description: Create intelligent Jira tickets from GitHub Actions failures
+author: PipelineIQ
+branding:
+  icon: alert-triangle
+  color: red
+
+inputs:
+  jira-url:
+    description: Base URL of your Jira instance (e.g. https://yourorg.atlassian.net)
+    required: true
+  jira-email:
+    description: Email of the Jira service account
+    required: true
+  jira-token:
+    description: Jira API token
+    required: true
+  jira-project:
+    description: Jira project key (e.g. DEVOPS)
+    required: true
+  issue-type:
+    description: Jira issue type to create
+    required: false
+    default: Bug
+  default-assignee:
+    description: Default Jira accountId to assign issues to
+    required: false
+  ai-mode:
+    description: AI enrichment mode (disabled | assist | full)
+    required: false
+    default: disabled
+  ai-api-key:
+    description: API key for AI provider (required when ai-mode != disabled)
+    required: false
+  ai-provider:
+    description: AI provider (openai | anthropic | azure-openai)
+    required: false
+    default: openai
+  github-token:
+    description: GITHUB_TOKEN for fetching workflow logs
+    required: false
+    default: ${{ github.token }}
+  environment:
+    description: Deployment environment label (dev / staging / production)
+    required: false
+  dedup-window-hours:
+    description: Time window (hours) for dedup signature matching
+    required: false
+    default: "24"
+
+outputs:
+  jira-issue-key:
+    description: Key of the Jira issue created or updated
+  action-taken:
+    description: One of created / updated / skipped
+
+runs:
+  using: node20
+  main: dist/index.js

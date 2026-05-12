@@ -1,0 +1,55 @@
+name: PipelineIQ Example
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+
+      - name: Run tests
+        run: |
+          npm test
+
+      - name: Build application
+        run: |
+          npm run build
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging..."
+          # Simulate deployment failure
+          exit 1
+
+  # PipelineIQ integration - only runs on failure
+  pipelineiq:
+    needs: build
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: PipelineIQ Analysis
+        uses: ./
+        with:
+          jira-url: ${{ secrets.JIRA_URL }}
+          jira-email: ${{ secrets.JIRA_EMAIL }}
+          jira-token: ${{ secrets.JIRA_TOKEN }}
+          jira-project: DEVOPS
+          environment: staging
+          ai-mode: assist
+          ai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          ai-provider: openai
