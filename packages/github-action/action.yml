@@ -1,5 +1,5 @@
 name: PipelineIQ
-description: Create intelligent Jira tickets from GitHub Actions failures
+description: 🔗 Bridge GitHub Actions failures to Jira - automatic ticket creation with AI insights
 author: PipelineIQ
 branding:
   icon: alert-triangle

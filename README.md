@@ -1,8 +1,20 @@
 # PipelineIQ
 
-AI-Powered CI/CD Failure Intelligence for GitHub, Azure DevOps & Jira
+![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
 
-PipelineIQ is a developer-native DevOps intelligence platform that automatically detects CI/CD failures from GitHub Actions and Azure DevOps Pipelines and creates intelligent Jira issues enriched with operational context, AI summaries, and remediation guidance.
+**🔗 The Missing Link Between Your CI/CD and Jira**
+
+PipelineIQ connects **GitHub Actions** and **Azure DevOps** pipelines directly to **Jira**, automatically creating intelligent tickets when failures occur. Stop manually copying logs and context - let PipelineIQ bridge the gap between your CI/CD failures and issue tracking.
+
+## 🎯 Core Value: Seamless CI/CD → Jira Integration
+
+- **🔄 Automatic Detection**: Monitors GitHub Actions and Azure DevOps pipeline failures
+- **🎫 Smart Jira Tickets**: Creates rich, contextual Jira issues with AI-powered insights
+- **📊 Operational Context**: Includes repository, branch, commit, environment, and failure details
+- **🤖 AI-Enhanced**: Root cause analysis and remediation suggestions
+- **🔒 Enterprise Ready**: Secret masking, GDPR compliance, and custom field support
+
+PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tickets without manual intervention.
 
 ## 🚀 Quick Start
 
@@ -23,7 +35,7 @@ Add to your workflow:
 
 ### Azure DevOps
 
-Add to your pipeline:
+Connect your Azure DevOps pipelines to Jira:
 
 ```yaml
 - task: PipelineIQ@0.2.1
@@ -44,7 +56,32 @@ npm install -g @pipelineiq/cli
 pipelineiq analyze --logs ./build.log --config ./pipelineiq.json
 ```
 
-## 📦 Installation
+## � How It Works: CI/CD → Jira Integration
+
+```mermaid
+graph LR
+    A[GitHub Actions] -->|Pipeline Failure| B[PipelineIQ]
+    C[Azure DevOps] -->|Pipeline Failure| B
+    B -->|AI Analysis| D[Rich Jira Ticket]
+    B -->|Context Enrichment| D
+    D -->|Actionable Issue| E[Development Team]
+```
+
+**Integration Flow:**
+1. **🔍 Failure Detection**: PipelineIQ monitors your CI/CD pipelines for failures
+2. **🧠 Context Analysis**: Extracts repository, branch, commit, and failure details
+3. **🤖 AI Processing**: Generates root cause analysis and remediation suggestions
+4. **🎫 Jira Creation**: Creates comprehensive tickets with all operational context
+5. **🔄 Deduplication**: Prevents duplicate tickets for similar failures
+
+**What Gets Bridged:**
+- ✅ Pipeline metadata → Jira custom fields
+- ✅ Commit links → Jira remote links  
+- ✅ Error logs → Jira descriptions
+- ✅ Environment context → Jira labels
+- ✅ AI insights → Jira comments
+
+## � Installation
 
 ### From npm
 
@@ -257,7 +294,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for gu
 
 ## 📄 License
 
-MIT License - see [LICENSE](./LICENSE) for details.
+Apache License 2.0 - see [LICENSE](./LICENSE) for details.
 
 ## 🔗 Links
 

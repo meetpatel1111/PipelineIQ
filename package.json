@@ -1,8 +1,9 @@
 {
   "name": "pipelineiq",
-  "version": "0.2.1",
-  "private": true,
+  "version": "0.2.2",
   "description": "AI-powered CI/CD failure intelligence for GitHub, Azure DevOps & Jira",
+  "main": "index.js",
+  "type": "module",
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0"
@@ -14,6 +15,35 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules"
   },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "packages/core/dist",
+    "packages/cli/dist",
+    "packages/github-action/dist",
+    "packages/azure-devops-extension/dist"
+  ],
+  "keywords": [
+    "ci-cd",
+    "devops",
+    "jira",
+    "github-actions",
+    "azure-devops",
+    "ai",
+    "failure-detection",
+    "automation"
+  ],
+  "author": "PipelineIQ Team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meetpatel1111/PipelineIQ.git"
+  },
+  "bugs": {
+    "url": "https://github.com/meetpatel1111/PipelineIQ/issues"
+  },
+  "homepage": "https://github.com/meetpatel1111/PipelineIQ#readme",
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/inquirer": "^9.0.9",
