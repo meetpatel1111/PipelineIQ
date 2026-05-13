@@ -1,7 +1,7 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: 0.7.2
-author: PipelineIQ
+version: '0.8.0'
+author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
   color: red

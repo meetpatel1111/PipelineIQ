@@ -12,7 +12,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "build": "npm run build:core && npm run build:cli && npm run build:platforms",
+    "build": "npm run sync-version && npm run build:core && npm run build:cli && npm run build:platforms",
+    "sync-version": "node scripts/sync-version.js",
+    "version": "npm run sync-version && git add task.json action.yml",
     "build:core": "tsup src/core/index.ts --format esm --dts --outDir dist",
     "build:cli": "tsup src/cli/index.ts --format esm --dts --outDir dist/cli",
     "build:platforms": "npm run build:github-action && npm run build:azure-devops",
@@ -42,7 +44,7 @@
     "failure-detection",
     "automation"
   ],
-  "author": "PipelineIQ Team",
+  "author": "Meetkumar Patel <pmeet464@gmail.com>",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

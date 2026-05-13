@@ -4,17 +4,18 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.7.2] - 2026-05-13
+## [0.8.0] - 2026-05-13
 
-### Added
-- **Optional Jira Assignment**: Added `--assignee` and `--default-assignee` CLI flags to allow explicit ticket assignment. Assignment is now optional and treats failures as warnings, preventing pipeline blockers on invalid user IDs.
-- **Enhanced CLI Aliases**: Added short flag `-m` for `--ai-model` and ensured consistency across all platform inputs.
-- **Azure DevOps Schema Parity**: Updated the Azure DevOps task to support `defaultAssignee` and fixed missing core configuration fields (`jiraProject`, `issueType`).
+### Added - Production Parity & Resilience
+- **Full Platform Parity**: Achieved 100% schema consistency across GitHub Actions and Azure DevOps task definitions.
+- **Optional Jira Assignment**: Introduced `--assignee` and `--default-assignee` CLI flags. Ticket assignment is now non-fatal; invalid Account IDs result in warnings rather than pipeline failures.
+- **Dynamic AI Model Selection**: First-class support for `--ai-model` (alias `-m`) across all commands.
+- **Global CLI Standardization**: Optimized build process for global `npm install -g` deployment.
 
 ### Fixed
-- **Authentication Hardening**: Implemented aggressive whitespace trimming for all sensitive CLI inputs to prevent common "copy-paste" authentication errors.
-- **Dynamic Versioning**: The CLI now correctly reports its version from `package.json` when running `pipelineiq --version`.
-- **CLI Command Consistency**: Fixed an issue where some CLI options were not correctly registered in the `analyze` command definition.
+- **Authentication Hardening**: Implemented automatic trimming for all credential-related CLI inputs (URL, Token, Email) to prevent copy-paste errors.
+- **Jira API Reliability**: Standardized summary truncation to 255 characters across all providers to ensure 100% Jira API compliance.
+- **Dynamic Versioning**: Fixed the CLI version reporting to correctly track `package.json`.
 
 ## [0.7.0] - 2026-05-13
 
