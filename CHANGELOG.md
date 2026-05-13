@@ -4,6 +4,12 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.1] - 2026-05-13
+
+### Added
+- **Dynamic AI Model Override**: Introduced `--ai-model` flag to the `analyze` and `test` CLI commands, enabling runtime selection of specific AI models (e.g., switching between Gemini Flash and Pro).
+- **CLI Test Enhancements**: The `test` command now supports overriding `ai-provider` and `ai-api-key` via CLI flags for easier troubleshooting.
+
 ## [0.6.0] - 2026-05-13
 
 ### Added

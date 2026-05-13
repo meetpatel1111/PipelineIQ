@@ -7,7 +7,7 @@
   "author": "PipelineIQ",
   "category": "Utility",
   "visibility": ["Build", "Release"],
-  "version": { "Major": 0, "Minor": 6, "Patch": 0 },
+  "version": { "Major": 0, "Minor": 6, "Patch": 1 },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
   "inputs": [
     { "name": "jiraUrl", "type": "string", "label": "Jira URL", "required": true },

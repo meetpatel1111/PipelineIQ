@@ -64,6 +64,7 @@ program
   .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
   .option("--ai-api-key <key>", "AI API key")
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
+  .option("--ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -97,6 +98,9 @@ program
   .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
   .option("--jira", "Test Jira connectivity", false)
   .option("--ai", "Test AI provider", false)
+  .option("--ai-provider <provider>", "AI provider to test")
+  .option("--ai-model <model>", "AI model to test")
+  .option("--ai-api-key <key>", "AI API key to test")
   .action(async (options) => {
     await handleTest(options);
   });
@@ -118,6 +122,7 @@ async function handleAnalyze(options: any) {
     if (options.aiMode) configData.ai.mode = options.aiMode;
     if (options.aiApiKey) configData.ai.apiKey = options.aiApiKey;
     if (options.aiProvider) configData.ai.provider = options.aiProvider;
+    if (options.aiModel) configData.ai.model = options.aiModel;
 
     // Now validate the fully merged configuration
     const config = PipelineIQConfigSchema.parse(configData);
@@ -239,6 +244,12 @@ async function handleParse(options: any) {
 async function handleTest(options: any) {
   try {
     const config = await loadConfig(options.config);
+    
+    // Override with CLI options
+    if (options.aiProvider) config.ai.provider = options.aiProvider;
+    if (options.aiModel) config.ai.model = options.aiModel;
+    if (options.aiApiKey) config.ai.apiKey = options.aiApiKey;
+
 
     if (options.jira) {
       const spinner = ora("Testing Jira connectivity...").start();

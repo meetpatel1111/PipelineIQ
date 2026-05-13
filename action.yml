@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: 0.6.0
+version: 0.6.1
 author: PipelineIQ
 branding:
   icon: alert-triangle
