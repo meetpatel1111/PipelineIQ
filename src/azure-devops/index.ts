@@ -40,6 +40,9 @@ async function readConfig(): Promise<PipelineIQConfig> {
       accessToken: tl.getInput("jiraAccessToken") || "",
       strictGDPR: tl.getBoolInput("jiraStrictGDPR"),
     },
+    jiraProject: tl.getInput("jiraProject", true)!,
+    issueType: tl.getInput("issueType") || "Bug",
+    defaultAssignee: tl.getInput("defaultAssignee") || undefined,
     ai: {
       mode: tl.getInput("aiMode") as any || "disabled",
       provider: tl.getInput("aiProvider") as any,

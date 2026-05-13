@@ -66,6 +66,8 @@ program
   .option("--ai-api-key <key>", "AI API key")
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
   .option("-m, --ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
+  .option("--assignee <id>", "Jira account ID to assign the issue to")
+  .option("--default-assignee <id>", "Alias for --assignee")
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -119,6 +121,9 @@ async function handleAnalyze(options: any) {
     if (options.jiraToken) configData.jira.apiToken = options.jiraToken.trim();
     if (options.jiraProject) configData.jiraProject = options.jiraProject.trim();
     if (options.issueType) configData.issueType = options.issueType.trim();
+    if (options.assignee || options.defaultAssignee) {
+      configData.defaultAssignee = (options.assignee || options.defaultAssignee).trim();
+    }
     if (options.dedupWindow) configData.dedup.windowHours = parseInt(options.dedupWindow);
     if (options.aiMode) configData.ai.mode = options.aiMode.trim();
     if (options.aiApiKey) configData.ai.apiKey = options.aiApiKey.trim();

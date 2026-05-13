@@ -7,7 +7,7 @@
   "author": "PipelineIQ",
   "category": "Utility",
   "visibility": ["Build", "Release"],
-  "version": { "Major": 0, "Minor": 7, "Patch": 0 },
+  "version": { "Major": 0, "Minor": 7, "Patch": 2 },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
   "inputs": [
     { "name": "jiraUrl", "type": "string", "label": "Jira URL", "required": true },
@@ -24,6 +24,7 @@
     { "name": "jiraPassword", "type": "string", "label": "Jira Password", "required": false },
     { "name": "jiraProject", "type": "string", "label": "Jira Project Key", "required": true },
     { "name": "issueType", "type": "string", "label": "Issue Type", "defaultValue": "Bug" },
+    { "name": "defaultAssignee", "type": "string", "label": "Default Assignee (Jira Account ID)", "required": false },
     { "name": "environment", "type": "string", "label": "Environment", "required": false },
     {
       "name": "aiMode",
