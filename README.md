@@ -128,7 +128,7 @@ npm run build
 - **Confidence Scoring**: AI confidence thresholds with fallback logic
 - **Dynamic Model Selection**: Override AI models at runtime via CLI or configuration (e.g., `--ai-model gemini-2.5-pro`)
 
-### Log Parsing
+## Log Parsing
 
 - **Format Support**: GitHub Actions, Azure DevOps, Terraform, Kubernetes, Docker, JUnit
 - **Smart Extraction**: Error messages, stack traces, exit codes, failed commands
@@ -209,6 +209,7 @@ pipelineiq analyze \
   --github-token "${{ secrets.GITHUB_TOKEN }}" \
   --ai-mode assist \
   --ai-provider gemini \
+  --ai-model "gemini-2.5-flash-lite" \
   --ai-api-key "${{ secrets.AI_API_KEY }}" \
   --environment main \
   --repository "${{ github.repository }}" \
@@ -228,8 +229,10 @@ pipelineiq analyze \
   --repository-owner "${{ github.repository_owner }}" \
   --format github-actions
 
+# To enable assignment, add: --assignee "${{ secrets.JIRA_ASSIGNEE_ID }}"
+
 # Override AI model at runtime
-pipelineiq analyze --logs ./logs --ai-model gemini-2.5-pro
+pipelineiq analyze --logs ./logs --ai-model gemini-2.5-flash-lite
 
 ```
 

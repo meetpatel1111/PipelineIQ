@@ -4,6 +4,18 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.7.2] - 2026-05-13
+
+### Added
+- **Optional Jira Assignment**: Added `--assignee` and `--default-assignee` CLI flags to allow explicit ticket assignment. Assignment is now optional and treats failures as warnings, preventing pipeline blockers on invalid user IDs.
+- **Enhanced CLI Aliases**: Added short flag `-m` for `--ai-model` and ensured consistency across all platform inputs.
+- **Azure DevOps Schema Parity**: Updated the Azure DevOps task to support `defaultAssignee` and fixed missing core configuration fields (`jiraProject`, `issueType`).
+
+### Fixed
+- **Authentication Hardening**: Implemented aggressive whitespace trimming for all sensitive CLI inputs to prevent common "copy-paste" authentication errors.
+- **Dynamic Versioning**: The CLI now correctly reports its version from `package.json` when running `pipelineiq --version`.
+- **CLI Command Consistency**: Fixed an issue where some CLI options were not correctly registered in the `analyze` command definition.
+
 ## [0.7.0] - 2026-05-13
 
 ### Fixed
