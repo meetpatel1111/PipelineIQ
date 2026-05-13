@@ -337,25 +337,31 @@ async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
 
 async function loadConfig(configPath: string): Promise<any> {
   try {
-    return await fs.readJson(configPath);
-  } catch (error) {
-    if ((error as any).code === "ENOENT") {
-      if (configPath !== "./pipelineiq.json") {
-        console.log(chalk.yellow(`Configuration file ${configPath} not found, using defaults`));
-      }
-      return {
-        jira: {
-          baseUrl: (process.env.JIRA_URL || "https://placeholder.atlassian.net").trim(),
-          email: (process.env.JIRA_EMAIL || "placeholder@example.com").trim(),
-          apiToken: (process.env.JIRA_TOKEN || "placeholder").trim(),
-        },
-        jiraProject: (process.env.JIRA_PROJECT || "DEVOPS").trim(),
-        ai: { mode: "disabled" },
-        dedup: { enabled: true, windowHours: 24 },
-      };
+    if (await fs.pathExists(configPath)) {
+      return await fs.readJson(configPath);
     }
-    throw error;
+    
+    // If a specific config path was provided but doesn't exist, throw error
+    if (configPath !== "./pipelineiq.json" && configPath !== "pipelineiq.json") {
+      throw new Error(`Configuration file not found at: ${configPath}`);
+    }
+  } catch (error) {
+    if ((error as any).code !== "ENOENT") {
+      throw new Error(`Error reading configuration file ${configPath}: ${(error as Error).message}`);
+    }
   }
+
+  // No config file found, return environment variable structure for merging
+  return {
+    jira: {
+      baseUrl: (process.env.JIRA_URL || "").trim(),
+      email: (process.env.JIRA_EMAIL || "").trim(),
+      apiToken: (process.env.JIRA_TOKEN || "").trim(),
+    },
+    jiraProject: (process.env.JIRA_PROJECT || "").trim(),
+    ai: { mode: "disabled" },
+    dedup: { enabled: true, windowHours: 24 },
+  };
 }
 
 async function initConfig() {
