@@ -113,16 +113,16 @@ async function handleAnalyze(options: any) {
     let configData = await loadConfig(options.config);
     
     // Override config with CLI options if provided
-    if (options.jiraUrl) configData.jira.baseUrl = options.jiraUrl;
-    if (options.jiraEmail) configData.jira.email = options.jiraEmail;
-    if (options.jiraToken) configData.jira.apiToken = options.jiraToken;
-    if (options.jiraProject) configData.jiraProject = options.jiraProject;
-    if (options.issueType) configData.issueType = options.issueType;
+    if (options.jiraUrl) configData.jira.baseUrl = options.jiraUrl.trim();
+    if (options.jiraEmail) configData.jira.email = options.jiraEmail.trim();
+    if (options.jiraToken) configData.jira.apiToken = options.jiraToken.trim();
+    if (options.jiraProject) configData.jiraProject = options.jiraProject.trim();
+    if (options.issueType) configData.issueType = options.issueType.trim();
     if (options.dedupWindow) configData.dedup.windowHours = parseInt(options.dedupWindow);
-    if (options.aiMode) configData.ai.mode = options.aiMode;
-    if (options.aiApiKey) configData.ai.apiKey = options.aiApiKey;
-    if (options.aiProvider) configData.ai.provider = options.aiProvider;
-    if (options.aiModel) configData.ai.model = options.aiModel;
+    if (options.aiMode) configData.ai.mode = options.aiMode.trim();
+    if (options.aiApiKey) configData.ai.apiKey = options.aiApiKey.trim();
+    if (options.aiProvider) configData.ai.provider = options.aiProvider.trim();
+    if (options.aiModel) configData.ai.model = options.aiModel.trim();
 
     // Now validate the fully merged configuration
     const config = PipelineIQConfigSchema.parse(configData);
@@ -345,11 +345,11 @@ async function loadConfig(configPath: string): Promise<any> {
       }
       return {
         jira: {
-          baseUrl: process.env.JIRA_URL || "https://placeholder.atlassian.net",
-          email: process.env.JIRA_EMAIL || "placeholder@example.com",
-          apiToken: process.env.JIRA_TOKEN || "placeholder",
+          baseUrl: (process.env.JIRA_URL || "https://placeholder.atlassian.net").trim(),
+          email: (process.env.JIRA_EMAIL || "placeholder@example.com").trim(),
+          apiToken: (process.env.JIRA_TOKEN || "placeholder").trim(),
         },
-        jiraProject: process.env.JIRA_PROJECT || "DEVOPS",
+        jiraProject: (process.env.JIRA_PROJECT || "DEVOPS").trim(),
         ai: { mode: "disabled" },
         dedup: { enabled: true, windowHours: 24 },
       };
