@@ -99,7 +99,7 @@ class JiraCloudClient implements JiraClient {
       const res = await this.client.issues.createIssue({
         fields: {
           project: { key: spec.projectKey },
-          summary: spec.summary,
+          summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
           description: markdownToAdf(spec.description) as any,
           issuetype: { name: spec.issueType },
           labels: spec.labels,
@@ -336,7 +336,7 @@ class JiraCloudClient implements JiraClient {
         issueUpdates: specs.map((spec) => ({
           fields: {
             project: { key: spec.projectKey },
-            summary: spec.summary,
+            summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
             description: markdownToAdf(spec.description) as any,
             issuetype: { name: spec.issueType },
             labels: spec.labels,

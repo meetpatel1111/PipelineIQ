@@ -355,7 +355,7 @@ export class EnhancedJiraClient implements JiraClient {
   private buildEnhancedFields(spec: JiraTicketSpec): any {
     const baseFields = {
       project: { key: spec.projectKey },
-      summary: spec.summary,
+      summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
       description: this.formatDescription(spec.description),
       issuetype: { name: spec.issueType },
       labels: spec.labels,

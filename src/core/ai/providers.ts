@@ -48,7 +48,7 @@ export class OpenAIProvider implements AIProviderInterface {
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
             
             Return a JSON object with the following fields:
-            - summary: Brief human-readable failure description
+            - summary: Brief human-readable failure description (max 255 characters)
             - rootCause: Most likely cause of the failure
             - remediation: Array of specific remediation steps
             - severity: Critical/High/Medium/Low based on impact
@@ -202,7 +202,7 @@ export class AnthropicProvider implements AIProviderInterface {
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
 Return a JSON object with the following fields:
-- summary: Brief human-readable failure description
+- summary: Brief human-readable failure description (max 255 characters)
 - rootCause: Most likely cause of the failure
 - remediation: Array of specific remediation steps
 - severity: Critical/High/Medium/Low based on impact
@@ -361,7 +361,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
             
             Return a JSON object with the following fields:
-            - summary: Brief human-readable failure description
+            - summary: Brief human-readable failure description (max 255 characters)
             - rootCause: Most likely cause of the failure
             - remediation: Array of specific remediation steps
             - severity: Critical/High/Medium/Low based on impact

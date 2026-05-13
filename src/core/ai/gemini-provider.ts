@@ -75,7 +75,7 @@ ${request.historicalContext ? `\n**Historical Context:**\n${request.historicalCo
 
 Please provide a JSON response with the following structure:
 {
-  "summary": "Brief summary of what went wrong",
+  "summary": "Brief summary of what went wrong (max 255 characters)",
   "rootCause": "Detailed explanation of the root cause",
   "remediation": ["Step 1: Fix this", "Step 2: Do that", "Step 3: Verify"],
   "severity": "Critical|High|Medium|Low",

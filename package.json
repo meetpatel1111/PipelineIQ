@@ -1,6 +1,6 @@
 {
   "name": "pipelineiq",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "AI-powered CI/CD failure intelligence for GitHub, Azure DevOps & Jira",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -8,6 +8,14 @@
   "bin": {
     "pipelineiq": "./bin/pipelineiq"
   },
+  "files": [
+    "dist",
+    "bin",
+    "action.yml",
+    "task.json",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20.0.0"
   },

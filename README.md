@@ -18,43 +18,24 @@ PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tic
 
 ## 🚀 Quick Start
 
-### GitHub Actions
-
-Add to your workflow (logs are automatically fetched):
-
-```yaml
-- name: PipelineIQ Analysis
-  if: failure()
-  uses: meetpatel1111/PipelineIQ@v0.6.0
-  with:
-    jira-url: ${{ secrets.JIRA_URL }}
-    jira-email: ${{ secrets.JIRA_EMAIL }}
-    jira-token: ${{ secrets.JIRA_API_TOKEN }}
-    jira-project: ${{ secrets.JIRA_PROJECT }}
-```
-
-### Azure DevOps
-
-Connect your Azure DevOps pipelines to Jira:
-
-```yaml
-- task: PipelineIQ@0
-  condition: failed()
-  inputs:
-    jiraUrl: $(JIRA_URL)
-    jiraEmail: $(JIRA_EMAIL)
-    jiraToken: $(JIRA_API_TOKEN)
-    jiraProject: $(JIRA_PROJECT)
-```
 
 ### CLI
 
-Install and analyze current GitHub/ADO failures automatically:
+PipelineIQ can be used as a global command or via `npx` for one-off tasks.
 
+#### Option 1: Global Install (Recommended for local use)
+Install globally to use the `pipelineiq` command directly from any terminal:
 ```bash
 npm install -g pipelineiq
-# Automatically detects environment and fetches logs
+
+# Now run directly
 pipelineiq analyze --jira-project "DEVOPS"
+```
+
+#### Option 2: Use with `npx` (Recommended for CI/CD)
+No installation required; `npx` will fetch the latest version and run it:
+```bash
+npx pipelineiq analyze --jira-project "DEVOPS"
 ```
 
 ## � How It Works: CI/CD → Jira Integration
@@ -84,10 +65,18 @@ graph LR
 
 ## � Installation
 
-### From npm
+### Global Installation (Direct CLI)
+Best for developers who want to use PipelineIQ frequently from their local machine.
+```bash
+npm install -g pipelineiq
+# Access directly via 'pipelineiq'
+```
 
+### Local Installation (Project-based)
+Best for including PipelineIQ as a dependency in your repository.
 ```bash
 npm install pipelineiq
+# Access via 'npx pipelineiq'
 ```
 
 ### From Source
@@ -102,9 +91,9 @@ npm run build
 ## 🏗 Architecture
 
 ```
-GitHub Action / Azure DevOps Extension
-                    |
-                    v
+                CLI / API
+                   | 
+                   v
            PipelineIQ Core Engine
                     |
         +-----------+------------+
@@ -137,6 +126,7 @@ GitHub Action / Azure DevOps Extension
 - **Multiple Providers**: Google Gemini (default), OpenAI, Anthropic, Azure OpenAI, local models
 - **Smart Analysis**: Root cause analysis, remediation guidance, severity prediction
 - **Confidence Scoring**: AI confidence thresholds with fallback logic
+- **Dynamic Model Selection**: Override AI models at runtime via CLI or configuration (e.g., `--ai-model gemini-2.5-pro`)
 
 ### Log Parsing
 
@@ -149,6 +139,7 @@ GitHub Action / Azure DevOps Extension
 
 - **ADF Conversion**: Markdown to Atlassian Document Format for rich descriptions
 - **Custom Fields**: Full support for operational metadata fields
+- **API Reliability**: Automatic truncation of long fields (e.g., Jira summary) to ensure API compliance.
 - **Dedup Search**: JQL-based duplicate detection with time windows
 - **Bulk Operations**: Enhanced client with bulk comments, links, transitions
 
@@ -206,11 +197,40 @@ GitHub Action / Azure DevOps Extension
 # Analyze GitHub Actions logs
 pipelineiq analyze --logs ./github-logs --source github --format github-actions
 
-# Analyze Azure DevOps logs
+# Analyze Azure DevOps logs (installed globally)
 pipelineiq analyze --logs ./ado-logs --source azure-devops --format azure-devops
 
-# Dry run (no Jira creation)
-pipelineiq analyze --logs ./build.log --dry-run
+# Full analysis with GitHub Actions context
+pipelineiq analyze \
+  --jira-url "${{ secrets.JIRA_URL }}" \
+  --jira-project "SCRUM" \
+  --jira-email "${{ secrets.JIRA_EMAIL }}" \
+  --jira-token "${{ secrets.JIRA_TOKEN }}" \
+  --github-token "${{ secrets.GITHUB_TOKEN }}" \
+  --ai-mode assist \
+  --ai-provider gemini \
+  --ai-api-key "${{ secrets.AI_API_KEY }}" \
+  --environment main \
+  --repository "${{ github.repository }}" \
+  --branch "${{ github.ref_name }}" \
+  --commit "${{ github.sha }}" \
+  --pipeline "CI/CD Pipeline with PipelineIQ" \
+  --run-id "${{ github.run_id }}" \
+  --run-number "${{ github.run_number }}" \
+  --actor "${{ github.actor }}" \
+  --issue-type Bug \
+  --event-name "${{ github.event_name }}" \
+  --run-attempt "${{ github.run_attempt }}" \
+  --runner-os "${{ runner.os }}" \
+  --runner-arch "${{ runner.arch }}" \
+  --api-url "${{ github.api_url }}" \
+  --job-name "${{ github.job }}" \
+  --repository-owner "${{ github.repository_owner }}" \
+  --format github-actions
+
+# Override AI model at runtime
+pipelineiq analyze --logs ./logs --ai-model gemini-2.5-pro
+
 ```
 
 ### Configuration Management
