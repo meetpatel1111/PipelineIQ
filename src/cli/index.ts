@@ -14,6 +14,7 @@ import {
   PipelineIQConfigSchema,
   aiEnricher
 } from "../core/index.js";
+const pkg = JSON.parse(await fs.readFile(new URL("../../package.json", import.meta.url), "utf-8"));
 import type {
   FailureEvent,
   PipelineIQConfig,
@@ -27,7 +28,7 @@ const program = new Command();
 program
   .name("pipelineiq")
   .description("CLI for PipelineIQ CI/CD failure intelligence")
-  .version("0.0.1");
+  .version(pkg.version);
 
 // Analyze command
 program
