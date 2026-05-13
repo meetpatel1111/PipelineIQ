@@ -248,14 +248,13 @@ pipelineiq/
 # GitHub Actions
 
 ```yaml
-- uses: pipelineiq/action@v1
+- uses: meetpatel1111/PipelineIQ@v0.3.2
   if: failure()
   with:
     jira-url: ${{ secrets.JIRA_URL }}
     jira-email: ${{ secrets.JIRA_EMAIL }}
     jira-token: ${{ secrets.JIRA_TOKEN }}
     jira-project: DEVOPS
-    ai-summary: true
 ```
 
 ---
@@ -263,7 +262,7 @@ pipelineiq/
 # Azure DevOps
 
 ```yaml
-- task: PipelineIQ@1
+- task: PipelineIQ@0
   condition: failed()
   inputs:
     jiraUrl: $(JIRA_URL)

@@ -19,6 +19,7 @@ import type {
   FailureSource,
   LogFormat,
 } from "../core/index.js";
+import { Octokit } from "@octokit/rest";
 
 const program = new Command();
 
@@ -46,6 +47,10 @@ program
   .option("--run-url <url>", "Run URL or pipeline URL")
   .option("--issue-type <type>", "Jira issue type to create (default from config)")
   .option("--dedup-window <hours>", "Deduplication window in hours (default from config)")
+  .option("--jira-url <url>", "Jira base URL")
+  .option("--jira-email <email>", "Jira user email")
+  .option("--jira-token <token>", "Jira API token")
+  .option("--jira-project <key>", "Jira project key")
   .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
   .option("--ai-api-key <key>", "AI API key")
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai)")
@@ -90,32 +95,52 @@ async function handleAnalyze(options: any) {
   const spinner = ora("Analyzing failure...").start();
 
   try {
-    // Load configuration
-    const config = await loadConfig(options.config);
+    // Load configuration (raw data)
+    let configData = await loadConfig(options.config);
     
     // Override config with CLI options if provided
-    if (options.issueType) config.issueType = options.issueType;
-    if (options.dedupWindow) config.dedup.windowHours = parseInt(options.dedupWindow);
-    if (options.aiMode) config.ai.mode = options.aiMode;
-    if (options.aiApiKey) config.ai.apiKey = options.aiApiKey;
-    if (options.aiProvider) config.ai.provider = options.aiProvider;
-    
-    // Read and parse logs
-    const logContent = await readLogs(options.logs);
-    const parsedLogs = parseLogs(logContent, {
-      format: options.format as LogFormat,
-      extractStackTraces: true,
-      extractErrorMessages: true,
-      extractExitCodes: true,
-      extractCommands: true,
-    });
+    if (options.jiraUrl) configData.jira.baseUrl = options.jiraUrl;
+    if (options.jiraEmail) configData.jira.email = options.jiraEmail;
+    if (options.jiraToken) configData.jira.apiToken = options.jiraToken;
+    if (options.jiraProject) configData.jiraProject = options.jiraProject;
+    if (options.issueType) configData.issueType = options.issueType;
+    if (options.dedupWindow) configData.dedup.windowHours = parseInt(options.dedupWindow);
+    if (options.aiMode) configData.ai.mode = options.aiMode;
+    if (options.aiApiKey) configData.ai.apiKey = options.aiApiKey;
+    if (options.aiProvider) configData.ai.provider = options.aiProvider;
 
-    // Create failure event
-    const event = await createFailureEvent(options.source as FailureSource, parsedLogs, options);
+    // Now validate the fully merged configuration
+    const config = PipelineIQConfigSchema.parse(configData);
     
+    // Read and parse logs or fetch from platform API
+    let event: FailureEvent;
+    
+    if (options.logs) {
+      const logContent = await readLogs(options.logs);
+      const parsedLogs = parseLogs(logContent, {
+        format: options.format as LogFormat,
+        extractStackTraces: true,
+        extractErrorMessages: true,
+        extractExitCodes: true,
+        extractCommands: true,
+      });
+      event = await createFailureEvent(options.source as FailureSource, parsedLogs, options);
+    } else {
+      spinner.text = "Fetching logs from platform API...";
+      event = await fetchEventFromPlatform(options);
+    }
+    
+    spinner.text = "Initializing Jira client...";
+    const jira = createJiraClient(config.jira);
+    const isConnected = await jira.checkConnection();
+    if (!isConnected) {
+      throw new Error(`Could not connect to Jira at ${config.jira.baseUrl}. Please check your email and API token.`);
+    }
+
+    spinner.text = "Analyzing failure with PipelineIQ...";
     // Process with PipelineIQ
     const result = await processFailureEvent(event, config, {
-      extraEnrichers: config.ai.mode !== "disabled" ? [] : [],
+      extraEnrichers: [],
     });
 
     spinner.succeed();
@@ -246,23 +271,61 @@ async function handleTest(options: any) {
   }
 }
 
-async function loadConfig(configPath: string): Promise<PipelineIQConfig> {
+async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
+  const source = options.source || (process.env.GITHUB_ACTIONS ? "github" : process.env.SYSTEM_COLLECTIONURI ? "azure-devops" : "github");
+
+  if (source === "github") {
+    const { mapGithubContext } = await import("../github-action/map-event.js");
+    const token = options.githubToken || process.env.GITHUB_TOKEN;
+    if (!token) {
+      throw new Error("GitHub token is required to fetch logs from API. Use --github-token or set GITHUB_TOKEN environment variable.");
+    }
+
+    const octokit = new Octokit({ auth: token });
+    const ghContext = {
+      repo: {
+        owner: (options.repository || process.env.GITHUB_REPOSITORY || "").split("/")[0] || "",
+        repo: (options.repository || process.env.GITHUB_REPOSITORY || "").split("/")[1] || "",
+      },
+      workflow: options.pipeline || process.env.GITHUB_WORKFLOW || "",
+      runId: parseInt(options.runId || process.env.GITHUB_RUN_ID || "0"),
+      runNumber: parseInt(options.runNumber || process.env.GITHUB_RUN_NUMBER || "0"),
+      sha: options.commit || process.env.GITHUB_SHA || "",
+      ref: options.branch || process.env.GITHUB_REF || "",
+      actor: process.env.GITHUB_ACTOR || "",
+      eventName: process.env.GITHUB_EVENT_NAME || "push",
+      serverUrl: process.env.GITHUB_SERVER_URL || "https://github.com",
+      payload: {}, // Minimal payload for CLI
+      headRef: process.env.GITHUB_HEAD_REF,
+    };
+
+    return await mapGithubContext(ghContext as any, octokit as any, options.environment);
+  } else if (source === "azure-devops") {
+    const { mapAzureDevOpsContext } = await import("../azure-devops/map-event.js");
+    return await mapAzureDevOpsContext(options.environment);
+  }
+
+  throw new Error(`Unsupported failure source for automatic log fetching: ${source}. Please provide logs via --logs.`);
+}
+
+async function loadConfig(configPath: string): Promise<any> {
   try {
-    const configContent = await fs.readJson(configPath);
-    return PipelineIQConfigSchema.parse(configContent);
+    return await fs.readJson(configPath);
   } catch (error) {
     if ((error as any).code === "ENOENT") {
-      console.log(chalk.yellow(`Configuration file ${configPath} not found, using defaults`));
-      return PipelineIQConfigSchema.parse({
+      if (configPath !== "./pipelineiq.json") {
+        console.log(chalk.yellow(`Configuration file ${configPath} not found, using defaults`));
+      }
+      return {
         jira: {
-          baseUrl: process.env.JIRA_URL || "",
-          email: process.env.JIRA_EMAIL || "",
-          apiToken: process.env.JIRA_TOKEN || "",
+          baseUrl: process.env.JIRA_URL || "https://placeholder.atlassian.net",
+          email: process.env.JIRA_EMAIL || "placeholder@example.com",
+          apiToken: process.env.JIRA_TOKEN || "placeholder",
         },
         jiraProject: process.env.JIRA_PROJECT || "DEVOPS",
         ai: { mode: "disabled" },
-        dedup: { enabled: true },
-      });
+        dedup: { enabled: true, windowHours: 24 },
+      };
     }
     throw error;
   }

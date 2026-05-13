@@ -20,21 +20,17 @@ PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tic
 
 ### GitHub Actions
 
-Add to your workflow:
+Add to your workflow (logs are automatically fetched):
 
 ```yaml
-- name: Install PipelineIQ
-  run: npm install pipelineiq
 - name: PipelineIQ Analysis
   if: failure()
-  run: |
-    pipelineiq analyze --log-file build.log
-  env:
-    JIRA_URL: ${{ secrets.JIRA_URL }}
-    JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-    JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-    JIRA_PROJECT: ${{ secrets.JIRA_PROJECT || 'DEVOPS' }}
-    AI_API_KEY: ${{ secrets.AI_API_KEY }}
+  uses: meetpatel1111/PipelineIQ@v0.3.2
+  with:
+    jira-url: ${{ secrets.JIRA_URL }}
+    jira-email: ${{ secrets.JIRA_EMAIL }}
+    jira-token: ${{ secrets.JIRA_API_TOKEN }}
+    jira-project: ${{ secrets.JIRA_PROJECT }}
 ```
 
 ### Azure DevOps
@@ -42,24 +38,23 @@ Add to your workflow:
 Connect your Azure DevOps pipelines to Jira:
 
 ```yaml
-- script: |
-    npm install pipelineiq
-    pipelineiq analyze --log-file build.log
-  env:
-    JIRA_URL: $(JIRA_URL)
-    JIRA_EMAIL: $(JIRA_EMAIL)
-    JIRA_API_TOKEN: $(JIRA_API_TOKEN)
-    JIRA_PROJECT: $(JIRA_PROJECT)
-    AI_API_KEY: $(AI_API_KEY)
+- task: PipelineIQ@0
+  condition: failed()
+  inputs:
+    jiraUrl: $(JIRA_URL)
+    jiraEmail: $(JIRA_EMAIL)
+    jiraToken: $(JIRA_API_TOKEN)
+    jiraProject: $(JIRA_PROJECT)
 ```
 
 ### CLI
 
-Install and analyze logs locally:
+Install and analyze current GitHub/ADO failures automatically:
 
 ```bash
 npm install -g pipelineiq
-pipelineiq analyze --logs ./build.log --config ./pipelineiq.json
+# Automatically detects environment and fetches logs
+pipelineiq analyze --jira-project "DEVOPS"
 ```
 
 ## � How It Works: CI/CD → Jira Integration
@@ -128,11 +123,13 @@ GitHub Action / Azure DevOps Extension
 
 ### Core Capabilities
 
-- **Failure Detection**: Automatically detects failed GitHub workflows and Azure DevOps pipelines
-- **Intelligent Enrichment**: AI-powered analysis with deterministic fallbacks
-- **Deduplication**: Prevents duplicate tickets with smart signature matching
-- **Rich Context**: 80-120 operational fields vs typical 5-10
-- **Multi-Platform**: Native support for GitHub Actions and Azure DevOps
+- **Failure Detection**: Automatically detects failed GitHub workflows and Azure DevOps pipelines.
+- **Automated Log Fetching**: Natively fetches logs from GitHub/Azure APIs—no log redirection required.
+- **Proactive Validation**: Built-in connectivity checks for Jira and AI providers before analysis starts.
+- **Intelligent Enrichment**: AI-powered analysis with deterministic fallbacks.
+- **Deduplication**: Prevents duplicate tickets with smart signature matching.
+- **Rich Context**: 80-120 operational fields vs typical 5-10.
+- **Multi-Platform**: Native support for GitHub Actions and Azure DevOps.
 
 ### AI Features
 

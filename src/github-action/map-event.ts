@@ -116,6 +116,9 @@ export async function mapGithubContext(
   const durationMs =
     startedAt && failedAt ? Date.parse(failedAt) - Date.parse(startedAt) : undefined;
 
+  // Build a more specific job URL if possible
+  const jobUrl = failedJob ? `${pipelineUrl}/job/${failedJob.id}` : pipelineUrl;
+
   const event: FailureEvent = {
     source: "github",
     startedAt,
@@ -123,7 +126,7 @@ export async function mapGithubContext(
     ...(durationMs !== undefined ? { durationMs } : {}),
     pipeline: {
       name: ctx.workflow,
-      url: pipelineUrl,
+      url: jobUrl, // Point to the specific job if we found it
       runId: String(ctx.runId),
       runNumber: ctx.runNumber,
       ...(failedJob ? { job: failedJob.name } : {}),
@@ -150,7 +153,7 @@ export async function mapGithubContext(
         ? { authorEmail: ctx.payload.head_commit.author.email }
         : {}),
     },
-    branch: finalBranch,
+    branch: ctx.refName || finalBranch, // Use the short ref name if available
     ...(ctx.payload.pull_request
       ? {
           pullRequest: {

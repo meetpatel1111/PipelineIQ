@@ -1,5 +1,6 @@
 name: PipelineIQ
-description: 🔗 Bridge GitHub Actions failures to Jira - automatic ticket creation with AI insights
+description: AI-powered CI/CD failure intelligence for GitHub & Jira
+version: 0.3.2
 author: PipelineIQ
 branding:
   icon: alert-triangle
@@ -7,7 +8,7 @@ branding:
 
 inputs:
   jira-url:
-    description: Base URL of your Jira instance (e.g. https://yourorg.atlassian.net)
+    description: Jira base URL (e.g., https://yourorg.atlassian.net)
     required: true
   jira-email:
     description: Email of the Jira service account
@@ -16,14 +17,14 @@ inputs:
     description: Jira API token
     required: true
   jira-project:
-    description: Jira project key (e.g. DEVOPS)
+    description: Jira project key (e.g., DEVOPS)
     required: true
   issue-type:
     description: Jira issue type to create
     required: false
     default: Bug
   default-assignee:
-    description: Default Jira accountId to assign issues to
+    description: Default user ID to assign issues to
     required: false
   ai-mode:
     description: AI enrichment mode (disabled | assist | full)
@@ -44,7 +45,7 @@ inputs:
     description: Deployment environment label (dev / staging / production)
     required: false
   dedup-window-hours:
-    description: Time window (hours) for dedup signature matching
+    description: Hours to look back for duplicate issues
     required: false
     default: "24"
 
@@ -56,4 +57,4 @@ outputs:
 
 runs:
   using: node20
-  main: dist/index.js
+  main: dist/github-action/index.js

@@ -4,6 +4,23 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.3.2] - 2025-05-13
+
+### Fixed
+- **Jira Search API**: Migrated from deprecated `/rest/api/3/search` to the new `/rest/api/3/search/jql` endpoint to resolve `410 Gone` errors.
+- **CLI Validation**: Fixed boot-up crashes by deferring configuration validation until after CLI flag overrides are merged.
+- **GitHub Action Path**: Corrected the `main` entry point in `action.yml` to point to the built artifact.
+
+### Added
+- **Automated Log Fetching**: CLI and GitHub Action now automatically retrieve logs from platform APIs (GitHub/Azure DevOps) when no local log path is provided.
+- **Jira Connectivity Check**: The CLI now verifies Jira credentials and connectivity before starting analysis to provide immediate feedback.
+- **Enhanced Job Linking**: GitHub Action now constructs direct links to the specific failing Job/Step in Jira tickets.
+- **Improved Spinner UI**: Added granular feedback in the CLI for log fetching, Jira initialization, and analysis stages.
+
+### Changed
+- **Refactored Jira Clients**: Centralized field mapping logic to eliminate code duplication and implemented missing generic `request` methods for Jira Server.
+- **Improved Branch Detection**: Leverages `GITHUB_REF_NAME` for cleaner branch labeling in failure events.
+
 ## [0.3.1] - 2025-05-13
 
 ### Added

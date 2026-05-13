@@ -43,7 +43,7 @@ export interface JiraClient {
   bulkCreateIssues(specs: JiraTicketSpec[]): Promise<CreateIssueResult[]>;
   getCreateIssueMeta(projectKeys?: string[], issueTypeNames?: string[]): Promise<any>;
   getEditIssueMeta(issueKey: string): Promise<any>;
-  
+
   // Platform-specific helpers
   getApiPath(path: string): string;
   formatDescription(text: string): any;
@@ -58,7 +58,7 @@ class JiraCloudClient implements JiraClient {
 
   constructor(auth: JiraAuth) {
     const authentication: any = {};
-    
+
     if (auth.accessToken) {
       authentication.oauth2 = {
         accessToken: auth.accessToken,
@@ -78,10 +78,7 @@ class JiraCloudClient implements JiraClient {
       middlewares: {
         onError: (error) => {
           // Wrap in a more descriptive error or log it
-          console.error(`[PipelineIQ Jira Cloud Error] ${error.message}`, {
-            status: error.response?.status,
-            url: error.config?.url,
-          });
+          console.error(`[PipelineIQ Jira Cloud Error] ${error.message || 'Unknown Error'}`);
         },
       },
     });
@@ -152,11 +149,19 @@ class JiraCloudClient implements JiraClient {
     const jql = `project = "${projectKey}" AND labels = "${label}" AND resolution = Unresolved AND created >= -${windowHours}h ORDER BY created DESC`;
 
     try {
-      const result = await this.client.issueSearch.searchForIssuesUsingJql({
-        jql,
-        maxResults: 1,
-        fields: ["summary", "status"],
-      });
+      // Atlassian deprecated /rest/api/3/search in favor of /rest/api/3/search/jql
+      const result = await this.client.sendRequest<any>(
+        {
+          method: "GET",
+          url: "/rest/api/3/search/jql",
+          params: {
+            jql,
+            maxResults: 1,
+            fields: "summary,status",
+          },
+        },
+        undefined as never
+      );
 
       const issue = result.issues?.[0];
       if (!issue) return null;
