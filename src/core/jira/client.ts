@@ -78,7 +78,8 @@ class JiraCloudClient implements JiraClient {
       middlewares: {
         onError: (error) => {
           // Wrap in a more descriptive error or log it
-          console.error(`[PipelineIQ Jira Cloud Error] ${error.message || 'Unknown Error'}`);
+          const msg = error.message || (error.response ? `${error.response.status} ${error.response.statusText}` : JSON.stringify(error));
+          console.error(`[PipelineIQ Jira Cloud Error] ${msg}`);
         },
       },
     });

@@ -17,9 +17,8 @@ export function renderDescription(
   out.push("");
 
   // Failure summary section
-  const customFields = fields.customFields ?? {};
-  const rca = customFields._rca as string | undefined;
-  const remediation = customFields._remediation as string[] | undefined;
+  const rca = fields.rca;
+  const remediation = fields.remediationSteps;
 
   out.push("### Failure Summary");
   out.push(fields.summary ?? "Pipeline failure detected.");
@@ -56,6 +55,13 @@ export function renderDescription(
   if (event.pipeline.retryCount !== undefined) {
     out.push(`| Retry Count | ${event.pipeline.retryCount} |`);
   }
+  if (event.pipeline.runAttempt !== undefined) {
+    out.push(`| Run Attempt | ${event.pipeline.runAttempt} |`);
+  }
+  if (event.pipeline.jobName) out.push(`| Job Name | ${event.pipeline.jobName} |`);
+  if (event.eventName) out.push(`| Event Name | ${event.eventName} |`);
+  if (event.pipeline.runnerOs) out.push(`| Runner OS | ${event.pipeline.runnerOs} |`);
+  if (event.pipeline.runnerArch) out.push(`| Runner Arch | ${event.pipeline.runnerArch} |`);
   out.push(`| Triggered By | ${event.triggeredBy ?? "unknown"} |`);
   if (event.durationMs) {
     out.push(`| Duration | ${(event.durationMs / 1000).toFixed(1)}s |`);

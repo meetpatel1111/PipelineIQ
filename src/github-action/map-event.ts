@@ -34,6 +34,7 @@ export type GhContext = {
   // Additional GitHub Actions context fields
   actorId?: string | undefined;
   apiUrl?: string | undefined;
+  graphqlUrl?: string | undefined;
   baseRef?: string | undefined;
   headRef?: string | undefined;
   job?: string | undefined;
@@ -56,6 +57,8 @@ export type GhContext = {
   runnerOs?: string | undefined;
   runnerTemp?: string | undefined;
   runnerToolCache?: string | undefined;
+  retentionDays?: number | undefined;
+  visibility?: string | undefined;
 };
 
 export async function mapGithubContext(
@@ -66,18 +69,20 @@ export async function mapGithubContext(
   const { owner, repo } = ctx.repo;
   const repoUrl = `${ctx.serverUrl}/${owner}/${repo}`;
   const pipelineUrl = `${repoUrl}/actions/runs/${ctx.runId}`;
-  const commitUrl = `${repoUrl}/commit/${ctx.sha}`;
-  const branch = ctx.ref.replace(/^refs\/heads\//, "");
-  
-  // Use headRef for PR builds if available
-  const finalBranch = ctx.headRef?.replace(/^refs\/heads\//, "") || branch;
 
-  // Pull job/step info — find the failed step in the current run.
+  // Fetch run data early to provide fallbacks for missing context
   const { data: runData } = await octokit.actions.getWorkflowRun({
     owner,
     repo,
     run_id: ctx.runId,
   });
+
+  const branch = (ctx.ref || runData.head_branch || "").replace(/^refs\/heads\//, "");
+  const sha = ctx.sha || runData.head_sha || "";
+  const commitUrl = `${repoUrl}/commit/${sha}`;
+  
+  // Use headRef for PR builds if available
+  const finalBranch = ctx.headRef?.replace(/^refs\/heads\//, "") || branch;
 
   const { data: jobsData } = await octokit.actions.listJobsForWorkflowRun({
     owner,
@@ -85,8 +90,21 @@ export async function mapGithubContext(
     run_id: ctx.runId,
   });
 
-  const failedJob = jobsData.jobs.find((j) => j.conclusion === "failure");
-  const failedStep = failedJob?.steps?.find((s) => s.conclusion === "failure");
+  let failedJob = jobsData.jobs.find((j) => {
+    const isTarget = ctx.job ? (j.name === ctx.job || j.id.toString() === ctx.job) : true;
+    const isFailed = j.conclusion === "failure" || j.conclusion === "cancelled" || j.conclusion === "timed_out";
+    return isTarget && isFailed;
+  });
+  
+  if (!failedJob) {
+    // Fallback: just find ANY failed job if specific one not found
+    const anyFailed = jobsData.jobs.find(j => j.conclusion === "failure" || j.conclusion === "cancelled");
+    if (anyFailed) {
+      failedJob = anyFailed;
+    }
+  }
+
+  const failedStep = failedJob?.steps?.find((s) => s.conclusion === "failure" || s.conclusion === "cancelled");
 
   // Fetch the failed job's logs (truncated to last 200 lines for the event).
   let logs = "";
@@ -98,10 +116,19 @@ export async function mapGithubContext(
         repo,
         job_id: failedJob.id,
       });
-      const fullText = String(logsResp.data ?? "");
+      
+      let fullText = "";
+      if (logsResp.data instanceof ArrayBuffer) {
+        fullText = Buffer.from(logsResp.data).toString("utf-8");
+      } else if (typeof logsResp.data === "string") {
+        fullText = logsResp.data;
+      } else {
+        fullText = String(logsResp.data ?? "");
+      }
+
       const lines = fullText.split("\n");
-      if (lines.length > 500) {
-        logs = lines.slice(-500).join("\n");
+      if (lines.length > 200) {
+        logs = lines.slice(-200).join("\n");
         logsTruncated = true;
       } else {
         logs = fullText;
@@ -125,23 +152,43 @@ export async function mapGithubContext(
     failedAt,
     ...(durationMs !== undefined ? { durationMs } : {}),
     pipeline: {
-      name: ctx.workflow,
+      name: ctx.workflow || runData.name || "unknown",
       url: jobUrl, // Point to the specific job if we found it
       runId: String(ctx.runId),
       runNumber: ctx.runNumber,
       ...(failedJob ? { job: failedJob.name } : {}),
       ...(failedStep ? { step: failedStep.name } : {}),
-      ...(runData.run_attempt ? { retryCount: runData.run_attempt - 1 } : {}),
+      ...(ctx.runAttempt ? { runAttempt: ctx.runAttempt, retryCount: Math.max(0, ctx.runAttempt - 1) } : 
+         runData.run_attempt ? { runAttempt: runData.run_attempt, retryCount: Math.max(0, runData.run_attempt - 1) } : {}),
       runnerType: failedJob?.runner_name ?? "github-hosted",
+      ...(ctx.runnerOs ? { runnerOs: ctx.runnerOs } : {}),
+      ...(ctx.runnerArch ? { runnerArch: ctx.runnerArch } : {}),
+      ...(ctx.runnerName ? { runnerName: ctx.runnerName } : {}),
+      triggerId: ctx.runId.toString(),
+      triggerName: ctx.eventName,
+      ...(ctx.apiUrl ? { apiUrl: ctx.apiUrl } : {}),
+      ...(ctx.graphqlUrl ? { graphqlUrl: ctx.graphqlUrl } : {}),
+      ...(ctx.workflowRef ? { workflowRef: ctx.workflowRef } : {}),
+      ...(ctx.workflow ? { workflow: ctx.workflow } : {}),
+      ...(ctx.workflowSha ? { workflowSha: ctx.workflowSha } : {}),
+      ...(ctx.runnerEnvironment ? { runnerEnvironment: ctx.runnerEnvironment } : {}),
+      ...(ctx.runnerDebug ? { runnerDebug: ctx.runnerDebug === "1" } : {}),
+      ...(ctx.retentionDays ? { retentionDays: ctx.retentionDays } : {}),
+      ...(ctx.actorId ? { actorId: ctx.actorId } : {}),
+      ...(ctx.triggeringActor ? { triggeringActor: ctx.triggeringActor } : {}),
+      ...(ctx.refType ? { refType: ctx.refType } : {}),
+      ...(ctx.refProtected ? { refProtected: ctx.refProtected === "true" } : {}),
     },
     repository: {
       owner,
       name: repo,
       url: repoUrl,
       ...(ctx.repositoryId ? { id: ctx.repositoryId } : {}),
+      ...(ctx.repositoryOwnerId ? { ownerId: ctx.repositoryOwnerId } : {}),
+      ...(ctx.visibility ? { visibility: ctx.visibility } : {}),
     },
     commit: {
-      sha: ctx.sha,
+      sha: sha,
       url: commitUrl,
       ...(ctx.payload.head_commit?.message
         ? { message: ctx.payload.head_commit.message }
@@ -165,7 +212,7 @@ export async function mapGithubContext(
         }
       : {}),
     ...(environment ? { environment } : {}),
-    triggeredBy: ctx.triggeringActor || ctx.actor,
+    triggeredBy: ctx.triggeringActor || ctx.actor || runData.actor?.login || "unknown",
     failure: {
       ...(failedStep ? { failedStep: failedStep.name } : {}),
       logs,

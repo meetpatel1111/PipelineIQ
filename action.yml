@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: 0.3.2
+version: 0.5.0
 author: PipelineIQ
 branding:
   icon: alert-triangle
@@ -16,6 +16,16 @@ inputs:
   jira-token:
     description: Jira API token
     required: true
+  jira-type:
+    description: Jira instance type (cloud | server)
+    required: false
+    default: cloud
+  jira-username:
+    description: Jira username (required for Jira Server)
+    required: false
+  jira-password:
+    description: Jira password (required for Jira Server)
+    required: false
   jira-project:
     description: Jira project key (e.g., DEVOPS)
     required: true
@@ -37,6 +47,25 @@ inputs:
     description: AI provider (openai | anthropic | azure-openai)
     required: false
     default: openai
+  ai-model:
+    description: Specific AI model name to use
+    required: false
+  ai-temperature:
+    description: AI sampling temperature (0.0 to 1.0)
+    required: false
+    default: "0.7"
+  ai-max-tokens:
+    description: Maximum tokens for AI response
+    required: false
+    default: "4000"
+  ai-confidence:
+    description: Minimum confidence score for AI analysis (0.0 to 1.0)
+    required: false
+    default: "0.7"
+  strict-gdpr:
+    description: Enable strict GDPR compliance mode
+    required: false
+    default: "false"
   github-token:
     description: GITHUB_TOKEN for fetching workflow logs
     required: false
@@ -48,6 +77,160 @@ inputs:
     description: Hours to look back for duplicate issues
     required: false
     default: "24"
+
+  # GitHub Actions Default Variable Overrides (Optional)
+  github-action:
+    description: The name of the action currently running
+    required: false
+    default: ${{ github.action }}
+  github-action-path:
+    description: The path where the action is located
+    required: false
+    default: ${{ github.action_path }}
+  github-action-repository:
+    description: The owner and repository name of the action
+    required: false
+    default: ${{ github.action_repository }}
+  github-actions:
+    description: Always set to true when GitHub Actions is running
+    required: false
+    default: "true"
+  ci:
+    description: Always set to true in CI environments
+    required: false
+    default: "true"
+  github-actor:
+    description: The name of the person or app that initiated the workflow
+    required: false
+    default: ${{ github.actor }}
+  github-actor-id:
+    description: The account ID of the person or app that triggered the initial workflow run
+    required: false
+    default: ${{ github.actor_id }}
+  github-api-url:
+    description: The API URL
+    required: false
+    default: ${{ github.api_url }}
+  github-graphql-url:
+    description: The GraphQL API URL
+    required: false
+    default: ${{ github.graphql_url }}
+  github-base-ref:
+    description: The name of the base ref or target branch of the pull request
+    required: false
+    default: ${{ github.base_ref }}
+  github-event-name:
+    description: The name of the event that triggered the workflow
+    required: false
+    default: ${{ github.event_name }}
+  github-head-ref:
+    description: The head ref or source branch of the pull request
+    required: false
+    default: ${{ github.head_ref }}
+  github-job:
+    description: The job_id of the current job
+    required: false
+    default: ${{ github.job }}
+  github-ref:
+    description: The fully-formed ref of the branch or tag that triggered the workflow run
+    required: false
+    default: ${{ github.ref }}
+  github-ref-name:
+    description: The short ref name of the branch or tag that triggered the workflow run
+    required: false
+    default: ${{ github.ref_name }}
+  github-ref-protected:
+    description: true if branch protections are configured for the ref
+    required: false
+    default: ${{ github.ref_protected }}
+  github-ref-type:
+    description: The type of ref that triggered the workflow run (branch or tag)
+    required: false
+    default: ${{ github.ref_type }}
+  github-repository:
+    description: The owner and repository name
+    required: false
+    default: ${{ github.repository }}
+  github-repository-id:
+    description: The ID of the repository
+    required: false
+    default: ${{ github.repository_id }}
+  github-repository-owner:
+    description: The repository owner's name
+    required: false
+    default: ${{ github.repository_owner }}
+  github-repository-owner-id:
+    description: The repository owner's account ID
+    required: false
+    default: ${{ github.repository_owner_id }}
+  github-retention-days:
+    description: The number of days that workflow run logs and artifacts are kept
+    required: false
+    default: ${{ github.retention_days }}
+  github-run-attempt:
+    description: A unique number for each attempt of a particular workflow run
+    required: false
+    default: ${{ github.run_attempt }}
+  github-run-id:
+    description: A unique number for each workflow run within a repository
+    required: false
+    default: ${{ github.run_id }}
+  github-run-number:
+    description: A unique number for each run of a particular workflow
+    required: false
+    default: ${{ github.run_number }}
+  github-server-url:
+    description: The URL of the GitHub server
+    required: false
+    default: ${{ github.server_url }}
+  github-sha:
+    description: The commit SHA that triggered the workflow
+    required: false
+    default: ${{ github.sha }}
+  github-workflow:
+    description: The name of the workflow
+    required: false
+    default: ${{ github.workflow }}
+  github-workflow-ref:
+    description: The ref path to the workflow
+    required: false
+    default: ${{ github.workflow_ref }}
+  github-workflow-sha:
+    description: The commit SHA for the workflow file
+    required: false
+    default: ${{ github.workflow_sha }}
+  github-workspace:
+    description: The default working directory on the runner
+    required: false
+    default: ${{ github.workspace }}
+  runner-arch:
+    description: The architecture of the runner executing the job
+    required: false
+    default: ${{ runner.arch }}
+  runner-debug:
+    description: Indicator if debug logging is enabled
+    required: false
+    default: ${{ runner.debug }}
+  runner-environment:
+    description: The environment of the runner (github-hosted or self-hosted)
+    required: false
+    default: ${{ runner.environment }}
+  runner-name:
+    description: The name of the runner executing the job
+    required: false
+    default: ${{ runner.name }}
+  runner-os:
+    description: The operating system of the runner
+    required: false
+    default: ${{ runner.os }}
+  runner-temp:
+    description: The path to a temporary directory on the runner
+    required: false
+    default: ${{ runner.temp }}
+  runner-tool-cache:
+    description: The path to the directory containing preinstalled tools
+    required: false
+    default: ${{ runner.tool_cache }}
 
 outputs:
   jira-issue-key:

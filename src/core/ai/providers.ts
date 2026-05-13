@@ -18,7 +18,7 @@ export class OpenAIProvider implements AIProviderInterface {
     }
     this.apiKey = config.apiKey;
     this.model = config.model || "gpt-4";
-    this.maxTokens = config.maxTokens || 4000;
+    this.maxTokens = config.maxTokens || 1000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint;
     this.apiVersion = config.apiVersion;
@@ -171,7 +171,7 @@ export class AnthropicProvider implements AIProviderInterface {
     }
     this.apiKey = config.apiKey;
     this.model = config.model || "claude-3-sonnet-20240229";
-    this.maxTokens = config.maxTokens || 4000;
+    this.maxTokens = config.maxTokens || 1000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint;
     this.apiVersion = config.apiVersion;
@@ -329,7 +329,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
     this.deployment = config.deployment || "gpt-4";
     this.model = config.model || "gpt-4";
     this.apiVersion = config.apiVersion || "2024-02-15-preview";
-    this.maxTokens = config.maxTokens || 4000;
+    this.maxTokens = config.maxTokens || 1000;
     this.temperature = config.temperature || 0.1;
   }
 

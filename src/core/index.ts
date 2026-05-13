@@ -4,6 +4,7 @@ export type { Enricher, EnrichmentContext } from "./enrichers/types.js";
 export { setField } from "./enrichers/types.js";
 export { deterministicEnricher } from "./enrichers/deterministic.js";
 export { computedEnricher } from "./enrichers/computed.js";
+export { aiEnricher } from "./enrichers/ai.js";
 export { renderDescription } from "./renderer.js";
 export { computeDedupSignature } from "./dedup.js";
 export { matchSignature, SIGNATURES } from "./signatures.js";

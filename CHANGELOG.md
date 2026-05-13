@@ -4,6 +4,30 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.5.0] - 2025-05-13
+
+### Added
+- **AI-Driven Diagnostic Integration**: Integrated AI-powered Root Cause Analysis (RCA) and Remediation steps into the Jira reporting pipeline.
+- **AI Token Optimization**: Implemented intelligent log truncation and budget management to fit large diagnostic data within 8k token context windows.
+- **Enhanced Jira Schema**: Added native `rca` and `remediationSteps` fields to the Jira ticket specification for cleaner rendering.
+- **Production-Grade Diagnostic Parity**: Achieved 100% metadata synchronization between GitHub Actions and Azure DevOps.
+- **Exhaustive Variable Support**: Added over 100+ platform-specific variables as optional, overrideable inputs:
+  - **GitHub Actions**: Actor IDs, Triggering Actors, Ref Protection status, GraphQL URL, visibility, and 40+ default environment variables.
+  - **Azure DevOps**: Predefined Build, Agent, System, Environment, and Strategy variables, including detailed path diagnostics and "Triggered By" relationships.
+- **Input-First Override Architecture**: Standardized `action.yml` and `task.json` to prioritize manual YAML inputs over automated environment defaults for maximum flexibility.
+- **Expanded Normalized Schema**: The unified `FailureEvent` Zod-validated schema now supports high-fidelity diagnostics for complex enterprise CI/CD scenarios (canary deployments, multi-pipeline triggers, etc.).
+- **Jira Server Support**: Enhanced Jira reporting to correctly handle Jira Server authentication and platform-specific fields.
+
+### Fixed
+- **Log Retrieval Hardening**: Resolved a critical bug where binary log responses from GitHub/Azure DevOps were not correctly decoded to UTF-8, ensuring logs are fully populated in Jira tickets.
+- **Job Discovery Logic**: Implemented robust job identification that automatically fallbacks to the failed build job if the specific job-name match fails.
+- **Jira Error Observability**: Enhanced error reporting for Jira Cloud/Server to provide descriptive API failure reasons instead of generic errors.
+- **CLI Flag Consistency**: Fixed the `analyze` command to correctly use `--pipeline` instead of `--workflow-name`.
+
+### Changed
+- **Unified Versioning**: Synchronized versioning across all project manifests (`package.json`, `task.json`, `action.yml`) to v0.5.0.
+- **Refactored aiEnricher**: Completely overhauled the AI enrichment pipeline to support high-fidelity failure summaries with 100% deterministic fallbacks.
+
 ## [0.3.2] - 2025-05-13
 
 ### Fixed

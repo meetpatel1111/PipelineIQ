@@ -9,9 +9,9 @@ PipelineIQ connects **GitHub Actions** and **Azure DevOps** pipelines directly t
 ## 🎯 Core Value: Seamless CI/CD → Jira Integration
 
 - **🔄 Automatic Detection**: Monitors GitHub Actions and Azure DevOps pipeline failures
-- **🎫 Smart Jira Tickets**: Creates rich, contextual Jira issues with AI-powered insights
-- **📊 Operational Context**: Includes repository, branch, commit, environment, and failure details
-- **🤖 AI-Enhanced**: Root cause analysis and remediation suggestions
+- **🎫 Smart Jira Tickets**: Creates rich, contextual Jira issues with AI-powered Root Cause Analysis (RCA)
+- **📊 Operational Context**: Includes repository, branch, commit, environment, and 100+ diagnostic fields
+- **🤖 AI-Native**: High-fidelity summaries and suggested remediation steps
 - **🔒 Enterprise Ready**: Secret masking, GDPR compliance, and custom field support
 
 PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tickets without manual intervention.
@@ -25,7 +25,7 @@ Add to your workflow (logs are automatically fetched):
 ```yaml
 - name: PipelineIQ Analysis
   if: failure()
-  uses: meetpatel1111/PipelineIQ@v0.3.2
+  uses: meetpatel1111/PipelineIQ@v0.5.0
   with:
     jira-url: ${{ secrets.JIRA_URL }}
     jira-email: ${{ secrets.JIRA_EMAIL }}

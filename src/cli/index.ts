@@ -11,7 +11,8 @@ import {
   parseLogs, 
   AIEngine, 
   createJiraClient,
-  PipelineIQConfigSchema
+  PipelineIQConfigSchema,
+  aiEnricher
 } from "../core/index.js";
 import type {
   FailureEvent,
@@ -44,7 +45,16 @@ program
   .option("--commit <sha>", "Commit SHA")
   .option("--pipeline <name>", "Pipeline/workflow name")
   .option("--run-id <id>", "Run ID or build number")
+  .option("--run-number <number>", "Run number")
   .option("--run-url <url>", "Run URL or pipeline URL")
+  .option("--event-name <name>", "Event name (push, pull_request, etc.)")
+  .option("--run-attempt <count>", "Run attempt count")
+  .option("--runner-os <os>", "Runner operating system")
+  .option("--runner-arch <arch>", "Runner architecture")
+  .option("--api-url <url>", "GitHub/Azure API URL")
+  .option("--actor <name>", "Triggered by user")
+  .option("--job-name <name>", "Specific job name")
+  .option("--repository-owner <owner>", "Repository owner")
   .option("--issue-type <type>", "Jira issue type to create (default from config)")
   .option("--dedup-window <hours>", "Deduplication window in hours (default from config)")
   .option("--jira-url <url>", "Jira base URL")
@@ -140,7 +150,7 @@ async function handleAnalyze(options: any) {
     spinner.text = "Analyzing failure with PipelineIQ...";
     // Process with PipelineIQ
     const result = await processFailureEvent(event, config, {
-      extraEnrichers: [],
+      extraEnrichers: [aiEnricher],
     });
 
     spinner.succeed();
@@ -293,10 +303,16 @@ async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
       sha: options.commit || process.env.GITHUB_SHA || "",
       ref: options.branch || process.env.GITHUB_REF || "",
       actor: process.env.GITHUB_ACTOR || "",
-      eventName: process.env.GITHUB_EVENT_NAME || "push",
       serverUrl: process.env.GITHUB_SERVER_URL || "https://github.com",
       payload: {}, // Minimal payload for CLI
-      headRef: process.env.GITHUB_HEAD_REF,
+      headRef: options.headRef || process.env.GITHUB_HEAD_REF,
+      job: options.jobName || process.env.GITHUB_JOB,
+      runAttempt: parseInt(options.runAttempt || process.env.GITHUB_RUN_ATTEMPT || "1"),
+      eventName: options.eventName || process.env.GITHUB_EVENT_NAME || "push",
+      apiUrl: options.apiUrl || process.env.GITHUB_API_URL,
+      runnerOs: options.runnerOs || process.env.RUNNER_OS,
+      runnerArch: options.runnerArch || process.env.RUNNER_ARCH,
+      runnerName: options.runnerName || process.env.RUNNER_NAME,
     };
 
     return await mapGithubContext(ghContext as any, octokit as any, options.environment);
@@ -423,16 +439,16 @@ async function createFailureEvent(
   const environment = options.environment || process.env.ENVIRONMENT || process.env.DEPLOYMENT_ENVIRONMENT || process.env.ENVIRONMENT_NAME;
   
   // GitHub Actions built-in variables
-  const githubRepo = process.env.GITHUB_REPOSITORY || options.repository;
+    const githubRepo = process.env.GITHUB_REPOSITORY || options.repository;
   const githubRef = process.env.GITHUB_REF || options.branch;
   const githubSha = process.env.GITHUB_SHA || options.commit;
   const githubRunId = process.env.GITHUB_RUN_ID || options.runId;
   const githubRunNumber = process.env.GITHUB_RUN_NUMBER || options.runId;
   const githubWorkflow = process.env.GITHUB_WORKFLOW || options.pipeline;
-  const githubActor = process.env.GITHUB_ACTOR;
+  const githubActor = options.actor || process.env.GITHUB_ACTOR;
   const githubServerUrl = process.env.GITHUB_SERVER_URL;
   const githubActorId = process.env.GITHUB_ACTOR_ID;
-  const githubApiUrl = process.env.GITHUB_API_URL;
+  const githubApiUrl = options.apiUrl || process.env.GITHUB_API_URL;
   const githubBaseRef = process.env.GITHUB_BASE_REF;
   const githubHeadRef = process.env.GITHUB_HEAD_REF;
   const githubJob = process.env.GITHUB_JOB;
@@ -440,23 +456,31 @@ async function createFailureEvent(
   const githubRefProtected = process.env.GITHUB_REF_PROTECTED;
   const githubRefType = process.env.GITHUB_REF_TYPE;
   const githubRepositoryId = process.env.GITHUB_REPOSITORY_ID;
-  const githubRepositoryOwner = process.env.GITHUB_REPOSITORY_OWNER;
+  const githubRepositoryOwner = options.repositoryOwner || process.env.GITHUB_REPOSITORY_OWNER;
   const githubRepositoryOwnerId = process.env.GITHUB_REPOSITORY_OWNER_ID;
-  const githubRunAttempt = process.env.GITHUB_RUN_ATTEMPT;
+  const githubRunAttempt = options.runAttempt || process.env.GITHUB_RUN_ATTEMPT;
   const githubTriggeringActor = process.env.GITHUB_TRIGGERING_ACTOR;
   const githubWorkflowRef = process.env.GITHUB_WORKFLOW_REF;
   const githubWorkflowSha = process.env.GITHUB_WORKFLOW_SHA;
   const githubWorkspace = process.env.GITHUB_WORKSPACE;
-  const githubEventName = process.env.GITHUB_EVENT_NAME;
+  const githubRetentionDays = process.env.GITHUB_RETENTION_DAYS;
+  const githubEventName = options.eventName || process.env.GITHUB_EVENT_NAME;
   
   // GitHub Actions Runner variables
-  const runnerArch = process.env.RUNNER_ARCH;
+  const runnerArch = options.runnerArch || process.env.RUNNER_ARCH;
   const runnerDebug = process.env.RUNNER_DEBUG;
   const runnerEnvironment = process.env.RUNNER_ENVIRONMENT;
   const runnerName = process.env.RUNNER_NAME;
-  const runnerOs = process.env.RUNNER_OS;
+  const runnerOs = options.runnerOs || process.env.RUNNER_OS;
   const runnerTemp = process.env.RUNNER_TEMP;
   const runnerToolCache = process.env.RUNNER_TOOL_CACHE;
+  
+  // Azure DevOps Runner variables
+  const adoAgentOs = process.env.AGENT_OS;
+  const adoAgentArch = process.env.AGENT_OSARCHITECTURE;
+  const adoAgentJobName = process.env.AGENT_JOBNAME;
+  const adoAgentName = process.env.AGENT_NAME;
+  const adoAgentMachineName = process.env.AGENT_MACHINENAME;
   
   // Azure DevOps built-in variables
   const adoRepo = process.env.BUILD_REPOSITORY_NAME || options.repository;
@@ -465,9 +489,17 @@ async function createFailureEvent(
   const adoBuildId = process.env.BUILD_BUILDID || options.runId;
   const adoBuildNumber = process.env.BUILD_BUILDNUMBER || options.runId;
   const adoPipeline = process.env.BUILD_DEFINITIONNAME || options.pipeline;
+  const adoDefinitionVersion = process.env.BUILD_DEFINITIONVERSION;
+  const adoSourcesDirectory = process.env.BUILD_SOURCESDIRECTORY;
+  const adoBinariesDirectory = process.env.BUILD_BINARIESDIRECTORY;
+  const adoArtifactStagingDirectory = process.env.BUILD_ARTIFACTSTAGINGDIRECTORY || process.env.BUILD_STAGINGDIRECTORY;
+  const adoContainerId = process.env.BUILD_CONTAINERID;
+  const adoRepositoryLocalPath = process.env.BUILD_REPOSITORY_LOCALPATH;
   const adoCollectionUri = process.env.SYSTEM_COLLECTIONURI;
   const adoTeamProject = process.env.SYSTEM_TEAMPROJECT;
   const adoRequestedFor = process.env.BUILD_REQUESTEDFOR;
+  const adoRequestedForEmail = process.env.BUILD_REQUESTEDFOREMAIL;
+  const adoRequestedForId = process.env.BUILD_REQUESTEDFORID;
   const adoSourceVersionMessage = process.env.BUILD_SOURCEVERSIONMESSAGE;
   const adoBuildReason = process.env.BUILD_REASON;
   const adoBuildUri = process.env.BUILD_BUILDURI;
@@ -475,6 +507,8 @@ async function createFailureEvent(
   const adoRepositoryId = process.env.BUILD_REPOSITORY_ID;
   const adoRepositoryProvider = process.env.BUILD_REPOSITORY_PROVIDER;
   const adoSourceBranchName = process.env.BUILD_SOURCEBRANCHNAME;
+  const adoQueuedBy = process.env.BUILD_QUEUEDBY;
+  const adoQueuedById = process.env.BUILD_QUEUEDBYID;
   
   // Azure DevOps System variables
   const adoSystemCollectionId = process.env.SYSTEM_COLLECTIONID;
@@ -504,12 +538,46 @@ async function createFailureEvent(
   const pipeline = githubWorkflow || adoPipeline || options.pipeline;
   const runId = githubRunId || adoBuildId || options.runId;
   const runNumber = githubRunNumber || adoBuildNumber || options.runId;
-  const triggeredBy = githubActor || adoRequestedFor || "cli-user";
+  const triggeredBy = githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || process.env.BUILD_QUEUEDBY || "cli-user";
   
   // Pull request information
-  const isPullRequest = githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber;
   const pullRequestNumber = githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId;
+  const isPullRequest = !!(githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber);
   const pullRequestBranch = adoPrSourceBranch?.replace('refs/heads/', '');
+  
+  // Rich data mapping for Azure DevOps
+  const adoJobName = process.env.SYSTEM_JOBNAME || process.env.SYSTEM_PHASENAME || process.env.SYSTEM_STAGENAME || adoAgentJobName;
+  const adoJobAttempt = process.env.SYSTEM_JOBATTEMPT;
+  const adoPhaseAttempt = process.env.SYSTEM_PHASEATTEMPT;
+  const adoRunAttempt = adoJobAttempt || adoPhaseAttempt || process.env.SYSTEM_STAGEATTEMPT;
+  const adoApiUrl = process.env.SYSTEM_COLLECTIONURI;
+  
+  const finalJobName = options.jobName || githubJob || adoJobName;
+  const finalRunAttempt = githubRunAttempt || adoRunAttempt || options.runAttempt;
+  const finalEventName = githubEventName || adoBuildReason || options.eventName;
+  const finalApiUrl = githubApiUrl || adoCollectionUri || options.apiUrl;
+  const finalDefinitionId = adoSystemDefinitionId;
+  const finalDefinitionVersion = adoDefinitionVersion;
+  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace;
+  const finalBinariesDirectory = adoBinariesDirectory;
+  const finalArtifactStagingDirectory = adoArtifactStagingDirectory;
+  const finalContainerId = adoContainerId;
+  const finalRepositoryLocalPath = adoRepositoryLocalPath;
+  const finalRetentionDays = githubRetentionDays ? parseInt(githubRetentionDays) : undefined;
+  const finalRunnerEnvironment = runnerEnvironment;
+  const finalRunnerDebug = runnerDebug === "1";
+  const finalWorkflowRef = githubWorkflowRef;
+  const finalWorkflowSha = githubWorkflowSha;
+  const finalActorId = githubActorId;
+  const finalTriggeringActor = githubTriggeringActor;
+  const finalRefType = githubRefType;
+  const finalRefProtected = githubRefProtected === "true";
+  const finalPrNumber = pullRequestNumber;
+  const finalRepoOwner = githubRepositoryOwner;
+  const finalRunnerOs = runnerOs || adoAgentOs;
+  const finalRunnerArch = runnerArch || adoAgentArch;
+  const finalRunnerName = runnerName || adoAgentName;
+  const finalAgentMachineName = adoAgentMachineName;
   
   // Use PR branch if available, otherwise use main branch
   const finalBranch = pullRequestBranch || branch;
@@ -519,6 +587,10 @@ async function createFailureEvent(
   if (!runUrl) {
     if (githubServerUrl && githubRepo && runId) {
       runUrl = `${githubServerUrl}/${githubRepo}/actions/runs/${runId}`;
+    } else if (adoCollectionUri && adoTeamProject && adoBuildId) {
+      // Build Azure DevOps Run URL: {collection}/{project}/_build/results?buildId={id}
+      const cleanUri = adoCollectionUri.endsWith('/') ? adoCollectionUri.slice(0, -1) : adoCollectionUri;
+      runUrl = `${cleanUri}/${adoTeamProject}/_build/results?buildId=${adoBuildId}`;
     } else if (adoCollectionUri && adoTeamProject && runId) {
       runUrl = `${adoCollectionUri}/${adoTeamProject}/_build/results?buildId=${runId}`;
     } else if (adoBuildUri) {
@@ -546,22 +618,51 @@ async function createFailureEvent(
         runId: runId || "cli-run",
         runNumber: parseInt(runNumber) || 1,
         step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        runAttempt: parseInt(finalRunAttempt as string) || 1,
+        runnerOs: finalRunnerOs,
+        runnerArch: finalRunnerArch,
+        runnerName: finalRunnerName,
+        agentMachineName: finalAgentMachineName,
+        definitionId: finalDefinitionId,
+        definitionVersion: finalDefinitionVersion,
+        sourcesDirectory: finalSourcesDirectory,
+        binariesDirectory: finalBinariesDirectory,
+        artifactStagingDirectory: finalArtifactStagingDirectory,
+        containerId: finalContainerId,
+        repositoryLocalPath: finalRepositoryLocalPath,
+        workflowRef: finalWorkflowRef,
+        workflowSha: finalWorkflowSha,
+        runnerEnvironment: finalRunnerEnvironment,
+        runnerDebug: finalRunnerDebug,
+        retentionDays: finalRetentionDays,
+        actorId: finalActorId,
+        triggeringActor: finalTriggeringActor,
+        refType: finalRefType,
+        refProtected: finalRefProtected,
+        job: finalJobName,
+        jobName: finalJobName,
       },
       repository: {
-        owner: repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || repository || "unknown-repo",
         url: repositoryUrl,
         defaultBranch: "main",
+        id: adoRepositoryId || githubRepositoryId,
+        ownerId: githubRepositoryOwnerId,
+        provider: adoRepositoryProvider || (githubServerUrl ? "github" : undefined),
       },
       commit: {
         sha: commit,
         url: repository && commit ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : "https://github.com/cli-user/unknown-repo/commit/unknown",
         message: adoSourceVersionMessage || "CLI analysis",
         author: triggeredBy,
+        authorEmail: adoRequestedForEmail,
       },
       branch: finalBranch,
       environment: environment,
       triggeredBy: triggeredBy,
+      eventName: finalEventName,
+      apiUrl: finalApiUrl,
       failure: {
         exitCode: parsedLogs.exitCodes[0],
         errorMessage: parsedLogs.errorMessages[0],
@@ -622,19 +723,45 @@ async function createFailureEvent(
     source,
     startedAt: new Date().toISOString(),
     failedAt: new Date().toISOString(),
-    pipeline: {
-      name: pipeline || answers.pipelineName,
-      url: runUrl || "https://example.com/pipeline",
-      runId: runId || "cli-run",
-      runNumber: parseInt(runNumber) || 1,
-      step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
-    },
-    repository: {
-      owner: repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
-      name: repository?.split("/")[1] || answers.repositoryName,
-      url: repositoryUrl,
-      defaultBranch: "main",
-    },
+      pipeline: {
+        name: pipeline || answers.pipelineName,
+        url: runUrl || "https://example.com/pipeline",
+        runId: runId || "cli-run",
+        runNumber: parseInt(runNumber) || 1,
+        step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        runAttempt: parseInt(finalRunAttempt as string) || 1,
+        runnerOs: finalRunnerOs,
+        runnerArch: finalRunnerArch,
+        runnerName: finalRunnerName,
+        agentMachineName: finalAgentMachineName,
+        definitionId: finalDefinitionId,
+        definitionVersion: finalDefinitionVersion,
+        sourcesDirectory: finalSourcesDirectory,
+        binariesDirectory: finalBinariesDirectory,
+        artifactStagingDirectory: finalArtifactStagingDirectory,
+        containerId: finalContainerId,
+        repositoryLocalPath: finalRepositoryLocalPath,
+        workflowRef: finalWorkflowRef,
+        workflowSha: finalWorkflowSha,
+        runnerEnvironment: finalRunnerEnvironment,
+        runnerDebug: finalRunnerDebug,
+        retentionDays: finalRetentionDays,
+        actorId: finalActorId,
+        triggeringActor: finalTriggeringActor,
+        refType: finalRefType,
+        refProtected: finalRefProtected,
+        job: finalJobName,
+        jobName: finalJobName,
+      },
+      repository: {
+        owner: options.repositoryOwner || githubRepositoryOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        name: repository?.split("/")[1] || answers.repositoryName,
+        url: repositoryUrl,
+        defaultBranch: "main",
+        id: adoRepositoryId || githubRepositoryId,
+        ownerId: githubRepositoryOwnerId,
+        provider: adoRepositoryProvider || (githubServerUrl ? "github" : undefined),
+      },
     commit: {
       sha: commit || answers.commitSha,
       url: (repository && commit) ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
@@ -644,6 +771,8 @@ async function createFailureEvent(
     branch: finalBranch || answers.branch,
     environment: environment || answers.environment,
     triggeredBy: triggeredBy,
+    eventName: finalEventName,
+    apiUrl: finalApiUrl,
     failure: {
       exitCode: parsedLogs.exitCodes[0],
       errorMessage: parsedLogs.errorMessages[0],

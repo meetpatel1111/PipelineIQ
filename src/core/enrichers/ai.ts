@@ -1,0 +1,52 @@
+import type { Enricher, EnrichmentContext } from "./types.js";
+import { setField } from "./types.js";
+import { AIEngine } from "../ai/ai-engine.js";
+
+/**
+ * AIEnricher — uses the AIEngine to provide high-fidelity diagnostics.
+ * This should run after deterministic and computed enrichers.
+ */
+export const aiEnricher: Enricher = {
+  name: "ai",
+  source: "ai",
+
+  async enrich(ctx: EnrichmentContext) {
+    const { event, config } = ctx;
+
+    if (config.ai.mode === "disabled") {
+      return;
+    }
+
+    const aiEngine = AIEngine.create(config.ai.mode as any, config.ai);
+    
+    if (!aiEngine.isAvailable()) {
+      return;
+    }
+
+    try {
+      // Cast to any to bypass the minor type discrepancies between the unified config and engine-specific config
+      const results = await aiEngine.enrich(event, config.ai as any);
+      
+      for (const result of results) {
+        if (result.aiUsed && result.value) {
+          // Map internal result fields to Jira ticket fields
+          let fieldName = result.field;
+          
+          if (fieldName === "rootCause") {
+            setField(ctx, "rca", result.value as string, "ai", true);
+          } else if (fieldName === "remediation") {
+            setField(ctx, "remediationSteps", result.value as string[], "ai", true);
+          } else if (fieldName === "classification") {
+            const currentLabels = (ctx.fields.labels as string[]) || [];
+            const newLabels = Array.isArray(result.value) ? result.value : [String(result.value)];
+            setField(ctx, "labels", Array.from(new Set([...currentLabels, ...newLabels])), "ai");
+          } else {
+            setField(ctx, fieldName as any, result.value, "ai", true);
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`AI Enrichment failed: ${error}`);
+    }
+  },
+};

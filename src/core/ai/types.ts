@@ -64,7 +64,7 @@ export const AIEngineConfigSchema = z.object({
   deployment: z.string().optional(),
   apiVersion: z.string().optional(),
   modelPath: z.string().optional(),
-  maxTokens: z.number().int().positive().default(4000),
+  maxTokens: z.number().int().positive().default(1000),
   temperature: z.number().min(0).max(2).default(0.1),
   timeout: z.number().int().positive().default(30000),
   retryAttempts: z.number().int().positive().default(3),

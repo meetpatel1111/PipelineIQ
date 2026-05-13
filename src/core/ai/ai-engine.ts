@@ -169,7 +169,7 @@ export class AIEngine implements IAIEngine {
    */
   static create(mode: "disabled" | "assist" | "full", config?: Partial<AIEngineConfig>): AIEngine {
     let engineConfig: AIEngineConfig = {
-      maxTokens: 4000,
+      maxTokens: 1000,
       temperature: 0.1,
       timeout: 30000,
       retryAttempts: 3,
@@ -199,7 +199,7 @@ export class AIEngine implements IAIEngine {
           provider: engineConfig.provider || "openai",
           temperature: 0.3, // More creative
           minConfidence: 0.5, // Lower confidence threshold
-          maxTokens: 8000, // Larger context window
+          maxTokens: 2000, // Larger context window
         });
       
       default:
