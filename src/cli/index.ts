@@ -64,7 +64,7 @@ program
   .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
   .option("--ai-api-key <key>", "AI API key")
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
-  .option("--ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
+  .option("-m, --ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
   .action(async (options) => {
     await handleAnalyze(options);
   });
