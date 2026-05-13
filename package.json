@@ -1,6 +1,6 @@
 {
   "name": "pipelineiq",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "AI-powered CI/CD failure intelligence for GitHub, Azure DevOps & Jira",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -56,6 +56,7 @@
     "@actions/core": "^1.10.0",
     "@actions/github": "^6.0.0",
     "@anthropic-ai/sdk": "^0.20.0",
+    "@google/generative-ai": "^0.24.1",
     "@octokit/rest": "^20.0.0",
     "axios": "^1.6.0",
     "azure-devops-node-api": "^13.0.0",

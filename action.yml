@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: 0.5.0
+version: 0.6.0
 author: PipelineIQ
 branding:
   icon: alert-triangle
@@ -44,9 +44,9 @@ inputs:
     description: API key for AI provider (required when ai-mode != disabled)
     required: false
   ai-provider:
-    description: AI provider (openai | anthropic | azure-openai)
+    description: AI provider (openai | anthropic | azure-openai | gemini)
     required: false
-    default: openai
+    default: gemini
   ai-model:
     description: Specific AI model name to use
     required: false

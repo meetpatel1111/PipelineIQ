@@ -2,6 +2,7 @@ import type { IAIEngine, AIEngineConfig, AIProviderInterface } from "./types.js"
 import type { FailureEvent, EnrichmentResult } from "../types/index.js";
 import { DeterministicFallbackEngine } from "./fallbacks.js";
 import { OpenAIProvider, AnthropicProvider, AzureOpenAIProvider, LocalAIProvider } from "./providers.js";
+import { GeminiProvider } from "./gemini-provider.js";
 
 /**
  * Main AI Engine implementation with deterministic fallbacks
@@ -39,6 +40,9 @@ export class AIEngine implements IAIEngine {
           break;
         case "local":
           this.provider = new LocalAIProvider(this.config);
+          break;
+        case "gemini":
+          this.provider = new GeminiProvider(this.config);
           break;
         default:
           console.warn(`Unknown AI provider: ${this.config.provider}`);
@@ -169,7 +173,7 @@ export class AIEngine implements IAIEngine {
    */
   static create(mode: "disabled" | "assist" | "full", config?: Partial<AIEngineConfig>): AIEngine {
     let engineConfig: AIEngineConfig = {
-      maxTokens: 1000,
+      maxTokens: 4096,
       temperature: 0.1,
       timeout: 30000,
       retryAttempts: 3,
@@ -187,7 +191,7 @@ export class AIEngine implements IAIEngine {
         // Basic AI with conservative settings
         return new AIEngine({
           ...engineConfig,
-          provider: engineConfig.provider || "openai",
+          provider: engineConfig.provider || "gemini",
           temperature: 0.1,
           minConfidence: 0.7, // Higher confidence threshold
         });
@@ -196,10 +200,10 @@ export class AIEngine implements IAIEngine {
         // Full AI with more aggressive settings
         return new AIEngine({
           ...engineConfig,
-          provider: engineConfig.provider || "openai",
+          provider: engineConfig.provider || "gemini",
           temperature: 0.3, // More creative
           minConfidence: 0.5, // Lower confidence threshold
-          maxTokens: 2000, // Larger context window
+          maxTokens: 8192,
         });
       
       default:

@@ -63,7 +63,7 @@ program
   .option("--jira-project <key>", "Jira project key")
   .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
   .option("--ai-api-key <key>", "AI API key")
-  .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai)")
+  .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
   .action(async (options) => {
     await handleAnalyze(options);
   });

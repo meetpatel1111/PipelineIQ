@@ -114,7 +114,18 @@ export class EnhancedJiraClient implements JiraClient {
   async createEnhancedIssue(spec: JiraTicketSpec): Promise<any> {
     const payload = this.buildEnhancedPayload(spec);
     
-    return await this.request<any>("POST", this.getApiPath("/issue"), payload);
+    const res = await this.request<any>("POST", this.getApiPath("/issue"), payload);
+
+    // Assign separately to handle invalid users gracefully
+    if (spec.assignee) {
+      try {
+        await this.assignIssue(res.key || res.id, spec.assignee);
+      } catch (assignError) {
+        console.warn(`[PipelineIQ] Failed to assign enhanced issue to "${spec.assignee}": ${assignError}`);
+      }
+    }
+
+    return res;
   }
 
   /**
@@ -126,6 +137,15 @@ export class EnhancedJiraClient implements JiraClient {
     };
 
     await this.request<void>("PUT", this.getApiPath(`/issue/${issueKey}`), payload);
+
+    // Assign separately to handle invalid users gracefully
+    if (spec.assignee) {
+      try {
+        await this.assignIssue(issueKey, spec.assignee);
+      } catch (assignError) {
+        console.warn(`[PipelineIQ] Failed to update assignee for enhanced issue ${issueKey} to "${spec.assignee}": ${assignError}`);
+      }
+    }
   }
 
   /**
@@ -340,8 +360,7 @@ export class EnhancedJiraClient implements JiraClient {
       issuetype: { name: spec.issueType },
       labels: spec.labels,
       ...(spec.priority ? { priority: { name: spec.priority } } : {}),
-      ...(spec.environment ? { environment: spec.environment } : {}),
-      ...(spec.assignee ? { assignee: this.formatAssignee(spec.assignee) } : {}),
+      ...(spec.environment ? { environment: this.formatDescription(spec.environment) } : {}),
       ...(spec.components.length > 0 
         ? { components: spec.components.map((name) => ({ name })) }
         : {}),

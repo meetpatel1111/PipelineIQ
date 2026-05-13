@@ -25,7 +25,7 @@ Add to your workflow (logs are automatically fetched):
 ```yaml
 - name: PipelineIQ Analysis
   if: failure()
-  uses: meetpatel1111/PipelineIQ@v0.5.0
+  uses: meetpatel1111/PipelineIQ@v0.6.0
   with:
     jira-url: ${{ secrets.JIRA_URL }}
     jira-email: ${{ secrets.JIRA_EMAIL }}
@@ -134,7 +134,7 @@ GitHub Action / Azure DevOps Extension
 ### AI Features
 
 - **Optional AI**: Works fully without AI - deterministic fallbacks always available
-- **Multiple Providers**: OpenAI, Anthropic, Azure OpenAI, local models
+- **Multiple Providers**: Google Gemini (default), OpenAI, Anthropic, Azure OpenAI, local models
 - **Smart Analysis**: Root cause analysis, remediation guidance, severity prediction
 - **Confidence Scoring**: AI confidence thresholds with fallback logic
 

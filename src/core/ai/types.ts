@@ -9,7 +9,7 @@ import type {
   EnrichmentResult,
 } from "../types/index.js";
 
-export const AIProviderSchema = z.enum(["openai", "anthropic", "azure-openai", "local"]);
+export const AIProviderSchema = z.enum(["openai", "anthropic", "azure-openai", "local", "gemini"]);
 export type AIProvider = z.infer<typeof AIProviderSchema>;
 
 export const AIRequestSchema = z.object({

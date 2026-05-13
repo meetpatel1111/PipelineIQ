@@ -4,6 +4,23 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.6.0] - 2026-05-13
+
+### Added
+- **Native Google Gemini Support**: Integrated `@google/generative-ai` as a first-class provider (`gemini-2.5-flash`).
+- **Resilient Jira Assignment**: Decoupled `assignee` mapping from issue creation. Analysis no longer fails if the AI suggests an invalid or non-existent Jira user; instead, it logs a warning and proceeds with ticket creation.
+- **Enhanced Jira Cloud Formatting**: Fully integrated Atlassian Document Format (ADF) for both `description` and `environment` fields in the Jira Cloud client.
+- **Schema Expansion**: Updated `FailureEvent` and `AIConfig` schemas to natively support Gemini and improved token budget management.
+
+### Fixed
+- **Jira 400 Bad Request**: Resolved the "Specify a valid value for assignee" error that previously halted pipelines when AI providers suggested incorrect user metadata.
+- **AI Token Management**: Fixed an issue where `maxLogTokens` wasn't correctly propagated to the AI engine, potentially causing context window overflows.
+- **Gemini JSON Parsing**: Hardened the Gemini response parser to handle non-structured text and markdown blocks more gracefully.
+
+### Changed
+- **Default AI Provider**: Switched default AI provider to `gemini` for improved performance and cost-efficiency.
+- **Fallback Engine**: Hardened the `DeterministicFallbackEngine` to provide high-fidelity reports even during AI service interruptions.
+
 ## [0.5.0] - 2025-05-13
 
 ### Added

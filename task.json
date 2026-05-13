@@ -7,7 +7,7 @@
   "author": "PipelineIQ",
   "category": "Utility",
   "visibility": ["Build", "Release"],
-  "version": { "Major": 0, "Minor": 5, "Patch": 0 },
+  "version": { "Major": 0, "Minor": 6, "Patch": 0 },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
   "inputs": [
     { "name": "jiraUrl", "type": "string", "label": "Jira URL", "required": true },
@@ -37,11 +37,12 @@
       "name": "aiProvider",
       "type": "pickList",
       "label": "AI Provider",
-      "defaultValue": "openai",
+      "defaultValue": "gemini",
       "options": {
         "openai": "OpenAI",
         "anthropic": "Anthropic",
-        "azure-openai": "Azure OpenAI"
+        "azure-openai": "Azure OpenAI",
+        "gemini": "Google Gemini"
       }
     },
     { "name": "aiModel", "type": "string", "label": "AI Model", "required": false },

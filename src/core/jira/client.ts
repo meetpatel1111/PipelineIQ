@@ -104,14 +104,23 @@ class JiraCloudClient implements JiraClient {
           issuetype: { name: spec.issueType },
           labels: spec.labels,
           ...(spec.priority ? { priority: { name: spec.priority } } : {}),
-          ...(spec.environment ? { environment: spec.environment } : {}),
-          ...(spec.assignee ? { assignee: { accountId: spec.assignee } } : {}),
+          ...(spec.environment ? { environment: markdownToAdf(spec.environment) as any } : {}),
           ...(spec.components.length > 0
             ? { components: spec.components.map((name) => ({ name })) }
             : {}),
           ...spec.customFields,
         },
       });
+
+      // Assign separately to prevent failure if assignee is invalid (common with AI-suggested users)
+      if (spec.assignee) {
+        try {
+          await this.assignIssue(res.key, spec.assignee);
+        } catch (assignError) {
+          console.warn(`[PipelineIQ] Failed to assign issue ${res.key} to "${spec.assignee}": ${assignError}`);
+        }
+      }
+
       return res as CreateIssueResult;
     } catch (error: any) {
       throw JiraApiError.from(error);
@@ -332,8 +341,7 @@ class JiraCloudClient implements JiraClient {
             issuetype: { name: spec.issueType },
             labels: spec.labels,
             ...(spec.priority ? { priority: { name: spec.priority } } : {}),
-            ...(spec.environment ? { environment: spec.environment } : {}),
-            ...(spec.assignee ? { assignee: { accountId: spec.assignee } } : {}),
+            ...(spec.environment ? { environment: markdownToAdf(spec.environment) as any } : {}),
             ...(spec.components.length > 0
               ? { components: spec.components.map((name) => ({ name })) }
               : {}),
@@ -341,7 +349,23 @@ class JiraCloudClient implements JiraClient {
           },
         })),
       });
-      return (res.issues || []) as CreateIssueResult[];
+
+      const results = (res.issues || []) as CreateIssueResult[];
+
+      // Assign separately for each created issue
+      for (let i = 0; i < results.length; i++) {
+        const spec = specs[i];
+        const result = results[i];
+        if (spec && result && spec.assignee && result.key) {
+          try {
+            await this.assignIssue(result.key, spec.assignee);
+          } catch (assignError) {
+            console.warn(`[PipelineIQ] Failed to bulk-assign issue ${result.key} to "${spec.assignee}": ${assignError}`);
+          }
+        }
+      }
+
+      return results;
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -419,13 +443,21 @@ class JiraServerClient implements JiraClient {
           labels: spec.labels,
           ...(spec.priority ? { priority: { name: spec.priority } } : {}),
           ...(spec.environment ? { environment: spec.environment } : {}),
-          ...(spec.assignee ? { assignee: { name: spec.assignee } } : {}),
           ...(spec.components.length > 0
             ? { components: spec.components.map((name) => ({ name })) }
             : {}),
           ...spec.customFields,
         },
       });
+
+      if (spec.assignee) {
+        try {
+          await this.assignIssue(res.key, spec.assignee);
+        } catch (assignError) {
+          console.warn(`[PipelineIQ] Failed to assign issue ${res.key} to "${spec.assignee}": ${assignError}`);
+        }
+      }
+
       return {
         id: res.id,
         key: res.key,

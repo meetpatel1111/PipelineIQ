@@ -248,7 +248,7 @@ pipelineiq/
 # GitHub Actions
 
 ```yaml
-- uses: meetpatel1111/PipelineIQ@v0.3.2
+- uses: meetpatel1111/PipelineIQ@v0.6.0
   if: failure()
   with:
     jira-url: ${{ secrets.JIRA_URL }}
@@ -863,7 +863,7 @@ FailureEvent
 This guarantees:
 
 * `core` and `jira-client` have **zero hard dependency** on `ai-engine`.
-* `ai-engine` is a swappable package — OpenAI today, Anthropic / Azure OpenAI / local model later.
+* `ai-engine` is a swappable package — Google Gemini (default), OpenAI, Anthropic, Azure OpenAI, or local models.
 * OSS tier ships fully functional **without** any AI API key configured.
 
 ---

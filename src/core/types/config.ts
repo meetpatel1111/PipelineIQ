@@ -24,7 +24,7 @@ export type DedupConfig = z.infer<typeof DedupConfigSchema>;
 
 export const AIConfigSchema = z.object({
   mode: AIModeSchema.default("disabled"),
-  provider: z.enum(["openai", "anthropic", "azure-openai"]).optional(),
+  provider: z.enum(["openai", "anthropic", "azure-openai", "gemini"]).optional(),
   apiKey: z.string().optional(),
   model: z.string().optional(),
   minConfidence: z.number().min(0).max(1).default(0.6),

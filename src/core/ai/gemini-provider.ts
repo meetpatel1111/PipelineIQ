@@ -16,7 +16,7 @@ export class GeminiProvider implements AIProviderInterface {
       throw new Error("Gemini API key is required");
     }
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-1.5-pro";
+    this.model = config.model || "gemini-2.5-flash";
     this.maxTokens = config.maxTokens || 4000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint || "https://generativelanguage.googleapis.com/v1beta";
@@ -30,20 +30,20 @@ export class GeminiProvider implements AIProviderInterface {
     try {
       // Import Google Generative AI library dynamically
       const { GoogleGenerativeAI } = await import("@google/generative-ai");
-      
+
       const genAI = new GoogleGenerativeAI(this.apiKey);
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: this.model,
         generationConfig: {
           maxOutputTokens: this.maxTokens,
           temperature: this.temperature,
-        }
+          responseMimeType: "application/json",
+        },
       });
 
       const prompt = this.buildPrompt(request);
       const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = result.response.text();
 
       return this.parseResponse(text);
     } catch (error: any) {
@@ -91,11 +91,16 @@ Focus on actionable insights and practical solutions. Be specific and helpful.`;
   }
 
   private parseResponse(text: string): AIResponse {
-    try {
-      // Try to extract JSON from the response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+    // With responseMimeType:"application/json" set, text should be raw JSON.
+    // Fall back to regex extraction in case an older SDK version ignores the mime type.
+    const jsonStr = text.trim().startsWith("{") ? text : (() => {
+      const m = text.match(/\{[\s\S]*\}/);
+      return m ? m[0] : null;
+    })();
+
+    if (jsonStr) {
+      try {
+        const parsed = JSON.parse(jsonStr);
         return {
           summary: parsed.summary || "Analysis completed",
           rootCause: parsed.rootCause || "Unable to determine root cause",
@@ -103,25 +108,16 @@ Focus on actionable insights and practical solutions. Be specific and helpful.`;
           severity: parsed.severity || "Medium",
           assignee: parsed.assignee,
           tags: parsed.tags || [],
-          confidence: parsed.confidence || 0.5,
+          confidence: parsed.confidence ?? 0.8,
           classification: parsed.classification || "Unknown",
           riskAssessment: parsed.riskAssessment,
-          timeline: parsed.timeline
+          timeline: parsed.timeline,
         };
+      } catch (error) {
+        console.error("Failed to parse Gemini response JSON:", error);
       }
-    } catch (error) {
-      console.error("Failed to parse Gemini response:", error);
     }
 
-    // Fallback response if JSON parsing fails
-    return {
-      summary: "CI/CD failure detected",
-      rootCause: "Unable to determine specific root cause from available information",
-      remediation: ["Review error logs", "Check recent changes", "Verify configuration"],
-      severity: "Medium",
-      tags: ["ci-cd", "failure"],
-      confidence: 0.3,
-      classification: "Unknown"
-    };
+    throw new Error(`Gemini returned unparseable response: ${text.slice(0, 200)}`);
   }
 }

@@ -17,7 +17,10 @@ export const aiEnricher: Enricher = {
       return;
     }
 
-    const aiEngine = AIEngine.create(config.ai.mode as any, config.ai);
+    const aiEngine = AIEngine.create(config.ai.mode as any, {
+      ...config.ai,
+      maxTokens: config.ai.maxLogTokens,
+    });
     
     if (!aiEngine.isAvailable()) {
       return;
