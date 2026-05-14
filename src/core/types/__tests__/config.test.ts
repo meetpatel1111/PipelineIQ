@@ -31,8 +31,18 @@ describe("PipelineIQConfigSchema - notifications", () => {
   });
 
   it("accepts notifyOn severity filter", () => {
-    const result = PipelineIQConfigSchema.safeParse({ ...base, notifications: { slack: { webhookUrl: "https://hooks.slack.com/T123", notifyOn: ["critical", "high"] } } });
+    const result = PipelineIQConfigSchema.safeParse({ ...base, notifications: { slack: { webhookUrl: "https://hooks.slack.com/T123", notifyOn: ["Critical", "High"] } } });
     expect(result.success).toBe(true);
+  });
+
+  it("parses notifyOn into a typed array", () => {
+    const cfg = PipelineIQConfigSchema.parse({
+      ...base,
+      notifications: {
+        slack: { webhookUrl: "https://hooks.slack.com/T", notifyOn: ["Critical", "High"] },
+      },
+    });
+    expect(cfg.notifications?.slack?.notifyOn).toEqual(["Critical", "High"]);
   });
 
   it("rejects notifyOn with invalid severity", () => {

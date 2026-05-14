@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SeveritySchema } from "./jira-ticket.js";
 
 export const AIModeSchema = z.enum(["disabled", "assist", "full"]);
 export type AIMode = z.infer<typeof AIModeSchema>;
@@ -34,12 +35,10 @@ export const AIConfigSchema = z.object({
 });
 export type AIConfig = z.infer<typeof AIConfigSchema>;
 
-const SeverityFilterSchema = z.enum(["critical", "high", "medium", "low"]);
-
 export const SlackConfigSchema = z.object({
   webhookUrl: z.string().url(),
   channel: z.string().optional(),
-  notifyOn: z.array(SeverityFilterSchema).optional(),
+  notifyOn: z.array(SeveritySchema).optional(),
   includeMetrics: z.boolean().optional(),
   username: z.string().optional(),
 });
@@ -47,7 +46,7 @@ export type SlackConfig = z.infer<typeof SlackConfigSchema>;
 
 export const TeamsConfigSchema = z.object({
   webhookUrl: z.string().url(),
-  notifyOn: z.array(SeverityFilterSchema).optional(),
+  notifyOn: z.array(SeveritySchema).optional(),
   includeMetrics: z.boolean().optional(),
 });
 export type TeamsConfig = z.infer<typeof TeamsConfigSchema>;
