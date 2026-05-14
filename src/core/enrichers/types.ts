@@ -22,6 +22,13 @@ export type EnrichmentContext = {
     trend?: "improving" | "worsening" | "stable" | undefined;
     relatedKeys: string[];
   };
+  metrics?: ComputedMetrics;
+};
+
+export type ComputedMetrics = {
+  mttrHours?: number;
+  blastRadius?: number;
+  sampleSize: number;
 };
 
 export interface Enricher {

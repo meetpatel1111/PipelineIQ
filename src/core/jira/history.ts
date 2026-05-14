@@ -1,5 +1,6 @@
 import type { EnhancedJiraClient } from "./enhanced-client.js";
 import type { FailureEvent, FailureCategory } from "../types/index.js";
+import type { ComputedMetrics } from "../enrichers/types.js";
 
 export type FailureHistory = {
   similarCount: number;
@@ -69,6 +70,52 @@ export class HistoryService {
     } catch (error) {
       console.warn(`[PipelineIQ] Keyword search failed: ${error}`);
       return [];
+    }
+  }
+
+  async getMetrics(signature: string, windowDays: number = 30): Promise<ComputedMetrics> {
+    const jql = `project = "${this.projectKey}" AND labels = "piq-sig:${signature}" AND resolution != Unresolved AND created >= -${windowDays}d ORDER BY created DESC`;
+
+    try {
+      const result = await this.jira.advancedSearch(jql, {
+        maxResults: 20,
+        fields: ["created", "resolutiondate", "labels"],
+      });
+
+      const durations: number[] = [];
+      const repoSet = new Set<string>();
+
+      for (const issue of result.issues) {
+        const created = new Date(issue.fields.created).getTime();
+        const resolved = issue.fields.resolutiondate
+          ? new Date(issue.fields.resolutiondate).getTime()
+          : null;
+
+        if (resolved !== null) {
+          durations.push((resolved - created) / (1000 * 60 * 60));
+        }
+
+        const labels: string[] = issue.fields.labels ?? [];
+        for (const label of labels) {
+          if (label.startsWith("piq-repo:")) {
+            repoSet.add(label.slice("piq-repo:".length));
+          }
+        }
+      }
+
+      const mttrHours =
+        durations.length > 0
+          ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
+          : undefined;
+
+      return {
+        ...(mttrHours !== undefined && { mttrHours }),
+        ...(repoSet.size > 1 && { blastRadius: repoSet.size }),
+        sampleSize: durations.length,
+      };
+    } catch (error) {
+      console.warn(`[PipelineIQ] Metrics computation failed: ${error}`);
+      return { sampleSize: 0 };
     }
   }
 
