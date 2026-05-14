@@ -499,10 +499,9 @@ export class LocalAIProvider implements AIProviderInterface {
   }
 
   async generateInsights(request: AIRequest): Promise<AIResponse> {
-    const { OpenAI } = await import("openai");
-    const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
-
     try {
+      const { OpenAI } = await import("openai");
+      const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
       const completion = await client.chat.completions.create({
         model: this.model,
         messages: [
@@ -536,7 +535,8 @@ Be concise but thorough. Focus on actionable insights.`,
   }
 
   private buildPrompt(request: AIRequest): string {
-    return `Pipeline Failure Analysis Request:
+    return `
+Pipeline Failure Analysis Request:
 
 Pipeline: ${request.pipelineName}
 Repository: ${request.repositoryName}

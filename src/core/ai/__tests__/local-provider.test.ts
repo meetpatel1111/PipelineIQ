@@ -1,6 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// vi.mock is hoisted — intercepts the dynamic import("openai") inside generateInsights()
+vi.mock("openai", () => ({
+  OpenAI: vi.fn(),
+}));
+
 import { LocalAIProvider } from "../providers.js";
 import type { AIEngineConfig } from "../types.js";
+import { OpenAI } from "openai";
 
 const baseConfig: AIEngineConfig = {
   provider: "local",
@@ -14,6 +21,24 @@ const baseConfig: AIEngineConfig = {
   minConfidence: 0.6,
 };
 
+const MockedOpenAI = vi.mocked(OpenAI);
+
+function mockCreate(response: unknown) {
+  MockedOpenAI.mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: vi.fn().mockResolvedValue({
+          choices: [{ message: { content: typeof response === "string" ? response : JSON.stringify(response) } }],
+        }),
+      },
+    },
+  }) as any);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("LocalAIProvider constructor", () => {
   it("throws when endpoint is missing", () => {
     expect(() => new LocalAIProvider({ ...baseConfig, endpoint: undefined })).toThrow(/endpoint/i);
@@ -26,6 +51,10 @@ describe("LocalAIProvider constructor", () => {
   it("constructs successfully with valid config", () => {
     expect(() => new LocalAIProvider(baseConfig)).not.toThrow();
   });
+
+  it("does not throw when apiKey is undefined (Ollama case)", () => {
+    expect(() => new LocalAIProvider({ ...baseConfig, apiKey: undefined })).not.toThrow();
+  });
 });
 
 describe("LocalAIProvider.generateInsights()", () => {
@@ -37,69 +66,63 @@ describe("LocalAIProvider.generateInsights()", () => {
   };
 
   it("parses a valid JSON response from the local model", async () => {
-    const mockResponse = {
+    mockCreate({
       summary: "npm peer dep conflict",
       rootCause: "react version mismatch",
       remediation: ["Pin react to ^18"],
       severity: "High",
       classification: "Dependency",
       confidence: 0.85,
-    };
-
-    vi.doMock("openai", () => ({
-      OpenAI: vi.fn().mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockResolvedValue({
-              choices: [{ message: { content: JSON.stringify(mockResponse) } }],
-            }),
-          },
-        },
-      })),
-    }));
+    });
 
     const provider = new LocalAIProvider(baseConfig);
     const result = await provider.generateInsights(request);
     expect(result.summary).toBe("npm peer dep conflict");
     expect(result.confidence).toBe(0.85);
-
-    vi.resetModules();
   });
 
   it("returns low-confidence fallback when model returns malformed JSON", async () => {
-    vi.doMock("openai", () => ({
-      OpenAI: vi.fn().mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockResolvedValue({
-              choices: [{ message: { content: "sorry, I cannot help with that" } }],
-            }),
-          },
-        },
-      })),
-    }));
+    mockCreate("sorry, I cannot help with that");
 
     const provider = new LocalAIProvider(baseConfig);
     const result = await provider.generateInsights(request);
     expect(result.confidence).toBe(0.5);
-
-    vi.resetModules();
   });
 
   it("throws a descriptive error when the HTTP call fails", async () => {
-    vi.doMock("openai", () => ({
-      OpenAI: vi.fn().mockImplementation(() => ({
-        chat: {
-          completions: {
-            create: vi.fn().mockRejectedValue(new Error("Connection refused")),
-          },
+    MockedOpenAI.mockImplementation(() => ({
+      chat: {
+        completions: {
+          create: vi.fn().mockRejectedValue(new Error("Connection refused")),
         },
-      })),
-    }));
+      },
+    }) as any);
 
     const provider = new LocalAIProvider(baseConfig);
     await expect(provider.generateInsights(request)).rejects.toThrow(/local ai error/i);
+  });
 
-    vi.resetModules();
+  it("uses the configured baseURL and apiKey when constructing the client", async () => {
+    mockCreate({ summary: "test", confidence: 0.9 });
+
+    const provider = new LocalAIProvider(baseConfig);
+    await provider.generateInsights(request);
+
+    expect(MockedOpenAI).toHaveBeenCalledWith({
+      baseURL: "http://localhost:11434/v1",
+      apiKey: "ollama",
+    });
+  });
+
+  it("uses 'local' as apiKey when config.apiKey is undefined", async () => {
+    mockCreate({ summary: "test", confidence: 0.9 });
+
+    const provider = new LocalAIProvider({ ...baseConfig, apiKey: undefined });
+    await provider.generateInsights(request);
+
+    expect(MockedOpenAI).toHaveBeenCalledWith({
+      baseURL: "http://localhost:11434/v1",
+      apiKey: "local",
+    });
   });
 });
