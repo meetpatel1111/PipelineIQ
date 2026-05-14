@@ -465,29 +465,121 @@ Current Category: ${request.category || "Not classified yet"}
 }
 
 /**
- * Local AI provider implementation (placeholder for local models)
+ * Local AI provider implementation for OpenAI-compatible local endpoints
+ * (e.g. Ollama, Llama.cpp, LM Studio)
  */
 export class LocalAIProvider implements AIProviderInterface {
   name = "local";
-  private modelPath: string;
-  private endpoint: string | undefined;
-  private deployment: string | undefined;
-  private apiVersion: string | undefined;
+  private baseURL: string;
+  private model: string;
+  private maxTokens: number;
+  private temperature: number;
+  private apiKey: string;
 
   constructor(config: AIEngineConfig) {
-    this.modelPath = config.modelPath || "./model";
-    this.endpoint = config.endpoint;
-    this.deployment = config.deployment;
-    this.apiVersion = config.apiVersion;
+    if (!config.endpoint) {
+      throw new Error(
+        "[PipelineIQ] Local AI provider requires config.ai.endpoint (e.g. 'http://localhost:11434/v1')",
+      );
+    }
+    if (!config.model) {
+      throw new Error(
+        "[PipelineIQ] Local AI provider requires config.ai.model (e.g. 'llama3.2')",
+      );
+    }
+    this.baseURL = config.endpoint;
+    this.model = config.model;
+    this.maxTokens = config.maxTokens ?? 1000;
+    this.temperature = config.temperature ?? 0.1;
+    this.apiKey = config.apiKey ?? "local";
   }
 
   isAvailable(): boolean {
-    return true; 
+    return true;
   }
 
   async generateInsights(request: AIRequest): Promise<AIResponse> {
-    // Placeholder implementation for local AI models
-    // This would integrate with local LLM runners like Ollama, Llama.cpp, etc.
-    throw new Error("Local AI provider not yet implemented");
+    const { OpenAI } = await import("openai");
+    const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
+
+    try {
+      const completion = await client.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: "system",
+            content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+
+Return a JSON object with the following fields:
+- summary: Brief human-readable failure description (max 255 characters)
+- rootCause: Most likely cause of the failure
+- remediation: Array of specific remediation steps
+- severity: Critical/High/Medium/Low based on impact
+- classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
+- confidence: 0-1 confidence score in your analysis
+- riskAssessment: Brief risk assessment for the deployment
+
+Be concise but thorough. Focus on actionable insights.`,
+          },
+          { role: "user", content: this.buildPrompt(request) },
+        ],
+        max_tokens: this.maxTokens,
+        temperature: this.temperature,
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) throw new Error("No response from local AI");
+      return this.parseResponse(content);
+    } catch (error) {
+      throw new Error(`Local AI error: ${error}`);
+    }
+  }
+
+  private buildPrompt(request: AIRequest): string {
+    return `Pipeline Failure Analysis Request:
+
+Pipeline: ${request.pipelineName}
+Repository: ${request.repositoryName}
+Branch: ${request.branch}
+Environment: ${request.environment ?? "Not specified"}
+Exit Code: ${request.exitCode ?? "Not specified"}
+Failed Command: ${request.failedCommand ?? "Not specified"}
+
+Error Message:
+${request.errorMessage ?? "No error message provided"}
+
+Stack Trace:
+${request.stackTrace ?? "No stack trace provided"}
+
+Logs:
+${request.logs}
+
+Historical Context:
+${request.historicalContext ?? "No historical context available"}
+
+Current Category: ${request.category ?? "Not classified yet"}`;
+  }
+
+  private parseResponse(content: string): AIResponse {
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        return {
+          summary: parsed.summary,
+          rootCause: parsed.rootCause,
+          remediation: Array.isArray(parsed.remediation)
+            ? parsed.remediation
+            : [parsed.remediation],
+          severity: parsed.severity,
+          classification: parsed.classification,
+          confidence: parsed.confidence,
+          riskAssessment: parsed.riskAssessment,
+        };
+      }
+    } catch {
+      // fall through to low-confidence default
+    }
+    return { confidence: 0.5 };
   }
 }
