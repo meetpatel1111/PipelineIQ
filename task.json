@@ -12,7 +12,7 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 8,
+    "Minor": 9,
     "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
@@ -72,7 +72,7 @@
     {
       "name": "defaultAssignee",
       "type": "string",
-      "label": "Default Assignee (Jira Account ID)",
+      "label": "Default Assignee (Jira Account ID) - Defaults to unassigned",
       "required": false
     },
     {

@@ -113,7 +113,7 @@ class JiraCloudClient implements JiraClient {
       });
 
       // Assign separately to prevent failure if assignee is invalid (common with AI-suggested users)
-      if (spec.assignee) {
+      if (spec.assignee !== undefined) {
         try {
           await this.assignIssue(res.key, spec.assignee);
         } catch (assignError) {
@@ -356,7 +356,7 @@ class JiraCloudClient implements JiraClient {
       for (let i = 0; i < results.length; i++) {
         const spec = specs[i];
         const result = results[i];
-        if (spec && result && spec.assignee && result.key) {
+        if (spec && result && spec.assignee !== undefined && result.key) {
           try {
             await this.assignIssue(result.key, spec.assignee);
           } catch (assignError) {
@@ -450,7 +450,7 @@ class JiraServerClient implements JiraClient {
         },
       });
 
-      if (spec.assignee) {
+      if (spec.assignee !== undefined) {
         try {
           await this.assignIssue(res.key, spec.assignee);
         } catch (assignError) {

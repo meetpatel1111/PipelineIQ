@@ -41,7 +41,7 @@ export const JiraTicketSpecSchema = z.object({
   labels: z.array(z.string()).default([]),
   components: z.array(z.string()).default([]),
   environment: z.string().optional(),
-  assignee: z.string().optional(),
+  assignee: z.string().nullable().optional(),
   rca: z.string().optional(),
   remediationSteps: z.array(z.string()).optional(),
   customFields: z.record(z.string(), z.unknown()).default({}),

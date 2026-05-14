@@ -15,7 +15,7 @@ We welcome contributions! This document provides guidelines for contributing to 
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/pipelineiq.git
+git clone https://github.com/meetpatel1111/PipelineIQ.git
 cd pipelineiq
 
 # Install dependencies
@@ -258,8 +258,7 @@ src/
 
 ### Getting Help
 
-- Join our [Discord community](https://discord.gg/pipelineiq)
-- Check [Discussions](https://github.com/your-org/pipelineiq/discussions)
+- Check [Discussions](https://github.com/meetpatel1111/PipelineIQ/discussions)
 - Review existing issues and PRs
 
 ### Code of Conduct

@@ -5,7 +5,7 @@ import type {
   Priority,
   DeterministicFallback,
 } from "../types/index.js";
-import type { AIRequest, AIResponse } from "./types.js";
+import { SIGNATURES, matchSignature } from "../signatures.js";
 
 /**
  * Deterministic fallback implementation as specified in PRD Section 14
@@ -25,79 +25,13 @@ export class DeterministicFallbackEngine {
 
   /**
    * Generate RCA using signature library lookup
-   * Uses regex/keyword patterns → known cause
    */
   static generateRootCause(event: FailureEvent, category: FailureCategory): string {
-    const errorMessage = event.failure.errorMessage || "";
-    const logs = event.failure.logs || "";
+    const searchSpace = `${event.failure.errorMessage || ""}\n${event.failure.logs}`;
+    const match = matchSignature(searchSpace);
 
-    // Pattern-based RCA lookup
-    const rcaPatterns = [
-      {
-        patterns: [/state lock/i, /backend.*lock/i, /acquiring.*lock/i],
-        cause: "State lock contention - another process holds the resource",
-        category: "Infrastructure",
-      },
-      {
-        patterns: [/image.*pull.*backoff/i, /errimagepull/i, /manifest unknown/i],
-        cause: "Container image cannot be pulled from registry",
-        category: "Deployment",
-      },
-      {
-        patterns: [/helm.*upgrade.*failed/i, /release.*not found/i, /cannot reuse.*name/i],
-        cause: "Helm chart deployment failed",
-        category: "Deployment",
-      },
-      {
-        patterns: [/eresolve/i, /peer dep missing/i, /could not resolve dependency/i],
-        cause: "Dependency resolution conflict",
-        category: "Dependency",
-      },
-      {
-        patterns: [/resolutionimpossible/i, /no matching distribution/i],
-        cause: "Python package dependency conflict",
-        category: "Dependency",
-      },
-      {
-        patterns: [/tests run.*failures/i, /failed.*test/i, /assertionerror/i],
-        cause: "One or more unit tests failed",
-        category: "Test",
-      },
-      {
-        patterns: [/timeout/i, /deadline exceeded/i, /operation was cancelled/i],
-        cause: "Operation exceeded configured timeout",
-        category: "Timeout",
-      },
-      {
-        patterns: [/401.*unauthorized/i, /invalid_token/i, /authentication failed/i],
-        cause: "Authentication failed against external system",
-        category: "Authentication",
-      },
-      {
-        patterns: [/getaddrinfo.*enotfound/i, /temporary failure.*name resolution/i],
-        cause: "DNS resolution failed",
-        category: "Network",
-      },
-      {
-        patterns: [/docker.*build.*failed/i, /executor.*failed/i, /returned a non-zero code/i],
-        cause: "Docker build process failed",
-        category: "Build",
-      },
-      {
-        patterns: [/error ts\d+/i, /error.*cannot find/i, /compilation failed/i, /syntaxerror/i],
-        cause: "Source code compilation failed",
-        category: "Build",
-      },
-    ];
-
-    // Search for matching patterns
-    const searchSpace = `${errorMessage}\n${logs}`.toLowerCase();
-    for (const patternGroup of rcaPatterns) {
-      for (const pattern of patternGroup.patterns) {
-        if (pattern.test(searchSpace)) {
-          return patternGroup.cause;
-        }
-      }
+    if (match) {
+      return match.cause;
     }
 
     // Fallback based on category
@@ -128,9 +62,16 @@ export class DeterministicFallbackEngine {
   }
 
   /**
-   * Generate remediation using static knowledge base keyed by failure_category
+   * Generate remediation using signature library or category-based default
    */
-  static generateRemediation(category: FailureCategory): string[] {
+  static generateRemediation(category: FailureCategory, event: FailureEvent): string[] {
+    const searchSpace = `${event.failure.errorMessage || ""}\n${event.failure.logs}`;
+    const match = matchSignature(searchSpace);
+
+    if (match) {
+      return match.remediation;
+    }
+
     const remediationMap: Record<FailureCategory, string[]> = {
       Infrastructure: [
         "Check infrastructure resource availability",
@@ -204,71 +145,16 @@ export class DeterministicFallbackEngine {
   }
 
   /**
-   * Generate classification using pattern-matched category from log signatures
+   * Generate classification using core signature library
    */
   static generateClassification(event: FailureEvent): FailureCategory {
-    const errorMessage = event.failure.errorMessage || "";
-    const logs = event.failure.logs || "";
-    const searchSpace = `${errorMessage}\n${logs}`.toLowerCase();
-
-    // Classification patterns from log signatures
-    const classificationPatterns = [
-      {
-        patterns: [/terraform/i, /kubernetes/i, /k8s/i, /helm/i, /docker/i, /container/i],
-        category: "Infrastructure" as FailureCategory,
-      },
-      {
-        patterns: [/npm/i, /yarn/i, /pnpm/i, /pip/i, /maven/i, /gradle/i, /cargo/i],
-        category: "Dependency" as FailureCategory,
-      },
-      {
-        patterns: [/compile/i, /build/i, /typescript/i, /webpack/i, /vite/i, /rollup/i],
-        category: "Build" as FailureCategory,
-      },
-      {
-        patterns: [/deploy/i, /release/i, /apply/i, /install/i, /upgrade/i],
-        category: "Deployment" as FailureCategory,
-      },
-      {
-        patterns: [/test/i, /jest/i, /mocha/i, /pytest/i, /vitest/i, /junit/i],
-        category: "Test" as FailureCategory,
-      },
-      {
-        patterns: [/secret/i, /token/i, /password/i, /credential/i, /auth/i],
-        category: "Security" as FailureCategory,
-      },
-      {
-        patterns: [/401/i, /403/i, /unauthorized/i, /forbidden/i, /access denied/i],
-        category: "Authentication" as FailureCategory,
-      },
-      {
-        patterns: [/timeout/i, /deadline/i, /timed out/i],
-        category: "Timeout" as FailureCategory,
-      },
-      {
-        patterns: [/dns/i, /network/i, /connection/i, /enotfound/i],
-        category: "Network" as FailureCategory,
-      },
-      {
-        patterns: [/aws/i, /azure/i, /gcp/i, /cloud/i],
-        category: "CloudProvider" as FailureCategory,
-      },
-    ];
-
-    for (const patternGroup of classificationPatterns) {
-      for (const pattern of patternGroup.patterns) {
-        if (pattern.test(searchSpace)) {
-          return patternGroup.category;
-        }
-      }
-    }
-
-    return "Unknown";
+    const searchSpace = `${event.failure.errorMessage || ""}\n${event.failure.logs}`;
+    const match = matchSignature(searchSpace);
+    return match?.category ?? "Unknown";
   }
 
   /**
    * Generate severity using rule-based approach
-   * Rules: env=prod + outage signature → High/Critical; test failure on PR → Medium; etc.
    */
   static generateSeverity(event: FailureEvent, category: FailureCategory): Severity {
     const env = (event.environment || "").toLowerCase();
@@ -276,37 +162,20 @@ export class DeterministicFallbackEngine {
     const isMain = event.branch === "main" || event.branch === "master";
     const isPR = !!event.pullRequest;
 
-    // Critical severity rules
     if (isProd && (category === "Infrastructure" || category === "Deployment" || category === "Network")) {
       return "Critical";
     }
 
-    // High severity rules
     if (category === "Security") return "High";
     if (isProd) return "High";
     if (isMain) return "High";
     if (category === "Infrastructure" && !isPR) return "High";
 
-    // Medium severity rules
     if (isPR) return "Medium";
     if (category === "Test" && isPR) return "Medium";
     if (category === "Build" && !isMain) return "Medium";
 
-    // Low severity for everything else
     return "Low";
-  }
-
-  /**
-   * Generate owner suggestion using CODEOWNERS → commit author → repo admin
-   */
-  static generateOwnerSuggestion(event: FailureEvent): string {
-    // In a real implementation, this would:
-    // 1. Check CODEOWNERS file for matching paths/patterns
-    // 2. Fall back to commit author
-    // 3. Fall back to repository admin
-    
-    // For now, return commit author as fallback
-    return event.commit.author || "unknown";
   }
 
   /**
@@ -340,7 +209,6 @@ export class DeterministicFallbackEngine {
     const isMain = event.branch === "main" || event.branch === "master";
     const isPR = !!event.pullRequest;
 
-    // Risk factors
     let riskScore = 0;
     let riskFactors: string[] = [];
 
@@ -369,7 +237,6 @@ export class DeterministicFallbackEngine {
       riskFactors.push("Previous retries");
     }
 
-    // Risk level assessment
     if (riskScore >= 5) {
       return `High risk: ${riskFactors.join(", ")}`;
     } else if (riskScore >= 3) {
@@ -385,14 +252,13 @@ export class DeterministicFallbackEngine {
   static generateFallback(event: FailureEvent): DeterministicFallback {
     const category = this.generateClassification(event);
     const severity = this.generateSeverity(event, category);
-    const priority = this.severityToPriority(severity);
 
     return {
       summary: this.generateSummary(event),
       rootCause: this.generateRootCause(event, category),
-      remediation: this.generateRemediation(category).join("\n"),
+      remediation: this.generateRemediation(category, event).join("\n"),
       severity,
-      assignee: this.generateOwnerSuggestion(event),
+      assignee: null,
       tags: this.generateTags(event, category),
       classification: category,
     };

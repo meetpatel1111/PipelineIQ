@@ -6,6 +6,26 @@
 
 PipelineIQ connects **GitHub Actions** and **Azure DevOps** pipelines directly to **Jira**, automatically creating intelligent tickets when failures occur. Stop manually copying logs and context - let PipelineIQ bridge the gap between your CI/CD failures and issue tracking.
 
+## 🛑 The Problem
+
+Engineering organizations lose thousands of hours every year because:
+* **CI/CD failures are noisy**: Finding the root cause in massive log files is like finding a needle in a haystack.
+* **Manual Debugging**: Developers spend 30-60 minutes just gathering context for a single failure.
+* **Incident Fragmentation**: Jira tickets are often missing, inconsistent, or lack the metadata needed for long-term reliability analysis.
+* **Duplicate Flood**: Similar failures trigger duplicate alerts, causing notification fatigue.
+
+There is currently **no unified integration** that automatically transforms a pipeline failure into a structured Jira incident. Most teams rely on ephemeral Slack notifications, manual log analysis, and inconsistent manual ticketing—leading to a massive "intelligence gap" in DevOps operations.
+
+## 💡 Why PipelineIQ?
+
+PipelineIQ exists to be the **intelligence layer for CI/CD operations**. It transforms raw pipeline failures into **fully operationalized incident records**.
+
+By bridging the gap between your logs and Jira with AI-driven root cause analysis (RCA), PipelineIQ:
+* **Reduces MTTR**: Provides instant debugging context and remediation steps.
+* **Eliminates Toil**: Automates the collection of repository, commit, and runner metadata.
+* **Standardizes Reliability**: Ensures every incident is recorded with consistent, high-fidelity data (80-120 fields).
+* **Focuses Teams**: Smart deduplication ensures teams fix the *problem*, not the *symptom*.
+
 ## 🎯 Core Value: Seamless CI/CD → Jira Integration
 
 - **🔄 Automatic Detection**: Monitors GitHub Actions and Azure DevOps pipeline failures
@@ -82,7 +102,7 @@ npm install pipelineiq
 ### From Source
 
 ```bash
-git clone https://github.com/your-org/pipelineiq.git
+git clone https://github.com/meetpatel1111/PipelineIQ.git
 cd pipelineiq
 npm install
 npm run build
@@ -142,6 +162,9 @@ npm run build
 - **API Reliability**: Automatic truncation of long fields (e.g., Jira summary) to ensure API compliance.
 - **Dedup Search**: JQL-based duplicate detection with time windows
 - **Bulk Operations**: Enhanced client with bulk comments, links, transitions
+
+> [!TIP]
+> **Jira Workflow Tip**: To ensure issues remain unassigned by default across any organization, you can configure your Jira workflow. Go to the **Create** transition → **Post Functions** → Add **Update Issue Field** → Set **Assignee** to **Unassigned**.
 
 ## 🔧 Configuration
 
@@ -324,12 +347,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for gu
 
 Apache License 2.0 - see LICENSE file for details.
 
-## 🔗 Links
-
-- [GitHub Repository](https://github.com/your-org/pipelineiq)
+- [GitHub Repository](https://github.com/meetpatel1111/PipelineIQ)
 - [npm Package](https://www.npmjs.com/package/pipelineiq)
-- [Documentation](https://pipelineiq.dev)
-- [Discord Community](https://discord.gg/pipelineiq)
 
 ---
 

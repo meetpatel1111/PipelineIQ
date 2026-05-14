@@ -42,6 +42,8 @@ export const deterministicEnricher: Enricher = {
 
     if (config.defaultAssignee) {
       setField(ctx, "assignee", config.defaultAssignee, "deterministic");
+    } else {
+      setField(ctx, "assignee", null, "deterministic");
     }
 
     // External links — always populated from event payload.

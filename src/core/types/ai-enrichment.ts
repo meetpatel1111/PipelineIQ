@@ -5,7 +5,7 @@ export const AIEnrichmentSchema = z.object({
   rootCause: z.string().optional(),
   remediation: z.string().optional(),
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
-  assignee: z.string().optional(),
+  assignee: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   confidence: z.number().min(0).max(1).optional(),
   postmortem: z.string().optional(),
@@ -33,7 +33,7 @@ export const DeterministicFallbackSchema = z.object({
   rootCause: z.string().optional(),
   remediation: z.string().optional(),
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
-  assignee: z.string().optional(),
+  assignee: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   classification: z.enum([
     "Infrastructure",

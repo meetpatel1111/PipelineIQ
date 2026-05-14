@@ -111,7 +111,7 @@ export class AIEngine implements IAIEngine {
           { field: "remediation", value: aiResponse.remediation, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "severity", value: aiResponse.severity, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "classification", value: aiResponse.classification, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "assignee", value: aiResponse.assignee, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
+          { field: "assignee", value: null, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "tags", value: aiResponse.tags, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "riskAssessment", value: aiResponse.riskAssessment, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true }
         );
@@ -143,7 +143,7 @@ export class AIEngine implements IAIEngine {
       { field: "remediation", value: fallback.remediation, provenance: "fallback", aiUsed: false },
       { field: "severity", value: fallback.severity, provenance: "fallback", aiUsed: false },
       { field: "classification", value: fallback.classification, provenance: "fallback", aiUsed: false },
-      { field: "assignee", value: fallback.assignee, provenance: "fallback", aiUsed: false },
+      { field: "assignee", value: null, provenance: "fallback", aiUsed: false },
       { field: "tags", value: fallback.tags, provenance: "fallback", aiUsed: false },
       { field: "riskAssessment", value: DeterministicFallbackEngine.generateRiskAssessment(event), provenance: "fallback", aiUsed: false }
     );

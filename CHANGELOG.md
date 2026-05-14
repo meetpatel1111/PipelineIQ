@@ -4,6 +4,16 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.9.0] - 2026-05-14
+
+### Added - Architectural Hardening & Unified Intelligence
+- **Unified Signature Library**: Refactored `DeterministicFallbackEngine` to use the central `SIGNATURES` library, ensuring 100% consistency in failure classification, RCA, and remediation across all engine modes.
+- **Strict "Unassigned" Policy**: Hardened Jira integration to explicitly initialize assignees as `null` by default, forcing "Unassigned" status and overriding project-level defaults.
+- **Enhanced Value Proposition**: Overhauled `README.md` to clearly define the PipelineIQ "Intelligence Gap" and its role in reducing CI/CD noise.
+
+### Changed
+- **Codebase Consolidation**: Eliminated redundant regex patterns in the AI fallback engine by centralizing diagnostic logic in `src/core/signatures.ts`.
+
 ## [0.8.0] - 2026-05-13
 
 ### Added - Production Parity & Resilience

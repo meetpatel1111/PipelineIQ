@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: '0.8.0'
+version: '0.9.0'
 author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
@@ -34,7 +34,7 @@ inputs:
     required: false
     default: Bug
   default-assignee:
-    description: Default user ID to assign issues to
+    description: Default user ID to assign issues to (Defaults to unassigned)
     required: false
   ai-mode:
     description: AI enrichment mode (disabled | assist | full)

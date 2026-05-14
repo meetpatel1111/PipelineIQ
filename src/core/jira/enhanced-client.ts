@@ -117,7 +117,7 @@ export class EnhancedJiraClient implements JiraClient {
     const res = await this.request<any>("POST", this.getApiPath("/issue"), payload);
 
     // Assign separately to handle invalid users gracefully
-    if (spec.assignee) {
+    if (spec.assignee !== undefined) {
       try {
         await this.assignIssue(res.key || res.id, spec.assignee);
       } catch (assignError) {
@@ -139,7 +139,7 @@ export class EnhancedJiraClient implements JiraClient {
     await this.request<void>("PUT", this.getApiPath(`/issue/${issueKey}`), payload);
 
     // Assign separately to handle invalid users gracefully
-    if (spec.assignee) {
+    if (spec.assignee !== undefined) {
       try {
         await this.assignIssue(issueKey, spec.assignee);
       } catch (assignError) {
