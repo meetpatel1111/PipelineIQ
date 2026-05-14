@@ -56,5 +56,16 @@ export const deterministicEnricher: Enricher = {
       links.push({ url: event.pullRequest.url, title: `PR #${event.pullRequest.number}` });
     }
     setField(ctx, "externalLinks", links, "deterministic");
+
+    // Merge custom metadata into fields
+    if (event.metadata && Object.keys(event.metadata).length > 0) {
+      const existingFields = (ctx.fields.customFields as Record<string, any>) || {};
+      setField(
+        ctx,
+        "customFields",
+        { ...existingFields, ...event.metadata },
+        "deterministic",
+      );
+    }
   },
 };

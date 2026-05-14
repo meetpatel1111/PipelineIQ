@@ -17,9 +17,11 @@ export const aiEnricher: Enricher = {
       return;
     }
 
+    const { temperature, ...restAiConfig } = config.ai;
     const aiEngine = AIEngine.create(config.ai.mode as any, {
-      ...config.ai,
+      ...restAiConfig,
       maxTokens: config.ai.maxLogTokens,
+      ...(temperature !== undefined ? { temperature } : {}),
     });
     
     if (!aiEngine.isAvailable()) {

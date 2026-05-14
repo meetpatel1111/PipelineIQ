@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: '0.9.0'
+version: '0.12.0'
 author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
@@ -191,6 +191,10 @@ inputs:
     description: The name of the workflow
     required: false
     default: ${{ github.workflow }}
+  github-triggering-actor:
+    description: Username of the user that initiated the workflow run (differs from actor on reruns)
+    required: false
+    default: ${{ github.triggering_actor }}
   github-workflow-ref:
     description: The ref path to the workflow
     required: false
@@ -231,6 +235,22 @@ inputs:
     description: The path to the directory containing preinstalled tools
     required: false
     default: ${{ runner.tool_cache }}
+  runner-workspace:
+    description: The path of the workspace directory for the repository
+    required: false
+    default: ${{ runner.workspace }}
+  job-status:
+    description: The current status of the job (success, failure, cancelled)
+    required: false
+    default: ${{ job.status }}
+  strategy-job-index:
+    description: The index in the job matrix of the current job
+    required: false
+    default: ${{ strategy.job-index }}
+  strategy-job-total:
+    description: The total number of jobs in the job matrix
+    required: false
+    default: ${{ strategy.job-total }}
 
 outputs:
   jira-issue-key:

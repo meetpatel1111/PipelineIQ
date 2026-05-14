@@ -1,9 +1,10 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { Octokit } from "@octokit/rest";
-import { 
+import {
   processFailureEvent,
   PipelineIQConfigSchema,
+  aiEnricher,
   type PipelineIQConfig,
 } from "../core/index.js";
 import { mapGithubContext, type GhContext } from "./map-event.js";
@@ -45,6 +46,9 @@ async function run(): Promise<void> {
       workflowRef: core.getInput("github-workflow-ref") || process.env.GITHUB_WORKFLOW_REF,
       workflowSha: core.getInput("github-workflow-sha") || process.env.GITHUB_WORKFLOW_SHA,
       workspace: core.getInput("github-workspace") || process.env.GITHUB_WORKSPACE,
+      action: core.getInput("github-action") || process.env.GITHUB_ACTION,
+      actionPath: core.getInput("github-action-path") || process.env.GITHUB_ACTION_PATH,
+      actionRepository: core.getInput("github-action-repository") || process.env.GITHUB_ACTION_REPOSITORY,
       visibility: (github.context.payload as any).repository?.visibility,
       // Runner information
       runnerArch: core.getInput("runner-arch") || process.env.RUNNER_ARCH,
@@ -54,11 +58,24 @@ async function run(): Promise<void> {
       runnerOs: core.getInput("runner-os") || process.env.RUNNER_OS,
       runnerTemp: core.getInput("runner-temp") || process.env.RUNNER_TEMP,
       runnerToolCache: core.getInput("runner-tool-cache") || process.env.RUNNER_TOOL_CACHE,
+      runnerWorkspace: core.getInput("runner-workspace") || process.env.RUNNER_WORKSPACE,
+      jobStatus: core.getInput("job-status"),
+      jobContainer: core.getInput("job-container"),
+      jobServices: core.getInput("job-services"),
+      strategyJobIndex: core.getInput("strategy-job-index") ? Number.parseInt(core.getInput("strategy-job-index"), 10) : undefined,
+      strategyJobTotal: core.getInput("strategy-job-total") ? Number.parseInt(core.getInput("strategy-job-total"), 10) : undefined,
+      actionRef: core.getInput("github-action-ref"),
+      actionStatus: core.getInput("github-action-status"),
+      repositoryGitUrl: core.getInput("github-repository-url"),
+      secretSource: core.getInput("github-secret-source"),
+      eventPayload: github.context.payload,
       retentionDays: (core.getInput("github-retention-days") || process.env.GITHUB_RETENTION_DAYS) ? Number.parseInt(core.getInput("github-retention-days") || process.env.GITHUB_RETENTION_DAYS!, 10) : undefined,
     };
 
     const event = await mapGithubContext(ghCtx, octokit, environment);
-    const result = await processFailureEvent(event, config);
+    const result = await processFailureEvent(event, config, {
+      extraEnrichers: [aiEnricher],
+    });
 
     const issueKey = result.action === "skipped" ? "" : result.issueKey;
     core.setOutput("jira-issue-key", issueKey);
@@ -99,8 +116,8 @@ function readConfig(): PipelineIQConfig {
       ...(core.getInput("ai-api-key") ? { apiKey: core.getInput("ai-api-key") } : {}),
       ...(core.getInput("ai-model") ? { model: core.getInput("ai-model") } : {}),
       ...(core.getInput("ai-temperature") ? { temperature: Number.parseFloat(core.getInput("ai-temperature")) } : {}),
-      ...(core.getInput("ai-max-tokens") ? { maxTokens: Number.parseInt(core.getInput("ai-max-tokens"), 10) } : {}),
-      ...(core.getInput("ai-confidence") ? { confidence: Number.parseFloat(core.getInput("ai-confidence")) } : {}),
+      ...(core.getInput("ai-max-tokens") ? { maxLogTokens: Number.parseInt(core.getInput("ai-max-tokens"), 10) } : {}),
+      ...(core.getInput("ai-confidence") ? { minConfidence: Number.parseFloat(core.getInput("ai-confidence")) } : {}),
     },
     dedup: {
       enabled: true,

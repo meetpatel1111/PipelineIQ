@@ -27,6 +27,7 @@ export const AIConfigSchema = z.object({
   provider: z.enum(["openai", "anthropic", "azure-openai", "gemini"]).optional(),
   apiKey: z.string().optional(),
   model: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
   minConfidence: z.number().min(0).max(1).default(0.6),
   maxLogTokens: z.number().int().positive().default(8000),
 });
@@ -42,6 +43,7 @@ export const PipelineIQConfigSchema = z.object({
   dedup: DedupConfigSchema.default({}),
   maskSecrets: z.boolean().default(true),
   logExcerptLines: z.number().int().positive().default(80),
+  displayMetadata: z.array(z.string()).optional(),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;

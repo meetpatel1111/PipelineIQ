@@ -49,6 +49,9 @@ export type GhContext = {
   workflowRef?: string | undefined;
   workflowSha?: string | undefined;
   workspace?: string | undefined;
+  action?: string | undefined;
+  actionPath?: string | undefined;
+  actionRepository?: string | undefined;
   // Runner information
   runnerArch?: string | undefined;
   runnerDebug?: string | undefined;
@@ -57,8 +60,19 @@ export type GhContext = {
   runnerOs?: string | undefined;
   runnerTemp?: string | undefined;
   runnerToolCache?: string | undefined;
+  runnerWorkspace?: string | undefined;
   retentionDays?: number | undefined;
   visibility?: string | undefined;
+  jobStatus?: string | undefined;
+  jobContainer?: string | undefined;
+  jobServices?: string | undefined;
+  strategyJobIndex?: number | undefined;
+  strategyJobTotal?: number | undefined;
+  actionRef?: string | undefined;
+  actionStatus?: string | undefined;
+  repositoryGitUrl?: string | undefined;
+  secretSource?: string | undefined;
+  eventPayload?: any;
 };
 
 export async function mapGithubContext(
@@ -178,6 +192,24 @@ export async function mapGithubContext(
       ...(ctx.triggeringActor ? { triggeringActor: ctx.triggeringActor } : {}),
       ...(ctx.refType ? { refType: ctx.refType } : {}),
       ...(ctx.refProtected ? { refProtected: ctx.refProtected === "true" } : {}),
+      ...(ctx.action ? { action: ctx.action } : {}),
+      ...(ctx.actionPath ? { actionPath: ctx.actionPath } : {}),
+      ...(ctx.actionRepository ? { actionRepository: ctx.actionRepository } : {}),
+      ...(ctx.baseRef ? { baseRef: ctx.baseRef } : {}),
+      ...(ctx.headRef ? { headRef: ctx.headRef } : {}),
+      ...(ctx.runnerTemp ? { runnerTemp: ctx.runnerTemp } : {}),
+      ...(ctx.runnerToolCache ? { runnerToolCache: ctx.runnerToolCache } : {}),
+      ...(ctx.runnerWorkspace ? { runnerWorkspace: ctx.runnerWorkspace } : {}),
+      ...(ctx.workspace ? { workspace: ctx.workspace, sourcesDirectory: ctx.workspace } : {}),
+      ...(ctx.jobStatus ? { jobStatus: ctx.jobStatus } : {}),
+      ...(ctx.jobContainer ? { jobContainer: ctx.jobContainer } : {}),
+      ...(ctx.jobServices ? { jobServices: ctx.jobServices } : {}),
+      ...(ctx.strategyJobIndex !== undefined ? { strategyJobIndex: ctx.strategyJobIndex } : {}),
+      ...(ctx.strategyJobTotal !== undefined ? { strategyJobTotal: ctx.strategyJobTotal } : {}),
+      ...(ctx.actionRef ? { actionRef: ctx.actionRef } : {}),
+      ...(ctx.actionStatus ? { actionStatus: ctx.actionStatus } : {}),
+      ...(ctx.repositoryGitUrl ? { repositoryGitUrl: ctx.repositoryGitUrl } : {}),
+      ...(ctx.secretSource ? { secretSource: ctx.secretSource } : {}),
     },
     repository: {
       owner,
@@ -201,6 +233,7 @@ export async function mapGithubContext(
         : {}),
     },
     branch: ctx.refName || finalBranch, // Use the short ref name if available
+    ...(ctx.eventPayload ? { eventPayload: ctx.eventPayload } : {}),
     ...(ctx.payload.pull_request
       ? {
           pullRequest: {
@@ -213,6 +246,11 @@ export async function mapGithubContext(
       : {}),
     ...(environment ? { environment } : {}),
     triggeredBy: ctx.triggeringActor || ctx.actor || runData.actor?.login || "unknown",
+    eventName: ctx.eventName,
+    apiUrl: ctx.apiUrl,
+    graphqlUrl: ctx.graphqlUrl,
+    metadata: {},
+    explicitFields: [],
     failure: {
       ...(failedStep ? { failedStep: failedStep.name } : {}),
       logs,

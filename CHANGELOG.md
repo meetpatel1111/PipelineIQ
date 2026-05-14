@@ -4,6 +4,109 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.12.0] - 2026-05-14
+
+### Added — Architecture Documentation & Visual Design Overhaul
+
+#### New Files
+- **`ARCHITECTURE.md`**: Comprehensive 20-section technical and business architecture document covering system overview, goals, component design, AI architecture, security model, Jira ticket architecture, scalability, deployment models, engineering tradeoffs, and roadmap.
+- **`pipelineiq-arch-structural.drawio`**: High-fidelity structural architecture diagram visualizing the Platform Adapter layer (GitHub/ADO/CLI), the ESM Core Pipeline (Normalization → Deterministic → Computed → Deduplicator → AI Engine → Renderer), the Signatures Library, Secret Masking middleware, and the Multi-Provider AI Hub (Gemini, OpenAI, Anthropic) with Jira integration.
+- **`pipelineiq-arch-operational-flow.drawio`**: End-to-end operational process flow diagram across four stages: Ingestion & Sanitization, Intelligence & Enrichment, Resolution & Dispatch, and a "Deep Dive Logic" section visualizing the AI Prompt Factory, Fingerprint Stabilizer, and Multi-Platform Renderer sub-flows.
+- **`pipelineiq-arch-deployment-topology.drawio`**: Deployment and Security Topology diagram covering Execution Contexts (GitHub Runner, ADO Agent, Local CLI), Network Boundaries (Jira Cloud/HTTPS, Jira Server/VPN, AI Provider egress), Secret Masking Firewall flow, and all four deployment modes including the future SaaS roadmap item.
+
+#### Diagram Design
+- All three Draw.io diagrams use a unified ultra-modern "Card" design system: white card nodes with vibrant accent borders, glassmorphism swimlane headers with numbered stage labels, curved connectors (`curved=1`) with color-coded semantic edge labels (YES/NO, FOUND/NEW), and shadow depth for visual hierarchy.
+- Color system: Info Blue (`#1c7ed6`) for ingestion/Jira, Success Green (`#37b24d`) for enrichment/output, AI Red (`#f03e3e`) for AI and secrets, Amber (`#f59f00`) for decision gates/fallbacks, Purple (`#ae3ec9`) for deduplication/dispatch.
+
+#### Architecture Content — Verified Against Current Codebase
+- **AI Prompt Factory** (`src/core/ai/ai-engine.ts`): Documented the `buildPrompt` method that aggregates log snippets, signature metadata, Git history, and platform context with a Token Limit Guard before dispatching to LLMs.
+- **Fingerprint Stabilizer** (`src/core/dedup.ts`): Documented the `normalizeLog` function that strips Timestamps, UUIDs/GUIDs, Hex codes, and absolute paths before computing the SHA-256 deduplication fingerprint.
+- **Multi-Platform Renderer** (`src/core/jira/enhanced-client.ts`): Documented the `isCloud` detection logic that branches between Atlassian Document Format (ADF v3) for Jira Cloud and WikiMarkup (v2) for Jira Server/DC.
+- **Secret Masking Firewall** (`src/core/secret-mask.ts`): Documented coverage for AWS/GCP/Azure keys, GitHub/ADO PATs, JWTs, Bearer tokens, and DB connection strings — all redacted in-place before any external dispatch.
+- **Confidence Gating**: Documented the `>= 0.6` threshold that discards low-confidence AI output and triggers the deterministic fallback engine.
+
+### Changed
+
+- **`ARCHITECTURE.md` Section 3.1 — Visual Architecture Diagrams**: Replaced single-line diagram references with a structured 3-row reference table linking all three diagrams with emoji-coded icons, filenames, and purpose descriptions.
+- **`ARCHITECTURE.md` Section 3.1**: Added `[!TIP]` callout highlighting the Deep Dive logic coverage and `[!IMPORTANT]` callout confirming the security guarantee that raw secrets never leave the runner.
+
+### Renamed
+
+- `pipelineiq.drawio` → `pipelineiq-arch-structural.drawio`
+- `pipelineiq-flow.drawio` → `pipelineiq-arch-operational-flow.drawio`
+- `pipelineiq-2.drawio` → `pipelineiq-arch-deployment-topology.drawio`
+
+---
+
+## [0.11.0] - 2026-05-14
+
+
+### Fixed — ADO Adapter Parity & AI Config Correctness
+
+- **Azure DevOps AI never ran**: `processFailureEvent` in `src/azure-devops/index.ts` was called without `extraEnrichers`, meaning the `aiEnricher` was never injected and AI enrichment was silently skipped for every ADO pipeline failure. Fixed by importing `aiEnricher` dynamically and passing `{ extraEnrichers: [aiEnricher] }`.
+- **Three Zod silent-strip bugs in ADO adapter** (`src/azure-devops/index.ts`): All three user-facing AI config fields were written under wrong keys, causing `PipelineIQConfigSchema.parse()` to strip them with no error:
+  - `maxTokens` → `maxLogTokens` (matches `AIConfigSchema`)
+  - `confidence` → `minConfidence` (matches `AIConfigSchema`)
+  - `temperature` — field did not exist in `AIConfigSchema` at all (see Added below)
+- **Two Zod silent-strip bugs in GitHub Action** (`src/github-action/index.ts`):
+  - `confidence` → `minConfidence`
+  - `temperature` now correctly lands in schema (see Added below)
+
+### Added
+
+- **`temperature` in `AIConfigSchema`** (`src/core/types/config.ts`): The `ai-temperature` / `aiTemperature` input was exposed in both `action.yml` and `task.json` but silently discarded because `AIConfigSchema` had no `temperature` field. Added `temperature: z.number().min(0).max(2).optional()` so user-supplied sampling temperature now reaches the AI engine.
+- **`fullSourceBranch` fully wired end-to-end**: `Build.SourceBranch` (the full `refs/heads/main` / `refs/tags/v1.0.0` / `refs/pull/1/merge` ref) was already written by `map-event.ts` but invisible to TypeScript and the renderer because `PipelineSchema` had no matching field. Completed the wiring:
+  - Added `fullSourceBranch: z.string().optional()` to `PipelineSchema` in `failure-event.ts`
+  - Added `"Source Branch (full ref)"` entry to `renderer.ts` `allFields` array
+  - Added `fullSourceBranch` to both pipeline object constructions in `cli/index.ts`
+
+### Changed
+
+- **`aiEnricher` temperature spread** (`src/core/enrichers/ai.ts`): Refactored the engine config construction to destructure `temperature` explicitly before spreading `config.ai`, satisfying `exactOptionalPropertyTypes: true` — `temperature?: number | undefined` cannot be spread directly into a type requiring `temperature: number`.
+
+### Added (continued)
+
+- **4 missing GitHub Actions inputs in `action.yml`**: `runner-workspace`, `job-status`, `strategy-job-index`, and `strategy-job-total` were fully wired in `index.ts`, `GhContext`, and `map-event.ts` but had no corresponding `action.yml` input with a default expression. Added all four so they are automatically populated without user configuration:
+  - `runner-workspace` → `${{ runner.workspace }}`
+  - `job-status` → `${{ job.status }}`
+  - `strategy-job-index` → `${{ strategy.job-index }}`
+  - `strategy-job-total` → `${{ strategy.job-total }}`
+- **`github-triggering-actor` input in `action.yml`**: Was read via `core.getInput()` in `index.ts` but had no input definition, so it always fell back to `process.env`. Added with `default: ${{ github.triggering_actor }}`.
+
+### Fixed (continued)
+
+- **GitHub failed job name invisible in Jira tickets** (`src/core/renderer.ts`): GitHub Actions sets `pipeline.job` (from `failedJob.name`) but the renderer only had an entry for `pipeline.jobName` — a distinct ADO field. Added a `job` entry to `allFields` so the failed job name now appears in the metadata table for GitHub runs.
+- **`runnerEnvironment` and `runnerDebug` missing from renderer** (`src/core/renderer.ts`): Both fields were fully wired through schema → both adapters → map-event but had no `allFields` entry, making them unreachable even with `--display-metadata`. Added both.
+- **`prIsFork` redundant `String()` cast** (`src/core/renderer.ts`): `PipelineSchema` defines `prIsFork` as `z.string().optional()` but the renderer applied an unnecessary `String()` conversion. Removed.
+
+### Added (renderer completeness)
+
+- **ADO triggered-by chain fields in renderer** (`src/core/renderer.ts`): Added `allFields` entries for `triggeredByDefinitionName`, `triggeredByBuildNumber`, `triggeredByDefinitionId`, and `triggeredByBuildId` — the four fields that identify which upstream pipeline triggered the current run. These were in `PipelineSchema` and set by the ADO adapter but had no renderer slot.
+- **ADO deployment environment fields in renderer** (`src/core/renderer.ts`): Added `environmentResourceName` and `environmentId` entries — relevant for ADO environment-gated deployments.
+
+### Verified
+
+- **Complete ADO predefined variable audit**: Cross-referenced all 91 official Azure DevOps predefined variables (`Agent.*`, `Build.*`, `Common.*`, `Pipeline.*`, `Release.*`, `System.*`, `TF_BUILD`) against both `src/azure-devops/map-event.ts` (task-lib dot notation) and `src/cli/index.ts` (YAML env var underscore notation). All variables confirmed correctly mapped — no gaps found.
+- **Complete GitHub Actions context variable audit**: Cross-referenced all official GitHub Actions context and environment variables across three batches (batch 1: `GITHUB_ACTION` → `GITHUB_TRIGGERING_ACTOR`; batch 2: `GITHUB_WORKFLOW_REF` → `RUNNER_TOOL_CACHE`; batch 3: `RUNNER_WORKSPACE` → `inputs.NAME`) against `action.yml`, `index.ts`, `GhContext`, and `map-event.ts`. All fixed-key variables confirmed correctly mapped or intentionally omitted (dynamic contexts: `env.NAME`, `vars.NAME`, `secrets.NAME`, `matrix.NAME`, `steps.<id>.*`, `needs.<job>.*`, `inputs.NAME`). Five gaps found and fixed.
+
+---
+
+## [0.10.0] - 2026-05-14
+
+### Added - Smart Metadata & Context-Aware Reporting
+- **Customizable Metadata Architecture**: Implemented a "Core + Explicit" display strategy that automatically filters technical clutter while ensuring user-provided flags and essential debugging data are always visible.
+- **Enhanced Jira Observability**: Overhauled the Jira ticket renderer to include interactive markdown links for Pipelines, Repositories, and Commits.
+- **Intelligent Commit Summaries**: Added truncated commit messages (first line, max 80 chars) to the Jira report for immediate developer context.
+- **Exhaustive CI/CD Context**: Expanded the FailureEvent schema to support the complete 100% range of GitHub Actions environment variables and contexts (Actions, Runners, Matrix, Inputs).
+- **New CLI Flags**: Introduced `--meta` (custom key-value pairs), `--display-meta` (field whitelisting), and ~15 new technical flags (e.g., `--action`, `--base-ref`, `--runner-temp`) for granular override control.
+- **Smart Whitelisting**: Updated the CLI to automatically promote any argument provided via flags to the "High Importance" section of the Jira report.
+
+### Changed
+- **Optimized Core Table**: Rebalanced default core fields to include "Triggered By" and "Commit Message" while moving technical runner data to optional diagnostic categories.
+
+### Fixed
+- **Cross-Platform Type Safety**: Synchronized the `FailureEvent` schema across GitHub Actions and Azure DevOps mapping logic to ensure robust, platform-agnostic reporting.
+
 ## [0.9.0] - 2026-05-14
 
 ### Added - Architectural Hardening & Unified Intelligence

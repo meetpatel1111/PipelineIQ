@@ -20,7 +20,8 @@ export async function mapAzureDevOpsContext(
   const buildNumber = tl.getInput("buildNumber") || required("Build.BuildNumber");
   const definitionName = tl.getInput("definitionName") || required("Build.DefinitionName");
   const sourceVersion = tl.getInput("sourceVersion") || required("Build.SourceVersion");
-  const sourceBranch = (tl.getInput("sourceBranch") || required("Build.SourceBranch")).replace(/^refs\/heads\//, "");
+  const fullSourceBranch = tl.getInput("sourceBranch") || tl.getVariable("Build.SourceBranch") || "";
+  const sourceBranch = fullSourceBranch.replace(/^refs\/heads\//, "");
   const repositoryName = tl.getInput("repositoryName") || required("Build.Repository.Name");
   const repositoryUri = tl.getInput("repositoryUri") || required("Build.Repository.Uri");
   const requestedFor = (tl.getInput("requestedFor") || tl.getVariable("Build.RequestedFor")) ?? "unknown";
@@ -37,6 +38,14 @@ export async function mapAzureDevOpsContext(
   const repositoryGitSubmoduleCheckout = tl.getInput("repositoryGitSubmoduleCheckout") || tl.getVariable("Build.Repository.Git.SubmoduleCheckout");
   const sourceBranchName = tl.getInput("sourceBranchName") || tl.getVariable("Build.SourceBranchName");
   const cronScheduleDisplayName = tl.getInput("cronScheduleDisplayName") || tl.getVariable("Build.CronSchedule.DisplayName");
+  const requestedForEmail = tl.getInput("requestedForEmail") || tl.getVariable("Build.RequestedForEmail");
+  const requestedForId = tl.getInput("requestedForId") || tl.getVariable("Build.RequestedForId");
+  const queuedBy = tl.getInput("queuedBy") || tl.getVariable("Build.QueuedBy");
+  const queuedById = tl.getInput("queuedById") || tl.getVariable("Build.QueuedById");
+  const stageRequestedBy = tl.getInput("stageRequestedBy") || tl.getVariable("Build.StageRequestedBy");
+  const stageRequestedForId = tl.getInput("stageRequestedForId") || tl.getVariable("Build.StageRequestedForId");
+  const testResultsDirectory = tl.getInput("testResultsDirectory") || tl.getVariable("Common.TestResultsDirectory");
+  const sourceTfvcShelveset = tl.getInput("sourceTfvcShelveset") || tl.getVariable("Build.SourceTfvcShelveset");
   const systemCollectionId = tl.getInput("systemCollectionId") || tl.getVariable("System.CollectionId");
   const systemDefinitionId = tl.getInput("systemDefinitionId") || tl.getVariable("System.DefinitionId");
   const systemTeamProjectId = tl.getInput("systemTeamProjectId") || tl.getVariable("System.TeamProjectId");
@@ -44,6 +53,7 @@ export async function mapAzureDevOpsContext(
   const systemHostType = tl.getInput("systemHostType") || tl.getVariable("System.HostType");
   const systemJobDisplayName = tl.getInput("systemJobDisplayName") || tl.getVariable("System.JobDisplayName");
   const systemJobId = tl.getInput("systemJobId") || tl.getVariable("System.JobId");
+  const systemJobName = tl.getInput("systemJobName") || tl.getVariable("System.JobName");
   const systemPhaseAttempt = tl.getInput("systemPhaseAttempt") || tl.getVariable("System.PhaseAttempt");
   const systemPhaseDisplayName = tl.getInput("systemPhaseDisplayName") || tl.getVariable("System.PhaseDisplayName");
   const systemPhaseName = tl.getInput("systemPhaseName") || tl.getVariable("System.PhaseName");
@@ -53,27 +63,9 @@ export async function mapAzureDevOpsContext(
   const systemStageName = tl.getInput("systemStageName") || tl.getVariable("System.StageName");
   const tfBuild = tl.getInput("tfBuild") || tl.getVariable("TF_BUILD");
   
-  // Environment variables (deployment jobs)
-  const environmentName = tl.getInput("environmentName") || tl.getVariable("Environment.Name");
-  const environmentId = tl.getInput("environmentId") || tl.getVariable("Environment.Id");
-  const environmentResourceName = tl.getInput("environmentResourceName") || tl.getVariable("Environment.ResourceName");
-  const environmentResourceId = tl.getInput("environmentResourceId") || tl.getVariable("Environment.ResourceId");
-  const strategyName = tl.getInput("strategyName") || tl.getVariable("Strategy.Name");
-  const strategyCycleName = tl.getInput("strategyCycleName") || tl.getVariable("Strategy.CycleName");
-  
-  // Pull Request variables
-  const prIsFork = tl.getInput("prIsFork") || tl.getVariable("System.PullRequest.IsFork");
-  const prId = tl.getInput("prId") || tl.getVariable("System.PullRequest.PullRequestId");
-  const prNumber = tl.getInput("prNumber") || tl.getVariable("System.PullRequest.PullRequestNumber");
-  const prTargetBranchName = tl.getInput("prTargetBranchName") || tl.getVariable("System.PullRequest.targetBranchName");
-  const prSourceBranch = tl.getInput("prSourceBranch") || tl.getVariable("System.PullRequest.SourceBranch");
-  const prSourceCommit = tl.getInput("prSourceCommitId") || tl.getVariable("System.PullRequest.SourceCommitId");
-  const prSourceRepoUri = tl.getInput("prSourceRepoUri") || tl.getVariable("System.PullRequest.SourceRepositoryUri");
-  const prTargetBranch = tl.getInput("prTargetBranch") || tl.getVariable("System.PullRequest.TargetBranch");
-
-  // Diagnostic variables
+  // Diagnostic and Agent variables
   const agentOs = tl.getInput("agentOs") || tl.getVariable("Agent.OS");
-  const agentArch = tl.getInput("agentOsArchitecture") || tl.getVariable("Agent.OSArchitecture");
+  const agentOsArch = tl.getInput("agentOsArchitecture") || tl.getVariable("Agent.OSArchitecture");
   const jobAttempt = tl.getVariable("System.JobAttempt");
   const jobName = tl.getInput("agentJobName") || tl.getVariable("Agent.JobName");
   const agentName = tl.getInput("agentName") || tl.getVariable("Agent.Name");
@@ -85,21 +77,69 @@ export async function mapAzureDevOpsContext(
   const agentTempDirectory = tl.getInput("agentTempDirectory") || tl.getVariable("Agent.TempDirectory");
   const agentToolsDirectory = tl.getInput("agentToolsDirectory") || tl.getVariable("Agent.ToolsDirectory");
   const agentWorkFolder = tl.getInput("agentWorkFolder") || tl.getVariable("Agent.WorkFolder");
+  const agentContainerMapping = tl.getVariable("Agent.ContainerMapping");
+  const agentReleaseDirectory = tl.getVariable("Agent.ReleaseDirectory");
+  const agentRootDirectory = tl.getVariable("Agent.RootDirectory");
   const definitionVersion = tl.getInput("definitionVersion") || tl.getVariable("Build.DefinitionVersion");
   const sourcesDirectory = tl.getInput("sourcesDirectory") || tl.getVariable("Build.SourcesDirectory");
   const binariesDirectory = tl.getInput("binariesDirectory") || tl.getVariable("Build.BinariesDirectory");
+  
+  // Environment variables (deployment jobs)
+  const environmentName = tl.getInput("environmentName") || tl.getVariable("Environment.Name");
+  const environmentId = tl.getInput("environmentId") || tl.getVariable("Environment.Id");
+  const environmentResourceName = tl.getInput("environmentResourceName") || tl.getVariable("Environment.ResourceName");
+  const environmentResourceId = tl.getInput("environmentResourceId") || tl.getVariable("Environment.ResourceId");
+  const strategyName = tl.getInput("strategyName") || tl.getVariable("Strategy.Name");
+  const strategyCycleName = tl.getInput("strategyCycleName") || tl.getVariable("Strategy.CycleName");
+  const checksStageAttempt = tl.getVariable("Checks.StageAttempt");
+  
+  // Release variables
+  const releaseDeploymentRequestedFor = tl.getVariable("Release.Deployment.RequestedFor");
+  const releaseDeploymentRequestedForEmail = tl.getVariable("Release.Deployment.RequestedForEmail");
+  const releaseDeploymentId = tl.getVariable("Release.DeploymentID");
+  const releaseDefinitionEnvironmentId = tl.getVariable("Release.DefinitionEnvironmentId");
+  const releaseDefinitionId = tl.getVariable("Release.DefinitionId");
+  const releaseDefinitionName = tl.getVariable("Release.DefinitionName");
+  const releaseEnvironmentId = tl.getVariable("Release.EnvironmentId");
+  const releaseEnvironmentName = tl.getVariable("Release.EnvironmentName");
+  const releasePrimaryArtifactSourceAlias = tl.getVariable("Release.PrimaryArtifactSourceAlias");
+  const releaseDescription = tl.getVariable("Release.ReleaseDescription");
+  const releaseId = tl.getVariable("Release.ReleaseId");
+  const releaseName = tl.getVariable("Release.ReleaseName");
+  const releaseUri = tl.getVariable("Release.ReleaseUri");
+  
+  // System variables
+  const systemDebug = tl.getVariable("System.Debug");
+  const systemDefaultWorkingDirectory = tl.getVariable("System.DefaultWorkingDirectory");
+  const systemCollectionUri = tl.getVariable("System.CollectionUri") || collectionUri;
+  const systemTeamFoundationCollectionUri = tl.getVariable("System.TeamFoundationCollectionUri");
+  const pipelineWorkspace = tl.getVariable("Pipeline.Workspace");
+  const systemWorkFolder = tl.getVariable("System.WorkFolder");
+  
+  
+  // Extract all Release.Artifacts variables
+  const releaseArtifacts: Record<string, any> = {};
+  const allVars = tl.getVariables();
+  for (const v of allVars) {
+    if (v.name.startsWith("Release.Artifacts.")) {
+      releaseArtifacts[v.name] = v.value;
+    }
+  }
+  
+  // Pull Request variables
+  const prIsFork = tl.getInput("prIsFork") || tl.getVariable("System.PullRequest.IsFork");
+  const prId = tl.getInput("prId") || tl.getVariable("System.PullRequest.PullRequestId");
+  const prNumber = tl.getInput("prNumber") || tl.getVariable("System.PullRequest.PullRequestNumber");
+  const prTargetBranchName = tl.getInput("prTargetBranchName") || tl.getVariable("System.PullRequest.targetBranchName");
+  const prSourceBranch = tl.getInput("prSourceBranch") || tl.getVariable("System.PullRequest.SourceBranch");
+  const prSourceCommit = tl.getInput("prSourceCommitId") || tl.getVariable("System.PullRequest.SourceCommitId");
+  const prSourceRepoUri = tl.getInput("prSourceRepoUri") || tl.getVariable("System.PullRequest.SourceRepositoryUri");
+  const prTargetBranch = tl.getInput("prTargetBranch") || tl.getVariable("System.PullRequest.TargetBranch");
+
   const artifactStagingDirectory = tl.getInput("artifactStagingDirectory") || tl.getVariable("Build.ArtifactStagingDirectory") || tl.getVariable("Build.StagingDirectory");
   const stagingDirectory = tl.getInput("stagingDirectory") || tl.getVariable("Build.StagingDirectory");
   const containerId = tl.getInput("containerId") || tl.getVariable("Build.ContainerId");
   const repositoryLocalPath = tl.getInput("repositoryLocalPath") || tl.getVariable("Build.Repository.LocalPath");
-  const requestedForEmail = tl.getInput("requestedForEmail") || tl.getVariable("Build.RequestedForEmail");
-  const requestedForId = tl.getInput("requestedForId") || tl.getVariable("Build.RequestedForId");
-  const queuedBy = tl.getInput("queuedBy") || tl.getVariable("Build.QueuedBy");
-  const queuedById = tl.getInput("queuedById") || tl.getVariable("Build.QueuedById");
-  const stageRequestedBy = tl.getInput("stageRequestedBy") || tl.getVariable("Build.StageRequestedBy");
-  const stageRequestedForId = tl.getInput("stageRequestedForId") || tl.getVariable("Build.StageRequestedForId");
-  const testResultsDirectory = tl.getInput("testResultsDirectory") || tl.getVariable("Common.TestResultsDirectory");
-  const sourceTfvcShelveset = tl.getInput("sourceTfvcShelveset") || tl.getVariable("Build.SourceTfvcShelveset");
 
   // Triggering information
   const triggeredByBuildId = tl.getInput("triggeredByBuildId") || tl.getVariable("Build.TriggeredBy.BuildId");
@@ -172,7 +212,7 @@ export async function mapAzureDevOpsContext(
       ...(failedRecord?.name ? { task: failedRecord.name, step: failedRecord.name } : {}),
       ...(failedJob?.workerName ? { runnerType: failedJob.workerName } : {}),
       ...(agentOs ? { runnerOs: agentOs } : {}),
-      ...(agentArch ? { runnerArch: agentArch } : {}),
+      ...(agentOsArch ? { runnerArch: agentOsArch } : {}),
       ...(jobAttempt ? { runAttempt: parseInt(jobAttempt, 10), retryCount: Math.max(0, parseInt(jobAttempt, 10) - 1) } : {}),
       ...(jobName ? { job: jobName, jobName: jobName } : {}),
       ...(agentName ? { runnerName: agentName } : {}),
@@ -195,9 +235,11 @@ export async function mapAzureDevOpsContext(
       ...(agentWorkFolder ? { agentWorkFolder } : {}),
       ...(stagingDirectory ? { stagingDirectory } : {}),
       ...(testResultsDirectory ? { testResultsDirectory } : {}),
+      ...(checksStageAttempt ? { checksStageAttempt } : {}),
       ...(cronScheduleDisplayName ? { cronScheduleDisplayName } : {}),
       ...(stageRequestedBy ? { stageRequestedBy } : {}),
       ...(stageRequestedForId ? { stageRequestedForId } : {}),
+      ...(sourceTfvcShelveset ? { sourceTfvcShelveset } : {}),
       ...(triggeredByBuildId ? { triggeredByBuildId } : {}),
       ...(triggeredByDefinitionId ? { triggeredByDefinitionId } : {}),
       ...(triggeredByDefinitionName ? { triggeredByDefinitionName } : {}),
@@ -208,19 +250,50 @@ export async function mapAzureDevOpsContext(
       ...(environmentResourceId ? { environmentResourceId } : {}),
       ...(strategyName ? { strategyName } : {}),
       ...(strategyCycleName ? { strategyCycleName } : {}),
+      ...(systemWorkFolder ? { systemWorkFolder } : {}),
+      ...(sourceBranchName ? { sourceBranchName } : {}),
+      ...(fullSourceBranch ? { fullSourceBranch } : {}),
       ...(systemCollectionId ? { systemCollectionId } : {}),
       ...(systemHostType ? { systemHostType } : {}),
       ...(systemJobDisplayName ? { systemJobDisplayName } : {}),
       ...(systemJobId ? { systemJobId } : {}),
+      ...(systemJobName ? { systemJobName } : {}),
       ...(systemPhaseAttempt ? { systemPhaseAttempt } : {}),
       ...(systemPhaseDisplayName ? { systemPhaseDisplayName } : {}),
       ...(systemPhaseName ? { systemPhaseName } : {}),
       ...(systemPlanId ? { systemPlanId } : {}),
+      ...(systemTimelineId ? { systemTimelineId } : {}),
       ...(systemStageAttempt ? { systemStageAttempt } : {}),
       ...(systemStageDisplayName ? { systemStageDisplayName } : {}),
       ...(systemStageName ? { systemStageName } : {}),
-      ...(systemTimelineId ? { systemTimelineId } : {}),
+      ...(systemCollectionUri ? { systemCollectionUri } : {}),
+      ...(systemTeamFoundationCollectionUri ? { systemTeamFoundationCollectionUri } : {}),
+      ...(systemDebug ? { systemDebug } : {}),
+      ...(systemDefaultWorkingDirectory ? { systemDefaultWorkingDirectory } : {}),
+      ...(pipelineWorkspace ? { pipelineWorkspace } : {}),
       ...(tfBuild ? { tfBuild } : {}),
+      ...(agentContainerMapping ? { agentContainerMapping } : {}),
+      ...(agentReleaseDirectory ? { agentReleaseDirectory } : {}),
+      ...(agentRootDirectory ? { agentRootDirectory } : {}),
+      ...(releaseDeploymentRequestedFor ? { releaseDeploymentRequestedFor } : {}),
+      ...(releaseDeploymentRequestedForEmail ? { releaseDeploymentRequestedForEmail } : {}),
+      ...(releaseDeploymentId ? { releaseDeploymentId } : {}),
+      ...(releaseDefinitionEnvironmentId ? { releaseDefinitionEnvironmentId } : {}),
+      ...(releaseDefinitionId ? { releaseDefinitionId } : {}),
+      ...(releaseDefinitionName ? { releaseDefinitionName } : {}),
+      ...(releaseEnvironmentId ? { releaseEnvironmentId } : {}),
+      ...(releaseEnvironmentName ? { releaseEnvironmentName } : {}),
+      ...(releasePrimaryArtifactSourceAlias ? { releasePrimaryArtifactSourceAlias } : {}),
+      ...(releaseDescription ? { releaseDescription } : {}),
+      ...(releaseId ? { releaseId } : {}),
+      ...(releaseName ? { releaseName } : {}),
+      ...(releaseUri ? { releaseUri } : {}),
+      releaseArtifacts,
+      ...(buildNumber ? { buildNumber } : {}),
+      ...(buildUri ? { buildUri } : {}),
+      ...(repositoryClean ? { repositoryClean } : {}),
+      ...(repositoryGitSubmoduleCheckout ? { repositoryGitSubmoduleCheckout } : {}),
+      ...(containerId ? { containerId } : {}),
       ...(prIsFork ? { prIsFork } : {}),
       ...(prId ? { prId } : {}),
       ...(prNumber ? { prNumber } : {}),
@@ -229,6 +302,17 @@ export async function mapAzureDevOpsContext(
       ...(prSourceCommit ? { prSourceCommitId: prSourceCommit } : {}),
       ...(prSourceRepoUri ? { prSourceRepoUri } : {}),
       ...(prTargetBranch ? { prTargetBranch } : {}),
+      ...(requestedFor ? { requestedFor } : {}),
+      ...(requestedForEmail ? { requestedForEmail } : {}),
+      ...(requestedForId ? { requestedForId } : {}),
+      ...(queuedBy ? { queuedBy } : {}),
+      ...(queuedById ? { queuedById } : {}),
+      ...(sourceBranchName ? { sourceBranchName } : {}),
+      ...(sourceVersionMessage ? { sourceVersionMessage } : {}),
+      ...(repositoryId ? { repositoryId } : {}),
+      ...(repositoryProvider ? { repositoryProvider } : {}),
+      ...(repositoryUri ? { repositoryUri } : {}),
+      ...(testResultsDirectory ? { testResultsDirectory } : {}),
     },
     repository: {
       owner: teamProject,
@@ -247,12 +331,15 @@ export async function mapAzureDevOpsContext(
       ...(build.requestedFor?.displayName ? { author: build.requestedFor.displayName } : {}),
       ...(requestedForEmail ? { authorEmail: requestedForEmail } : {}),
       ...(requestedForId ? { requestedForId } : {}),
+      ...(queuedBy ? { author: requestedFor || queuedBy, queuedBy } : {}),
       ...(queuedById ? { queuedById } : {}),
     },
     branch: finalBranch,
     ...(environment || environmentName ? { environment: environment || environmentName } : {}),
     triggeredBy: queuedBy || requestedFor,
     eventName: buildReason || undefined,
+    metadata: {},
+    explicitFields: [],
     failure: {
       ...(failedRecord?.name ? { failedStep: failedRecord.name } : {}),
       ...(failedRecord?.errorCount !== undefined

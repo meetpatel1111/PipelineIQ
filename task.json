@@ -12,7 +12,7 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 9,
+    "Minor": 12,
     "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",

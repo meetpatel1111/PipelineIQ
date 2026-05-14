@@ -1,0 +1,121 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="ikhGKlWrqOuEKTYh6_VA" name="Page-1">
+    <mxGraphModel dx="1848" dy="1175" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1400" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="lane1" parent="1" style="swimlane;horizontal=0;startSize=110;fillColor=#f8f9fa;html=1;fontColor=#495057;strokeColor=#dee2e6;glass=1;rounded=1;arcSize=5;" value="&lt;b&gt;01 EXECUTION CONTEXT&lt;/b&gt;" vertex="1">
+          <mxGeometry height="280" width="1600" as="geometry" />
+        </mxCell>
+        <mxCell id="gh_runner" parent="lane1" style="swimlane;startSize=30;fillColor=#ffffff;strokeColor=#1c7ed6;html=1;rounded=1;arcSize=10;shadow=1;" value="&lt;b&gt;GitHub Runner Environment&lt;/b&gt;" vertex="1">
+          <mxGeometry height="190" width="460" x="120" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="gh_pipeline" parent="gh_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#adb5bd;shadow=1;" value="&lt;font color=&quot;#1c7ed6&quot;&gt;&lt;b&gt;CI Pipeline Steps&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ubuntu-latest / windows-latest&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="180" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="gh_action" parent="gh_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Action&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="180" x="240" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="gh_env" parent="gh_runner" style="text;html=1;strokeColor=none;fillColor=#fff9db;rounded=1;strokeColor=#f59f00;" value="&lt;small&gt;GH_TOKEN, REPO, SHA, REF&lt;br&gt;injected as ENV vars&lt;/small&gt;" vertex="1">
+          <mxGeometry height="40" width="200" x="20" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="ado_runner" parent="lane1" style="swimlane;startSize=30;fillColor=#ffffff;strokeColor=#ae3ec9;html=1;rounded=1;arcSize=10;shadow=1;" value="&lt;b&gt;Azure DevOps Agent Environment&lt;/b&gt;" vertex="1">
+          <mxGeometry height="190" width="460" x="640" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ado_pipeline" parent="ado_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#adb5bd;shadow=1;" value="&lt;font color=&quot;#ae3ec9&quot;&gt;&lt;b&gt;Pipeline Task&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Self-Hosted / Microsoft-Hosted&lt;/small&gt;" vertex="1">
+          <mxGeometry height="60" width="180" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ado_task" parent="ado_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Task&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="180" x="240" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ado_env" parent="ado_runner" style="text;html=1;strokeColor=none;fillColor=#fff9db;rounded=1;strokeColor=#f59f00;" value="&lt;small&gt;AGENT_*, BUILD_*, SYSTEM_*&lt;br&gt;injected as ENV vars&lt;/small&gt;" vertex="1">
+          <mxGeometry height="40" width="200" x="20" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="cli_ctx" parent="lane1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f59f00;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;b&gt;Local Developer CLI&lt;/b&gt;&lt;br&gt;&lt;small&gt;npx pipelineiq analyze&lt;br&gt;.env / Shell Flags&lt;/small&gt;" vertex="1">
+          <mxGeometry height="100" width="200" x="1180" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="lane2" parent="1" style="swimlane;horizontal=0;startSize=110;fillColor=#f1f3f5;html=1;fontColor=#495057;strokeColor=#dee2e6;glass=1;rounded=1;arcSize=5;" value="&lt;b&gt;02 NETWORK BOUNDARY&lt;/b&gt;" vertex="1">
+          <mxGeometry height="300" width="1600" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="jira_cloud" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1c7ed6;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#1c7ed6&quot;&gt;&lt;b&gt;Jira Cloud&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;*.atlassian.net&lt;br&gt;REST API v3 (ADF)&lt;br&gt;HTTPS / PAT Auth&lt;/small&gt;" vertex="1">
+          <mxGeometry height="120" width="200" x="170" y="170" as="geometry" />
+        </mxCell>
+        <mxCell id="jira_server" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#ae3ec9;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#ae3ec9&quot;&gt;&lt;b&gt;Jira Server / DC&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Self-Hosted&lt;br&gt;REST API v2 (WikiMarkup)&lt;br&gt;HTTPS / Basic Auth&lt;/small&gt;" vertex="1">
+          <mxGeometry height="120" width="200" x="110" y="10" as="geometry" />
+        </mxCell>
+        <mxCell id="jira_vpn" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f0fc;strokeColor=#ae3ec9;strokeWidth=1;shadow=1;arcSize=10;dashed=1;" value="&lt;font color=&quot;#ae3ec9&quot;&gt;&lt;b&gt;VPN / Private Gateway&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Required for On-Prem&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="200" x="380" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ai_hub" parent="lane2" style="swimlane;startSize=30;fillColor=#fff5f5;strokeColor=#f03e3e;html=1;rounded=1;arcSize=10;shadow=1;" value="&lt;b&gt;AI Providers (HTTPS)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="160" width="500" x="640" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="gemini" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="Google Gemini API" vertex="1">
+          <mxGeometry height="50" width="140" x="20" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="openai" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="OpenAI API" vertex="1">
+          <mxGeometry height="50" width="140" x="180" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="anthropic" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="Anthropic API" vertex="1">
+          <mxGeometry height="50" width="140" x="340" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="no_egress" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5f5;strokeColor=#f03e3e;strokeWidth=1;dashed=1;shadow=0;arcSize=15;" value="&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;AI OPTIONAL&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Skip if PIPELINEIQ_AI_DISABLED=true&lt;br&gt;No data leaves runner if disabled&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="260" x="1200" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="lane3" parent="1" style="swimlane;horizontal=0;startSize=110;fillColor=#fff5f5;html=1;fontColor=#495057;strokeColor=#dee2e6;glass=1;rounded=1;arcSize=5;" value="&lt;b&gt;03 SECURITY &amp; SECRET FLOW&lt;/b&gt;" vertex="1">
+          <mxGeometry height="280" width="1600" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="secret_src" parent="lane3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5f5;strokeColor=#f03e3e;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;Raw Secrets&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;GH/ADO Encrypted Store&lt;br&gt;API Keys, PATs, JWTs&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="180" x="120" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="masking" parent="lane3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff0f6;strokeColor=#f03e3e;strokeWidth=3;shadow=1;arcSize=10;" value="&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;SECRET MASKING FIREWALL&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;secret-mask.ts&lt;br&gt;Regex-based In-Place Redaction&lt;br&gt;Runs BEFORE any dispatch&lt;/small&gt;" vertex="1">
+          <mxGeometry height="100" width="220" x="380" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="clean_data" parent="lane3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f4fce3;strokeColor=#37b24d;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;Sanitized Report&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;[REDACTED] tokens only&lt;br&gt;Safe for external dispatch&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="200" x="680" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="jira_out" parent="lane3" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e7f5ff;strokeColor=#1c7ed6;strokeWidth=1;shadow=1;arcSize=10;" value="&lt;font color=&quot;#1c7ed6&quot;&gt;&lt;b&gt;Jira Ticket&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;No raw credentials&lt;/small&gt;" vertex="1">
+          <mxGeometry height="80" width="180" x="980" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="secret_types" parent="lane3" style="text;html=1;fillColor=#fff5f5;strokeColor=#f8cecc;rounded=1;" value="&lt;small&gt;✓ AWS/GCP/Azure Keys&lt;br&gt;✓ GitHub / ADO PATs&lt;br&gt;✓ JWTs &amp; Bearer Tokens&lt;br&gt;✓ DB Connection Strings&lt;/small&gt;" vertex="1">
+          <mxGeometry height="75" width="200" x="120" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="lane4" parent="1" style="swimlane;horizontal=0;startSize=110;fillColor=#e9ecef;html=1;fontColor=#495057;strokeColor=#dee2e6;glass=1;rounded=1;arcSize=5;" value="&lt;b&gt;04 DEPLOYMENT MODES&lt;/b&gt;" vertex="1">
+          <mxGeometry height="280" width="1600" y="860" as="geometry" />
+        </mxCell>
+        <mxCell id="mode_gh" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e7f5ff;strokeColor=#1c7ed6;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;b&gt;GitHub Actions Mode&lt;/b&gt;&lt;br&gt;&lt;small&gt;uses: pipelineiq/action@v1&lt;br&gt;Zero-Config, Auto-Discovery&lt;br&gt;Ephemeral Runner Lifecycle&lt;/small&gt;" vertex="1">
+          <mxGeometry height="110" width="220" x="120" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mode_ado" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f0fc;strokeColor=#ae3ec9;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;b&gt;Azure DevOps Mode&lt;/b&gt;&lt;br&gt;&lt;small&gt;task: PipelineIQ@1&lt;br&gt;task.json Extension&lt;br&gt;YAML pipeline step&lt;/small&gt;" vertex="1">
+          <mxGeometry height="110" width="220" x="420" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mode_cli" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9db;strokeColor=#f59f00;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;b&gt;CLI / Local Mode&lt;/b&gt;&lt;br&gt;&lt;small&gt;npx pipelineiq analyze&lt;br&gt;Manual flag overrides&lt;br&gt;.env file support&lt;/small&gt;" vertex="1">
+          <mxGeometry height="110" width="220" x="720" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mode_future" parent="lane4" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#adb5bd;strokeWidth=1;shadow=0;arcSize=10;dashed=1;" value="&lt;b&gt;SaaS / Managed (Roadmap)&lt;/b&gt;&lt;br&gt;&lt;small&gt;Centralized Dashboard&lt;br&gt;Analytics API&lt;br&gt;Self-Healing Triggers&lt;/small&gt;" vertex="1">
+          <mxGeometry height="110" width="220" x="1020" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" edge="1" parent="1" source="gh_action" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#1c7ed6;" target="jira_cloud">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" edge="1" parent="1" source="ado_task" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#ae3ec9;dashed=1;" target="jira_vpn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" edge="1" parent="1" source="jira_vpn" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#ae3ec9;" target="jira_server">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" edge="1" parent="1" source="gh_action" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=1;strokeColor=#adb5bd;dashed=1;" target="ai_hub">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" edge="1" parent="1" source="secret_src" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#f03e3e;" target="masking">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" edge="1" parent="1" source="masking" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#37b24d;" target="clean_data">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" edge="1" parent="1" source="clean_data" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#1c7ed6;" target="jira_out">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,10 +1,10 @@
 # PipelineIQ
 
-![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+[![npm version](https://img.shields.io/npm/v/pipelineiq?color=blue)](https://www.npmjs.com/package/pipelineiq) [![npm downloads](https://img.shields.io/npm/dm/pipelineiq)](https://www.npmjs.com/package/pipelineiq) [![npm weekly downloads](https://img.shields.io/npm/dw/pipelineiq?color=blue&logo=npm)](https://www.npmjs.com/package/pipelineiq)
+![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue?logo=typescript) ![Node.js Compatibility](https://img.shields.io/badge/Node.js-%3E%3D20-green) ![npm last publish](https://img.shields.io/npm/last-publisher/pipelineiq?color=orange&logo=npm) ![npm unpacked size](https://img.shields.io/npm/unpacked-size/pipelineiq?color=brightgreen&logo=npm) ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
+![Platform Support](https://img.shields.io/badge/Platform-GitHub%20%7C%20Azure%20DevOps-orange) ![AI Providers](https://img.shields.io/badge/AI-Gemini%20%7C%20OpenAI%20%7C%20Anthropic-purple) ![npm dependencies](https://img.shields.io/badge/dependencies-18-informational?logo=npm) ![Security](https://img.shields.io/badge/Security-Snyk-blueviolet) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-**🔗 The Missing Link Between Your CI/CD and Jira**
-
-PipelineIQ connects **GitHub Actions** and **Azure DevOps** pipelines directly to **Jira**, automatically creating intelligent tickets when failures occur. Stop manually copying logs and context - let PipelineIQ bridge the gap between your CI/CD failures and issue tracking.
+PipelineIQ is the **Intelligence Layer** that connects **GitHub Actions** and **Azure DevOps** directly to **Jira**. It automatically transforms raw pipeline failures into high-fidelity, intelligent incident tickets with AI-powered Root Cause Analysis (RCA), Failure Summaries, Suggested Remediation, deduplication, and deep operational context.
 
 ## 🛑 The Problem
 
@@ -58,7 +58,7 @@ No installation required; `npx` will fetch the latest version and run it:
 npx pipelineiq analyze --jira-project "DEVOPS"
 ```
 
-## � How It Works: CI/CD → Jira Integration
+## 🏗 How It Works: CI/CD → Jira Integration
 
 ```mermaid
 graph LR
@@ -83,7 +83,7 @@ graph LR
 - ✅ Environment context → Jira labels
 - ✅ AI insights → Jira comments
 
-## � Installation
+## 📦 Installation
 
 ### Global Installation (Direct CLI)
 Best for developers who want to use PipelineIQ frequently from their local machine.
@@ -108,25 +108,18 @@ npm install
 npm run build
 ```
 
-## 🏗 Architecture
+### Visual Architecture
 
-```
-                CLI / API
-                   | 
-                   v
-           PipelineIQ Core Engine
-                    |
-        +-----------+------------+
-        |           |            |
-        v           v            v
-   Log Parser   AI Engine   Dedup Engine
-                    |
-                    v
-             Jira REST Client
-                    |
-                    v
-                Jira Issues
-```
+PipelineIQ maintains a "Digital Twin" documentation standard where all technical diagrams are 1:1 mapped to the TypeScript ESM codebase.
+
+| Diagram | Link | Purpose |
+| :--- | :--- | :--- |
+| **🏗 Structural Architecture** | [pipelineiq-arch-structural.drawio](./pipelineiq-arch-structural.drawio) | ESM Engine, Signatures, and AI Hub |
+| **🔄 Operational Flow** | [pipelineiq-arch-operational-flow.drawio](./pipelineiq-arch-operational-flow.drawio) | End-to-end processing & logic deep-dives |
+| **🌐 Deployment Topology** | [pipelineiq-arch-deployment-topology.drawio](./pipelineiq-arch-deployment-topology.drawio) | Network egress, context boundaries, and security |
+
+> [!TIP]
+> For a detailed technical breakdown of the engine, AI strategies, and security model, see the full [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## 📊 Features
 
@@ -142,11 +135,12 @@ npm run build
 
 ### AI Features
 
-- **Optional AI**: Works fully without AI - deterministic fallbacks always available
-- **Multiple Providers**: Google Gemini (default), OpenAI, Anthropic, Azure OpenAI, local models
-- **Smart Analysis**: Root cause analysis, remediation guidance, severity prediction
-- **Confidence Scoring**: AI confidence thresholds with fallback logic
-- **Dynamic Model Selection**: Override AI models at runtime via CLI or configuration (e.g., `--ai-model gemini-2.5-pro`)
+- **Optional AI**: Works fully without AI - deterministic fallbacks always available.
+- **Multi-Provider AI Hub**: Native support for **Google Gemini** (v1.5/2.0), **OpenAI** (GPT-4o), **Anthropic** (Claude 3.5), and **Azure OpenAI**.
+- **AI Prompt Factory**: Advanced context aggregation including log snippets, Git history, and signature heuristics with a Token Limit Guard.
+- **Smart Analysis**: Instant Root Cause Analysis (RCA), remediation guidance, and severity prediction.
+- **Confidence Gating**: Threshold-based logic (`>= 0.6`) that discards low-confidence output and triggers deterministic fallbacks.
+- **Dynamic Model Selection**: Override models at runtime via CLI (e.g., `--ai-model gpt-4o`).
 
 ## Log Parsing
 
@@ -157,11 +151,11 @@ npm run build
 
 ### Jira Integration
 
-- **ADF Conversion**: Markdown to Atlassian Document Format for rich descriptions
-- **Custom Fields**: Full support for operational metadata fields
-- **API Reliability**: Automatic truncation of long fields (e.g., Jira summary) to ensure API compliance.
-- **Dedup Search**: JQL-based duplicate detection with time windows
-- **Bulk Operations**: Enhanced client with bulk comments, links, transitions
+- **Multi-Platform Renderer**: Intelligent branching between **ADF v3** (Jira Cloud) and **WikiMarkup** (Jira Server/DC).
+- **Custom Fields**: Full support for mapping 100+ operational metadata fields.
+- **API Reliability**: Automatic truncation of long fields (Summary/Description) to ensure Atlassian API compliance.
+- **Dedup Search**: JQL-based duplicate detection with configurable time windows.
+- **Bulk Operations**: High-performance client for transitions, linking, and enrichment comments.
 
 > [!TIP]
 > **Jira Workflow Tip**: To ensure issues remain unassigned by default across any organization, you can configure your Jira workflow. Go to the **Create** transition → **Post Functions** → Add **Update Issue Field** → Set **Assignee** to **Unassigned**.
@@ -301,7 +295,8 @@ pipelineiq/
 ├── action.yml               # GitHub Action metadata
 ├── task.json                # Azure DevOps task metadata
 ├── examples/                # Usage examples and patterns
-└── docs/                    # Documentation
+├── docs/                    # Documentation
+└── ARCHITECTURE.md          # Technical Deep Dive
 ```
 
 ### Building
@@ -326,9 +321,9 @@ npm run clean
 ## 📚 Documentation
 
 - [Product Requirements Document](./PRD.md) - Comprehensive PRD with all features
+- [Architecture Guide](./ARCHITECTURE.md) - System design and technical patterns
 - [API Documentation](./docs/api/) - Detailed API reference
 - [Examples](./examples/) - Usage examples and patterns
-- [Architecture Guide](./docs/architecture/) - System design and patterns
 
 ## 🤝 Contributing
 

@@ -65,6 +65,7 @@ export async function processFailureEvent(
     ctx.fields,
     config.logExcerptLines,
     config.maskSecrets,
+    config.displayMetadata,
   );
   ctx.fields.provenance = ctx.provenance;
 
