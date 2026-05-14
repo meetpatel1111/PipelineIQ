@@ -20,7 +20,12 @@ export function createHistoryEnricher(jira: EnhancedJiraClient): Enricher {
       try {
         let history: FailureHistory | undefined;
         if (signature) {
-          history = await historyService.getHistory(signature);
+          const [fetchedHistory, metrics] = await Promise.all([
+            historyService.getHistory(signature),
+            historyService.getMetrics(signature),
+          ]);
+          history = fetchedHistory;
+          ctx.metrics = metrics;
         }
 
         const relatedKeys = await historyService.searchRelatedByKeywords(keywords);
@@ -32,10 +37,6 @@ export function createHistoryEnricher(jira: EnhancedJiraClient): Enricher {
           trend: history?.trend,
           relatedKeys: relatedKeys.filter((k) => !history?.previousIncidentKeys.includes(k)),
         };
-
-        if (signature) {
-          ctx.metrics = await historyService.getMetrics(signature);
-        }
       } catch (error) {
         console.warn(`[PipelineIQ] History enrichment failed: ${error}`);
       }
