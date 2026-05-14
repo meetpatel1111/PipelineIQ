@@ -48,10 +48,13 @@ export const deterministicEnricher: Enricher = {
 
     // External links — always populated from event payload.
     const links: Array<{ url: string; title: string }> = [
-      { url: event.pipeline.url, title: "Pipeline Run" },
-      { url: event.commit.url, title: `Commit ${event.commit.sha.slice(0, 7)}` },
-      { url: event.repository.url, title: "Repository" },
+      { url: event.pipeline.url, title: "Pipeline" },
     ];
+    if (event.pipeline.runUrl) {
+      links.push({ url: event.pipeline.runUrl, title: "Pipeline Run" });
+    }
+    links.push({ url: event.commit.url, title: `Commit ${event.commit.sha.slice(0, 7)}` });
+    links.push({ url: event.repository.url, title: "Repository" });
     if (event.pullRequest) {
       links.push({ url: event.pullRequest.url, title: `PR #${event.pullRequest.number}` });
     }

@@ -242,6 +242,7 @@ async function handleAnalyze(options: any) {
       environment: "environment",
       runId: "runNumber", // Map runId to runNumber for display
       runNumber: "runNumber",
+      runUrl: "runUrl",
       runAttempt: "runAttempt",
       runnerOs: "runnerOs",
       runnerArch: "runnerArch",
@@ -914,27 +915,41 @@ async function createFailureEvent(
   const finalBranch = pullRequestBranch || branch;
   
   // Build proper URLs based on platform
-  let runUrl = options.runUrl;
-  if (!runUrl) {
-    if (githubServerUrl && githubRepo && runId) {
-      runUrl = `${githubServerUrl}/${githubRepo}/actions/runs/${runId}`;
-    } else if (adoCollectionUri && adoTeamProject && adoBuildId) {
-      // Build Azure DevOps Run URL: {collection}/{project}/_build/results?buildId={id}
-      const cleanUri = adoCollectionUri.endsWith('/') ? adoCollectionUri.slice(0, -1) : adoCollectionUri;
-      runUrl = `${cleanUri}/${adoTeamProject}/_build/results?buildId=${adoBuildId}`;
-    } else if (adoCollectionUri && adoTeamProject && runId) {
-      runUrl = `${adoCollectionUri}/${adoTeamProject}/_build/results?buildId=${runId}`;
-    } else if (adoBuildUri) {
-      runUrl = adoBuildUri;
+  let executionUrl = options.runUrl;
+  let definitionUrl = "https://example.com/pipeline";
+
+  if (githubServerUrl && githubRepo) {
+    // If we have a workflow name/path, try to construct definition URL
+    let workflowPath = options.pipeline || githubWorkflow || "unknown";
+    const ref = githubWorkflowRef;
+    if (ref && typeof ref === "string") {
+      const parts = ref.split("@")[0]!.split("/");
+      const filename = parts[parts.length - 1];
+      if (filename) {
+        workflowPath = filename;
+      }
+    }
+    definitionUrl = `${githubServerUrl}/${githubRepo}/actions/workflows/${workflowPath}`;
+    
+    if (runId) {
+      executionUrl = executionUrl || `${githubServerUrl}/${githubRepo}/actions/runs/${runId}`;
+    }
+  } else if (adoCollectionUri && adoTeamProject) {
+    const cleanUri = adoCollectionUri.endsWith("/") ? adoCollectionUri.slice(0, -1) : adoCollectionUri;
+    if (finalDefinitionId) {
+      definitionUrl = `${cleanUri}/${adoTeamProject}/_build?definitionId=${finalDefinitionId}`;
+    }
+    if (adoBuildId || runId) {
+      executionUrl = executionUrl || `${cleanUri}/${adoTeamProject}/_build/results?buildId=${adoBuildId || runId}`;
     }
   }
-  
-  // Repository URL for Azure DevOps
+
+  // Repository URL logic
   let repositoryUrl = options.repository ? (githubServerUrl ? `${githubServerUrl}/${repository}` : `https://github.com/${repository}`) : "https://github.com/cli-user/unknown-repo";
   if (adoRepositoryUri && !githubServerUrl) {
     repositoryUrl = adoRepositoryUri;
   }
-  
+
   // Use CLI options if provided, otherwise use environment variables
   const hasAllOptions = pipeline && repository && finalBranch && commit;
   
@@ -945,7 +960,8 @@ async function createFailureEvent(
       failedAt: new Date().toISOString(),
       pipeline: {
         name: pipeline,
-        url: runUrl || "https://example.com/pipeline",
+        url: definitionUrl,
+        runUrl: executionUrl,
         runId: runId || "cli-run",
         runNumber: parseInt(runNumber) || 1,
         step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
@@ -1145,7 +1161,8 @@ async function createFailureEvent(
     failedAt: new Date().toISOString(),
       pipeline: {
         name: pipeline || answers.pipelineName,
-        url: runUrl || "https://example.com/pipeline",
+        url: definitionUrl,
+        runUrl: executionUrl,
         runId: runId || "cli-run",
         runNumber: parseInt(runNumber) || 1,
         step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",

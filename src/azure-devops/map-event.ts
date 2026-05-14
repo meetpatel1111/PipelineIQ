@@ -182,7 +182,8 @@ export async function mapAzureDevOpsContext(
     }
   }
 
-  const pipelineUrl = buildUri || `${collectionUri}${teamProject}/_build/results?buildId=${buildId}`;
+  const definitionUrl = `${collectionUri}${teamProject}/_build?definitionId=${systemDefinitionId}`;
+  const runUrl = buildUri || `${collectionUri}${teamProject}/_build/results?buildId=${buildId}`;
   const commitUrl = `${repositoryUri}/commit/${sourceVersion}`;
 
   const startedAt = (build.startTime ?? new Date()).toISOString();
@@ -205,7 +206,8 @@ export async function mapAzureDevOpsContext(
     ...(durationMs !== undefined ? { durationMs } : {}),
     pipeline: {
       name: definitionName,
-      url: pipelineUrl,
+      url: definitionUrl,
+      runUrl: runUrl,
       runId: String(buildId),
       runNumber: Number.parseInt(buildNumber, 10) || 0,
       ...(failedJob?.name ? { stage: failedJob.name } : {}),

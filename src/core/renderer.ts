@@ -53,6 +53,11 @@ export function renderDescription(
       value: `[${event.pipeline.name}](${event.pipeline.url})`,
     },
     {
+      key: "runUrl",
+      label: "Pipeline Run",
+      value: event.pipeline.runUrl ? `[View Execution](${event.pipeline.runUrl})` : "",
+    },
+    {
       key: "repository",
       label: "Repository",
       value: `[${event.repository.owner}/${event.repository.name}](${event.repository.url})`,
@@ -320,7 +325,10 @@ export function renderDescription(
   // Links
   out.push("### Links");
   // Pipeline/Workflow URL
-  out.push(`- [Pipeline Run](${event.pipeline.url})`);
+  out.push(`- [Pipeline](${event.pipeline.url})`);
+  if (event.pipeline.runUrl) {
+    out.push(`- [Pipeline Run](${event.pipeline.runUrl})`);
+  }
   // Repository URL
   out.push(`- [Repository](${event.repository.url})`);
   // Commit URL

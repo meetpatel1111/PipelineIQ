@@ -40,6 +40,7 @@ export type PullRequest = z.infer<typeof PullRequestSchema>;
 export const PipelineSchema = z.object({
   name: z.string(),
   url: z.string().url(),
+  runUrl: z.string().url().optional(),
   runId: z.string(),
   runNumber: z.number().int().nonnegative().optional(),
   stage: z.string().optional(),
