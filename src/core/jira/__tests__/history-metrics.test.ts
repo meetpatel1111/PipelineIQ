@@ -88,6 +88,32 @@ describe("HistoryService.getMetrics()", () => {
     expect(calledJql).toContain("resolution != Unresolved");
   });
 
+  it("rounds MTTR to one decimal place correctly", async () => {
+    const now = new Date();
+    // Two issues: 1h and 1.1h duration = avg 1.05h → should be 1.1, not 1.0
+    const issues = [
+      {
+        fields: {
+          created: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+          resolutiondate: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(), // 1h
+          labels: [],
+        },
+      },
+      {
+        fields: {
+          created: new Date(now.getTime() - 2.1 * 60 * 60 * 1000).toISOString(),
+          resolutiondate: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(), // 1.1h
+          labels: [],
+        },
+      },
+    ];
+
+    const service = new HistoryService(makeJira(issues), "PIQ");
+    const metrics = await service.getMetrics("abc123");
+
+    expect(metrics.mttrHours).toBe(1.1);
+  });
+
   it("returns sampleSize 0 and no mttrHours on Jira error", async () => {
     const jira = {
       advancedSearch: vi.fn().mockRejectedValue(new Error("Jira down")),

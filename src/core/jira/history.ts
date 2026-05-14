@@ -1,6 +1,6 @@
 import type { EnhancedJiraClient } from "./enhanced-client.js";
 import type { FailureEvent, FailureCategory } from "../types/index.js";
-import type { ComputedMetrics } from "../enrichers/types.js";
+import type { ComputedMetrics } from "../types/index.js";
 
 export type FailureHistory = {
   similarCount: number;
@@ -103,15 +103,15 @@ export class HistoryService {
         }
       }
 
-      const mttrHours =
-        durations.length > 0
-          ? Math.round((durations.reduce((a, b) => a + b, 0) / durations.length) * 10) / 10
-          : undefined;
+      const avg = durations.length > 0
+        ? durations.reduce((a, b) => a + b, 0) / durations.length
+        : undefined;
+      const mttrHours = avg !== undefined ? parseFloat(avg.toFixed(1)) : undefined;
 
       return {
         ...(mttrHours !== undefined && { mttrHours }),
         ...(repoSet.size > 1 && { blastRadius: repoSet.size }),
-        sampleSize: durations.length,
+        sampleSize: result.issues.length,
       };
     } catch (error) {
       console.warn(`[PipelineIQ] Metrics computation failed: ${error}`);

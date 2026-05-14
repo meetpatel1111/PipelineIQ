@@ -3,6 +3,7 @@ import type {
   JiraTicketSpec,
   PipelineIQConfig,
   FieldProvenance,
+  ComputedMetrics,
 } from "../types/index.js";
 
 /**
@@ -23,12 +24,6 @@ export type EnrichmentContext = {
     relatedKeys: string[];
   };
   metrics?: ComputedMetrics;
-};
-
-export type ComputedMetrics = {
-  mttrHours?: number;
-  blastRadius?: number;
-  sampleSize: number;
 };
 
 export interface Enricher {

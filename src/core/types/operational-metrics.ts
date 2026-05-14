@@ -41,3 +41,11 @@ export const NotificationFieldsSchema = z.object({
 });
 
 export type NotificationFields = z.infer<typeof NotificationFieldsSchema>;
+
+// Computed at runtime from Jira history — distinct from OperationalMetrics which
+// captures raw schema fields. blastRadius is a count (not a list) for display efficiency.
+export type ComputedMetrics = {
+  mttrHours?: number;
+  blastRadius?: number;
+  sampleSize: number;
+};
