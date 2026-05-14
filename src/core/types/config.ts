@@ -24,14 +24,40 @@ export type DedupConfig = z.infer<typeof DedupConfigSchema>;
 
 export const AIConfigSchema = z.object({
   mode: AIModeSchema.default("disabled"),
-  provider: z.enum(["openai", "anthropic", "azure-openai", "gemini"]).optional(),
+  provider: z.enum(["openai", "anthropic", "azure-openai", "gemini", "local"]).optional(),
   apiKey: z.string().optional(),
   model: z.string().optional(),
+  endpoint: z.string().optional(),
   temperature: z.number().min(0).max(2).optional(),
   minConfidence: z.number().min(0).max(1).default(0.6),
   maxLogTokens: z.number().int().positive().default(8000),
 });
 export type AIConfig = z.infer<typeof AIConfigSchema>;
+
+const SeverityFilterSchema = z.enum(["critical", "high", "medium", "low"]);
+
+export const SlackConfigSchema = z.object({
+  webhookUrl: z.string().url(),
+  channel: z.string().optional(),
+  notifyOn: z.array(SeverityFilterSchema).optional(),
+  includeMetrics: z.boolean().optional(),
+  username: z.string().optional(),
+});
+export type SlackConfig = z.infer<typeof SlackConfigSchema>;
+
+export const TeamsConfigSchema = z.object({
+  webhookUrl: z.string().url(),
+  notifyOn: z.array(SeverityFilterSchema).optional(),
+  includeMetrics: z.boolean().optional(),
+});
+export type TeamsConfig = z.infer<typeof TeamsConfigSchema>;
+
+export const NotificationsConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  slack: SlackConfigSchema.optional(),
+  teams: TeamsConfigSchema.optional(),
+});
+export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 
 export const PipelineIQConfigSchema = z.object({
   jira: JiraAuthSchema,
@@ -44,6 +70,7 @@ export const PipelineIQConfigSchema = z.object({
   maskSecrets: z.boolean().default(true),
   logExcerptLines: z.number().int().positive().default(80),
   displayMetadata: z.array(z.string()).optional(),
+  notifications: NotificationsConfigSchema.optional(),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;
