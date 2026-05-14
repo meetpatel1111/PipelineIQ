@@ -72,6 +72,7 @@ export async function processFailureEvent(
     config.maskSecrets,
     config.displayMetadata,
     ctx.history,
+    ctx.metrics,
   );
   ctx.fields.provenance = ctx.provenance;
 

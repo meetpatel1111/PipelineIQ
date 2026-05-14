@@ -1,4 +1,5 @@
 import type { FailureEvent, JiraTicketSpec } from "./types/index.js";
+import type { ComputedMetrics } from "./types/index.js";
 import { maskSecrets } from "./secret-mask.js";
 
 /**
@@ -18,6 +19,7 @@ export function renderDescription(
     trend?: "improving" | "worsening" | "stable" | undefined;
     relatedKeys: string[];
   },
+  metrics?: ComputedMetrics,
 ): string {
   const out: string[] = [];
 
@@ -75,6 +77,15 @@ export function renderDescription(
 
     if (history.relatedKeys.length > 0) {
       out.push(`- **Related by Symptom:** ${history.relatedKeys.join(", ")}`);
+    }
+
+    if (metrics) {
+      if (metrics.mttrHours !== undefined && metrics.sampleSize > 0) {
+        out.push(`- **MTTR:** ${metrics.mttrHours}h avg (${metrics.sampleSize} incidents)`);
+      }
+      if (metrics.blastRadius !== undefined) {
+        out.push(`- **Blast radius:** ${metrics.blastRadius} repos affected`);
+      }
     }
     out.push("");
     out.push("---");
