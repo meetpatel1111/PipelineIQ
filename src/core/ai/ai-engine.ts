@@ -1,5 +1,6 @@
-import type { IAIEngine, AIEngineConfig, AIProviderInterface } from "./types.js";
-import type { FailureEvent, EnrichmentResult } from "../types/index.js";
+import type { IAIEngine, AIEngineConfig, AIProviderInterface, AIRequest } from "./types.js";
+import type { FailureEvent, EnrichmentResult, DeterministicFallback, Severity, Priority } from "../types/index.js";
+import type { EnrichmentContext } from "../enrichers/types.js";
 import { DeterministicFallbackEngine } from "./fallbacks.js";
 import { OpenAIProvider, AnthropicProvider, AzureOpenAIProvider, LocalAIProvider } from "./providers.js";
 import { GeminiProvider } from "./gemini-provider.js";
@@ -83,50 +84,51 @@ export class AIEngine implements IAIEngine {
    *            → deterministic producer (always)
    *            → null / omitted (only for advanced AI-only fields)
    */
-  async enrich(event: FailureEvent, config: AIEngineConfig): Promise<EnrichmentResult[]> {
+  async enrich(
+    event: FailureEvent, 
+    config: AIEngineConfig, 
+    history?: EnrichmentContext["history"]
+  ): Promise<EnrichmentResult[]> {
     const results: EnrichmentResult[] = [];
     
-    // Always generate deterministic fallback first
-    const deterministicFallback = DeterministicFallbackEngine.generateFallback(event);
-    
-    // If AI is not available, return deterministic fallbacks
+    // If AI is not available, return deterministic fallbacks immediately
     if (!this.isAvailable()) {
+      const deterministicFallback = DeterministicFallbackEngine.generateFallback(event);
       this.addDeterministicResults(results, deterministicFallback, event);
       return results;
     }
 
     // AI is available - try to get AI insights
     try {
-      const aiRequest = this.buildAIRequest(event, deterministicFallback);
+      // 1. Generate classification hint only (cheap) - to provide context to AI
+      const classification = DeterministicFallbackEngine.generateClassification(event);
+      
+      // 2. Build AI request with minimal context from deterministic side
+      const aiRequest = this.buildAIRequest(event, { classification } as any, history);
       const aiResponse = await this.provider!.generateInsights(aiRequest);
       
-      // Check confidence threshold
+      // 3. Check confidence threshold
       const meetsConfidence = !aiResponse.confidence || aiResponse.confidence >= (config.minConfidence || 0.6);
       
       if (meetsConfidence) {
-        // Use AI response
+        // AI Success - populate results from AI
         results.push(
           { field: "summary", value: aiResponse.summary, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "rootCause", value: aiResponse.rootCause, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "remediation", value: aiResponse.remediation, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
+          { field: "remediationSteps", value: aiResponse.remediation, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
+          { field: "category", value: aiResponse.classification, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "severity", value: aiResponse.severity, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "classification", value: aiResponse.classification, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "assignee", value: null, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "tags", value: aiResponse.tags, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "riskAssessment", value: aiResponse.riskAssessment, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true }
+          { field: "priority", value: this.severityToPriority(aiResponse.severity as any), provenance: "ai", confidence: aiResponse.confidence, aiUsed: true }
         );
-        if (aiResponse.postmortem) {
-          results.push({ field: "postmortem", value: aiResponse.postmortem, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true });
-        }
-        if (aiResponse.timeline) {
-          results.push({ field: "timeline", value: aiResponse.timeline, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true });
-        }
       } else {
-        // AI response below confidence threshold - use deterministic fallbacks
+        // AI confidence too low - generate full deterministic fallback now (On-Demand)
+        const deterministicFallback = DeterministicFallbackEngine.generateFallback(event);
         this.addDeterministicResults(results, deterministicFallback, event);
       }
     } catch (error) {
-      console.warn(`AI enrichment failed: ${error}, falling back to deterministic`);
+      // AI failed - generate full deterministic fallback now (On-Demand)
+      console.warn(`[PipelineIQ] AI Enrichment failed, falling back to signatures: ${error}`);
+      const deterministicFallback = DeterministicFallbackEngine.generateFallback(event);
       this.addDeterministicResults(results, deterministicFallback, event);
     }
 
@@ -152,7 +154,23 @@ export class AIEngine implements IAIEngine {
   /**
    * Build AI request from failure event and deterministic fallback
    */
-  private buildAIRequest(event: FailureEvent, fallback: any): any {
+  private buildAIRequest(
+    event: FailureEvent, 
+    fallback: DeterministicFallback,
+    history?: EnrichmentContext["history"]
+  ): AIRequest {
+    // Use historical context if available
+    let historicalContext = "";
+    if (history) {
+      historicalContext = `This failure has a signature that has appeared ${history.similarCount} times in the last 30 days. `;
+      if (history.isFlaky) {
+        historicalContext += "This appears to be a FLAKY failure (alternating success/failure). ";
+      }
+      if (history.trend) {
+        historicalContext += `The failure trend is currently ${history.trend.toUpperCase()}. `;
+      }
+    }
+
     return {
       logs: event.failure.logs || "",
       errorMessage: event.failure.errorMessage || "",
@@ -164,7 +182,7 @@ export class AIEngine implements IAIEngine {
       branch: event.branch,
       environment: event.environment,
       category: fallback.classification, // Use deterministic classification as hint
-      historicalContext: "", // Would be populated from history in a full implementation
+      historicalContext,
     };
   }
 
@@ -205,9 +223,18 @@ export class AIEngine implements IAIEngine {
           minConfidence: 0.5, // Lower confidence threshold
           maxTokens: 8192,
         });
-      
       default:
         return new AIEngine(engineConfig);
+    }
+  }
+
+  private severityToPriority(severity: Severity): Priority {
+    switch (severity) {
+      case "Critical": return "Highest";
+      case "High": return "High";
+      case "Medium": return "Medium";
+      case "Low": return "Low";
+      default: return "Medium";
     }
   }
 }

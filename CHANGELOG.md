@@ -4,6 +4,33 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.13.0] - 2026-05-15
+
+### Added — AI-First Diagnostics & Historical Reliability Context
+
+- **AI-First Diagnostic Strategy**: Refactored the core engine to prioritize high-fidelity AI insights. Deterministic signature matching is now a surgical fallback, triggered only when AI is unavailable or under-confident, reducing redundant compute and token costs.
+- **Historical Reliability Context**: Integrated Jira-based failure history tracking. Every incident now automatically includes:
+  - **Frequency Analysis**: Identifies how many times an identical failure occurred in the last 30 days.
+  - **Trend Detection**: Visual indicators (📈/📉) showing if a failure type is becoming more frequent or is being resolved.
+  - **Flakiness Detection**: Heuristics to identify unstable tests or transient infrastructure based on past resolution patterns.
+- **Fuzzy Keyword Search**: Added symptom-based incident discovery. Uses JQL fuzzy text search (`~`) to find "related" issues that share common error messages or failed command names, even if they don't share the same deduplication signature.
+- **Enhanced Jira Client Integration**: Standardized on an `EnhancedJiraClient` factory that exposes advanced search and historical analysis capabilities as first-class citizens.
+- **Signature Library Expansion**: Added 20+ granular diagnostic patterns covering Helm chart deployment errors, Kubernetes pod timeouts, and complex AuthN/AuthZ failures.
+
+### Changed
+
+- **Renderer Overhaul**: The Jira ticket description now includes a dedicated "Reliability Context" section displaying Frequency, Trend, Flakiness, and Related Incidents.
+- **Optimized Computed Enrichment**: The `computedEnricher` now skips expensive full-signature matching when AI is active, performing only lightweight category classification for deduplication stability.
+- **Factory Pattern Restoration**: Reintroduced the `createEnhancedJiraClient` factory in `pipeline.ts` to maintain consistent developer experience while providing the new history features.
+
+### Fixed
+
+- **Type Safety Hardening**: Resolved 10+ TypeScript errors related to `exactOptionalPropertyTypes` and strict `undefined` checks across the history, AI, and rendering pipelines.
+- **ESM Runtime Compatibility**: Fixed module resolution issues in the history enricher by ensuring correct `.js` extensions on all imports.
+- **Secret Masking Expansion**: Strengthened redaction coverage for enterprise tokens and environment-specific credentials.
+
+---
+
 ## [0.12.0] - 2026-05-14
 
 ### Added — Architecture Documentation & Visual Design Overhaul

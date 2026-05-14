@@ -5,7 +5,9 @@ import {
   type PipelineIQConfig,
   JiraTicketSpecSchema,
 } from "./types/index.js";
-import { createJiraClient, type JiraClient } from "./jira/index.js";
+import { createEnhancedJiraClient, EnhancedJiraClient } from "./jira/index.js";
+import { JiraClient } from "./jira/client.js";
+import { createHistoryEnricher } from "./enrichers/history.js";
 import { computedEnricher } from "./enrichers/computed.js";
 import { deterministicEnricher } from "./enrichers/deterministic.js";
 import type { Enricher, EnrichmentContext } from "./enrichers/types.js";
@@ -48,9 +50,12 @@ export async function processFailureEvent(
     provenance: {},
   };
 
+  const jira = options.jiraClient ?? createEnhancedJiraClient(config.jira);
+
   const enrichers: Enricher[] = [
     deterministicEnricher,
     computedEnricher,
+    createHistoryEnricher(jira as EnhancedJiraClient),
     ...(options.extraEnrichers ?? []),
   ];
 
@@ -66,11 +71,11 @@ export async function processFailureEvent(
     config.logExcerptLines,
     config.maskSecrets,
     config.displayMetadata,
+    ctx.history,
   );
   ctx.fields.provenance = ctx.provenance;
 
   const spec = JiraTicketSpecSchema.parse(ctx.fields);
-  const jira = options.jiraClient ?? createJiraClient(config.jira);
 
   // Dedup path
   if (config.dedup.enabled) {

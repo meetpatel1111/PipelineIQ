@@ -1,0 +1,95 @@
+import type { EnhancedJiraClient } from "./enhanced-client.js";
+import type { FailureEvent, FailureCategory } from "../types/index.js";
+
+export type FailureHistory = {
+  similarCount: number;
+  isFlaky: boolean;
+  previousIncidentKeys: string[];
+  lastOccurred?: Date | undefined;
+  trend: "improving" | "worsening" | "stable";
+  relatedKeys: string[];
+};
+
+/**
+ * HistoryService — analyzes past incidents to provide context for the current failure.
+ * Uses the dedup signature to find identical failures across time.
+ */
+export class HistoryService {
+  constructor(private jira: EnhancedJiraClient, private projectKey: string) {}
+
+  /**
+   * Get failure history for a specific signature
+   */
+  async getHistory(signature: string, windowDays: number = 30): Promise<FailureHistory> {
+    const jql = `project = "${this.projectKey}" AND labels = "piq-sig:${signature}" AND created >= -${windowDays}d ORDER BY created DESC`;
+    
+    const result = await this.jira.advancedSearch(jql, {
+      maxResults: 50,
+      fields: ["created", "status", "resolution"],
+    });
+
+    const issues = result.issues;
+    const keys = issues.map((i: any) => i.key);
+    
+    // Simple flakiness heuristic: if it failed, then succeeded (resolved), then failed again.
+    // Since we only have failure events here, we look at the resolution state of past failures.
+    // If many past failures were resolved quickly, it might be a flaky test or transient infra.
+    const resolvedCount = issues.filter((i: any) => i.fields.resolution !== null).length;
+    
+    return {
+      similarCount: result.total,
+      isFlaky: result.total > 2 && resolvedCount > 0,
+      previousIncidentKeys: keys,
+      lastOccurred: issues.length > 0 ? new Date(issues[0].fields.created) : undefined,
+      trend: this.calculateTrend(issues),
+      relatedKeys: [],
+    };
+  }
+
+  /**
+   * Search for related incidents using fuzzy keyword matching (JQL ~ operator)
+   */
+  async searchRelatedByKeywords(keywords: string[], windowDays: number = 30): Promise<string[]> {
+    if (keywords.length === 0) return [];
+
+    // Filter out very short or generic keywords to avoid noisy results
+    const cleanKeywords = keywords
+      .map(k => k.trim())
+      .filter(k => k.length > 5 && !k.includes(" "))
+      .slice(0, 3); // Limit to top 3 for precision
+
+    if (cleanKeywords.length === 0) return [];
+
+    const keywordQuery = cleanKeywords.map(k => `text ~ "${k}"`).join(" OR ");
+    const jql = `project = "${this.projectKey}" AND (${keywordQuery}) AND created >= -${windowDays}d ORDER BY created DESC`;
+
+    try {
+      const result = await this.jira.advancedSearch(jql, { maxResults: 5 });
+      return result.issues.map((i: any) => i.key);
+    } catch (error) {
+      console.warn(`[PipelineIQ] Keyword search failed: ${error}`);
+      return [];
+    }
+  }
+
+  private calculateTrend(issues: any[]): "improving" | "worsening" | "stable" {
+    if (issues.length < 3) return "stable";
+    
+    // Group by day and see if frequency is increasing
+    const dailyCount: Record<string, number> = {};
+    for (const issue of issues) {
+      const day = new Date(issue.fields.created).toISOString().split("T")[0]!;
+      dailyCount[day] = (dailyCount[day] || 0) + 1;
+    }
+    
+    const counts = Object.values(dailyCount);
+    if (counts.length < 2) return "stable";
+    
+    const recent = counts[0]!;
+    const previous = counts[1]!;
+    
+    if (recent > previous * 1.5) return "worsening";
+    if (recent < previous * 0.5) return "improving";
+    return "stable";
+  }
+}

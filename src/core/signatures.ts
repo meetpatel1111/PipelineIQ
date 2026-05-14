@@ -29,6 +29,28 @@ export const SIGNATURES: readonly SignaturePattern[] = [
     ],
   },
   {
+    id: "aws-throttling",
+    category: "CloudProvider",
+    pattern: /Rate exceeded|ThrottlingException|RequestLimitExceeded/i,
+    cause: "AWS API request was throttled due to rate limiting.",
+    remediation: [
+      "Implement or increase exponential backoff in the client.",
+      "Check if multiple jobs are making simultaneous API calls.",
+      "Request a quota increase for the affected service.",
+    ],
+  },
+  {
+    id: "azure-resource-not-found",
+    category: "Infrastructure",
+    pattern: /ResourceGroupNotFound|ResourceNotFound|ParentResourceNotFound/i,
+    cause: "Azure resource or resource group could not be found.",
+    remediation: [
+      "Verify the resource name and resource group are correct.",
+      "Check if the resource was deleted or moved.",
+      "Ensure the deployment target region is correct.",
+    ],
+  },
+  {
     id: "k8s-image-pull",
     category: "Deployment",
     pattern: /(ImagePullBackOff|ErrImagePull|manifest unknown)/,
@@ -134,16 +156,113 @@ export const SIGNATURES: readonly SignaturePattern[] = [
       "Re-run locally before pushing.",
     ],
   },
+  {
+    id: "security-scan-vulnerability",
+    category: "Security",
+    pattern: /(Vulnerability found|CVE-\d+|Critical vulnerability|High severity issue)/i,
+    cause: "Security scan detected vulnerabilities in the codebase or dependencies.",
+    remediation: [
+      "Review the security scan report.",
+      "Update vulnerable dependencies to a patched version.",
+      "If the vulnerability is a false positive, document and whitelist it.",
+    ],
+  },
+  {
+    id: "memory-limit-exceeded",
+    category: "Infrastructure",
+    pattern: /(OOMKill|out of memory|process killed with signal 9|java.lang.OutOfMemoryError)/i,
+    cause: "Process exceeded the allocated memory limit.",
+    remediation: [
+      "Increase the memory limit for the job/container.",
+      "Optimize the application to reduce memory usage.",
+      "Check for memory leaks in the application logic.",
+    ],
+  },
+  {
+    id: "disk-full",
+    category: "Infrastructure",
+    pattern: /(No space left on device|Disk full|ENOSPC)/i,
+    cause: "Runner or target system ran out of disk space.",
+    remediation: [
+      "Clean up temporary files or logs.",
+      "Increase the disk size of the runner/environment.",
+      "Check for large build artifacts that are not being cleaned up.",
+    ],
+  },
+  {
+    id: "git-conflict",
+    category: "Build",
+    pattern: /(CONFLICT \(content\): Merge conflict|Automatic merge failed|fix conflicts and then commit)/i,
+    cause: "Merge conflicts detected during git operations.",
+    remediation: [
+      "Resolve the merge conflicts manually in the codebase.",
+      "Ensure you are working on the latest version of the target branch.",
+      "Rebase your feature branch on top of the main branch.",
+    ],
+  },
+  {
+    id: "api-connection-refused",
+    category: "Network",
+    pattern: /(ECONNREFUSED|connect ECONNREFUSED|Connection refused)/i,
+    cause: "Target service is not reachable or the connection was refused.",
+    remediation: [
+      "Verify the target service is running.",
+      "Check the target host and port are correct.",
+      "Review firewall and security group rules between source and target.",
+    ],
+  },
+  {
+    id: "db-connection-failed",
+    category: "Infrastructure",
+    pattern: /(Connection to the database failed|failed to connect to server|Database is starting up)/i,
+    cause: "Failed to establish a connection to the database.",
+    remediation: [
+      "Check database availability and status.",
+      "Verify database credentials and connection string.",
+      "Ensure the database host is reachable from the runner.",
+    ],
+  },
 ];
 
 export type SignatureMatch = SignaturePattern & {
   matchedText: string;
+  confidence: number;
 };
 
-export function matchSignature(input: string): SignatureMatch | null {
-  for (const sig of SIGNATURES) {
-    const m = sig.pattern.exec(input);
-    if (m) return { ...sig, matchedText: m[0] };
+// Pre-compute grouped signatures for performance
+const GROUPED_SIGNATURES = SIGNATURES.reduce((acc, sig) => {
+  const cat = sig.category;
+  if (!acc[cat]) acc[cat] = [];
+  acc[cat].push(sig);
+  return acc;
+}, {} as Record<FailureCategory, SignaturePattern[]>);
+
+/**
+ * Enhanced signature matching logic.
+ *
+ * Performant: Uses pre-grouped patterns.
+ * Granular: Supports category hints to narrow the search space.
+ */
+export function matchSignature(
+  input: string,
+  options: { categoryHint?: FailureCategory | undefined } = {}
+): SignatureMatch | null {
+  // If we have a hint, search that category first for better performance and accuracy
+  if (options.categoryHint && GROUPED_SIGNATURES[options.categoryHint]) {
+    for (const sig of GROUPED_SIGNATURES[options.categoryHint]!) {
+      const m = sig.pattern.exec(input);
+      if (m) return { ...sig, matchedText: m[0], confidence: 1.0 };
+    }
   }
+
+  // Fallback to full search
+  for (const sig of SIGNATURES) {
+    // Skip if already checked via hint
+    if (options.categoryHint && sig.category === options.categoryHint) continue;
+
+    const m = sig.pattern.exec(input);
+    if (m) return { ...sig, matchedText: m[0], confidence: 0.9 }; // Slightly lower confidence if hint didn't match
+  }
+
   return null;
 }

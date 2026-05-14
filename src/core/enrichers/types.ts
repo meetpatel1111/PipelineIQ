@@ -19,6 +19,8 @@ export type EnrichmentContext = {
     similarCount: number;
     isFlaky: boolean;
     previousIncidentKeys: string[];
+    trend?: "improving" | "worsening" | "stable" | undefined;
+    relatedKeys: string[];
   };
 };
 

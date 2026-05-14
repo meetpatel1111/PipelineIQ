@@ -11,6 +11,13 @@ export function renderDescription(
   logExcerptLines: number,
   maskLogs: boolean,
   displayMetadata?: string[],
+  history?: {
+    similarCount: number;
+    isFlaky: boolean;
+    previousIncidentKeys: string[];
+    trend?: "improving" | "worsening" | "stable" | undefined;
+    relatedKeys: string[];
+  },
 ): string {
   const out: string[] = [];
 
@@ -22,7 +29,12 @@ export function renderDescription(
   const remediation = fields.remediationSteps;
 
   out.push("### Failure Summary");
-  out.push(fields.summary ?? "Pipeline failure detected.");
+  let summary = fields.summary ?? "Pipeline failure detected.";
+  if (fields.customFields?._matchConfidence !== undefined) {
+    const conf = Math.round(Number(fields.customFields._matchConfidence) * 100);
+    summary += ` (Match Confidence: ${conf}%)`;
+  }
+  out.push(summary);
   out.push("");
 
   if (rca) {
@@ -39,6 +51,35 @@ export function renderDescription(
 
   out.push("---");
   out.push("");
+
+  // Reliability Context (Historical)
+  if (history) {
+    out.push("### Reliability Context");
+    
+    let trendIcon = "➡️";
+    if (history.trend === "worsening") trendIcon = "📈";
+    if (history.trend === "improving") trendIcon = "📉";
+
+    const flakyMsg = history.isFlaky ? " ⚠️ **Detected as Flaky**" : "";
+    
+    out.push(`- **Frequency:** ${history.similarCount} occurrences in last 30 days${flakyMsg}`);
+    if (history.trend) {
+      out.push(`- **Trend:** ${trendIcon} ${history.trend.charAt(0).toUpperCase() + history.trend.slice(1)}`);
+    }
+    
+    if (history.previousIncidentKeys.length > 0) {
+      const keys = history.previousIncidentKeys.slice(0, 5).join(", ");
+      const more = history.previousIncidentKeys.length > 5 ? "..." : "";
+      out.push(`- **Previous Incidents:** ${keys}${more}`);
+    }
+
+    if (history.relatedKeys.length > 0) {
+      out.push(`- **Related by Symptom:** ${history.relatedKeys.join(", ")}`);
+    }
+    out.push("");
+    out.push("---");
+    out.push("");
+  }
 
   const commitMsg = event.commit.message ?? "";
   const firstLine = commitMsg.split("\n")[0] || "";

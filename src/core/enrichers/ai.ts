@@ -30,7 +30,7 @@ export const aiEnricher: Enricher = {
 
     try {
       // Cast to any to bypass the minor type discrepancies between the unified config and engine-specific config
-      const results = await aiEngine.enrich(event, config.ai as any);
+      const results = await aiEngine.enrich(event, config.ai as any, ctx.history);
       
       for (const result of results) {
         if (result.aiUsed && result.value) {

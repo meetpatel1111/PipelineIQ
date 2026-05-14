@@ -4,9 +4,15 @@ import type {
   Priority,
 } from "../types/index.js";
 import { computeDedupSignature } from "../dedup.js";
-import { matchSignature } from "../signatures.js";
+import { matchSignature, type SignatureMatch } from "../signatures.js";
+import { DeterministicFallbackEngine } from "../ai/fallbacks.js";
 import type { Enricher, EnrichmentContext } from "./types.js";
 import { setField } from "./types.js";
+import {
+  extractErrorMessages,
+  extractFailedCommands,
+  extractExitCodes,
+} from "../log-parser/extractors.js";
 
 /**
  * ComputedEnricher — derives fields via heuristics, pattern matching, and
@@ -21,24 +27,59 @@ export const computedEnricher: Enricher = {
 
   enrich(ctx: EnrichmentContext) {
     const { event } = ctx;
-    const searchSpace = `${event.failure.errorMessage ?? ""}\n${event.failure.logs}`;
-    const match = matchSignature(searchSpace);
+    const logs = event.failure.logs || "";
+    const errorMessage = event.failure.errorMessage || "";
+    const searchSpace = `${errorMessage}\n${logs}`;
+    
+    // 1. Extract structural hints from logs
+    const failedCommands = extractFailedCommands(logs);
+    const exitCodes = extractExitCodes(logs);
+    const errorMessages = extractErrorMessages(searchSpace);
 
-    const category: FailureCategory = match?.category ?? "Unknown";
-    setField(ctx, "category", category, match ? "computed" : "fallback");
+    // 2. Determine likely category based on extracted hints (Pre-Signature Hinting)
+    let categoryHint: FailureCategory | undefined;
+    if (failedCommands.some(c => c.includes("terraform"))) categoryHint = "Infrastructure";
+    else if (failedCommands.some(c => c.includes("npm") || c.includes("yarn") || c.includes("pip"))) categoryHint = "Dependency";
+    else if (failedCommands.some(c => c.includes("docker") || c.includes("helm") || c.includes("kubectl"))) categoryHint = "Deployment";
+    else if (errorMessages.some(m => m.toLowerCase().includes("test") || m.toLowerCase().includes("assert"))) categoryHint = "Test";
 
-    // RCA / remediation fallback — populated only when AI is off OR as a baseline.
-    // The AI stage may later override these via setField(..., override: true).
-    if (match) {
-      const baseDescription = ctx.fields.description ?? "";
-      // We don't write description here — markdown-renderer does that downstream.
-      // We stash rca/remediation on customFields for the renderer to consume.
-      ctx.fields.customFields = {
-        ...(ctx.fields.customFields ?? {}),
-        _rca: match.cause,
-        _remediation: match.remediation,
-        _signatureId: match.id,
-      };
+    // 3. AI-First Strategy: Only run full signature matching if AI is disabled.
+    // If AI is enabled, we only need a stable category for the dedup signature.
+    const aiEnabled = ctx.config.ai.mode !== "disabled";
+    
+    let category: FailureCategory = "Unknown";
+    let match: SignatureMatch | null = null;
+
+    if (aiEnabled) {
+      // Light-weight classification for stable dedup signature
+      category = DeterministicFallbackEngine.generateClassification(event);
+      setField(ctx, "category", category, "computed");
+    } else {
+      // AI is disabled — run full deterministic signature matching now
+      match = matchSignature(searchSpace, { categoryHint });
+      category = match?.category ?? categoryHint ?? "Unknown";
+      setField(ctx, "category", category, match ? "computed" : "fallback");
+
+      if (match) {
+        ctx.fields.customFields = {
+          ...(ctx.fields.customFields ?? {}),
+          _rca: match.cause,
+          _remediation: match.remediation,
+          _signatureId: match.id,
+          _matchConfidence: match.confidence,
+        };
+      } else if (failedCommands.length > 0) {
+        const cmd = failedCommands[0]!;
+        const code = exitCodes.length > 0 ? ` (exit ${exitCodes[0]})` : "";
+        ctx.fields.customFields = {
+          ...(ctx.fields.customFields ?? {}),
+          _rca: `Command '${cmd}' failed${code}.`,
+          _remediation: [
+            "Verify command syntax.",
+            "Check tool installation in runner.",
+          ],
+        };
+      }
     }
 
     // Severity rules — rule-based fallback. Tunable.
@@ -53,7 +94,7 @@ export const computedEnricher: Enricher = {
     // Append the signature label so JQL can find duplicates.
     const labels = new Set(ctx.fields.labels ?? []);
     labels.add(`piq-sig:${signature}`);
-    if (match) labels.add(`piq-cat:${category.toLowerCase()}`);
+    if (category !== "Unknown") labels.add(`piq-cat:${category.toLowerCase()}`);
     setField(ctx, "labels", Array.from(labels), "computed", true);
   },
 };

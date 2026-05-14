@@ -9,7 +9,20 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/\bghp_[A-Za-z0-9]{20,}\b/g, "[REDACTED_GITHUB_TOKEN]"],
   [/\bgho_[A-Za-z0-9]{20,}\b/g, "[REDACTED_GITHUB_OAUTH]"],
   [/\bglpat-[A-Za-z0-9_\-]{20}\b/g, "[REDACTED_GITLAB_PAT]"],
-  [/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED_API_KEY]"],
+  [/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED_OPENAI_KEY]"],
+  // Azure
+  [/\b[a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12}\b/gi, "[REDACTED_UUID]"], // UUIDs/GUIDs often sensitive
+  [/SharedAccessKey=[A-Za-z0-9+/=]{30,}/g, "SharedAccessKey=[REDACTED]"],
+  // GCP
+  [/\bAIza[0-9A-Za-z\\-_]{35}\b/g, "[REDACTED_GCP_API_KEY]"],
+  // Slack
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, "[REDACTED_SLACK_TOKEN]"],
+  // Stripe
+  [/\b(sk|pk)_(test|live)_[0-9a-zA-Z]{24}\b/g, "[REDACTED_STRIPE_KEY]"],
+  // Database connection strings
+  [/(mongodb(?:\+srv)?:\/\/[^:]+:)[^@]+(@)/gi, "$1[REDACTED]$2"],
+  [/(postgres(?:ql)?:\/\/[^:]+:)[^@]+(@)/gi, "$1[REDACTED]$2"],
+  [/(mysql:\/\/[^:]+:)[^@]+(@)/gi, "$1[REDACTED]$2"],
   // Bearer tokens
   [/Bearer\s+[A-Za-z0-9._\-]{20,}/g, "Bearer [REDACTED]"],
   // Basic auth header
@@ -18,6 +31,8 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/(password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*["']?[^\s"']{6,}/gi, "$1=[REDACTED]"],
   // JWT-ish (three dot-separated base64 segments)
   [/\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b/g, "[REDACTED_JWT]"],
+  // Private keys
+  [/-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]+?-----END [A-Z ]+ PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]"],
 ];
 
 export function maskSecrets(input: string): string {

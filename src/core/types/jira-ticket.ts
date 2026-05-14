@@ -27,7 +27,7 @@ export const ExternalLinkSchema = z.object({
 });
 export type ExternalLink = z.infer<typeof ExternalLinkSchema>;
 
-export const FieldProvenanceSchema = z.enum(["deterministic", "computed", "ai", "fallback"]);
+export const FieldProvenanceSchema = z.enum(["deterministic", "computed", "ai", "fallback", "history"]);
 export type FieldProvenance = z.infer<typeof FieldProvenanceSchema>;
 
 export const JiraTicketSpecSchema = z.object({
