@@ -1,6 +1,6 @@
 # PipelineIQ CLI Reference
 
-Complete reference for the `pipelineiq` command-line interface — covering all 101 CLI flags, all auto-read environment variables, and every value that reaches a Jira ticket.
+Complete reference for the `pipelineiq` command-line interface — covering all 113 CLI flags, all auto-read environment variables, and every value that reaches a Jira ticket.
 
 ---
 
@@ -18,6 +18,7 @@ Complete reference for the `pipelineiq` command-line interface — covering all 
   - [General Flags](#general-flags)
   - [Jira Flags](#jira-flags)
   - [AI Flags](#ai-flags)
+  - [Notification Flags](#notification-flags)
   - [Core Pipeline Context](#core-pipeline-context)
   - [GitHub Actions — CLI Flags](#github-actions--cli-flags)
   - [GitHub Actions — Auto-read Env Vars (no CLI override)](#github-actions--auto-read-env-vars-no-cli-override)
@@ -156,6 +157,7 @@ Default path: `./pipelineiq.json`. Override with `--config`.
     "provider": "gemini",
     "apiKey": "your-ai-api-key",
     "model": "gemini-2.5-flash",
+    "endpoint": "",
     "temperature": 0.7,
     "maxLogTokens": 4000,
     "minConfidence": 0.6
@@ -163,6 +165,21 @@ Default path: `./pipelineiq.json`. Override with `--config`.
   "dedup": {
     "enabled": true,
     "windowHours": 24
+  },
+  "notifications": {
+    "enabled": true,
+    "slack": {
+      "webhookUrl": "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXX",
+      "channel": "#incidents",
+      "notifyOn": ["Critical", "High"],
+      "username": "PipelineIQ",
+      "includeMetrics": true
+    },
+    "teams": {
+      "webhookUrl": "https://yourorg.webhook.office.com/webhookb2/...",
+      "notifyOn": ["Critical", "High"],
+      "includeMetrics": true
+    }
   }
 }
 ```
@@ -180,14 +197,24 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `issueType` | string | No | `"Bug"` | Jira issue type |
 | `defaultAssignee` | string | No | unassigned | Jira account ID |
 | `ai.mode` | `"disabled"` \| `"assist"` \| `"full"` | No | `"disabled"` | AI enrichment mode |
-| `ai.provider` | `"openai"` \| `"anthropic"` \| `"azure-openai"` \| `"gemini"` | No | `"gemini"` | AI provider |
-| `ai.apiKey` | string | No | — | API key for the AI provider |
+| `ai.provider` | `"openai"` \| `"anthropic"` \| `"azure-openai"` \| `"gemini"` \| `"local"` | No | `"gemini"` | AI provider |
+| `ai.apiKey` | string | No | — | API key for the AI provider (omit for `local`) |
 | `ai.model` | string | No | provider default | Specific model name |
+| `ai.endpoint` | string | No | — | Custom API base URL. Required for `local` (e.g., `http://localhost:11434/v1`). Also used for `azure-openai` deployments |
 | `ai.temperature` | number (0–2) | No | `0.7` | Sampling temperature |
 | `ai.maxLogTokens` | integer | No | `4000` | Max tokens sent to AI |
 | `ai.minConfidence` | number (0–1) | No | `0.6` | Minimum confidence to accept AI result |
 | `dedup.enabled` | boolean | No | `true` | Enable duplicate issue detection |
 | `dedup.windowHours` | integer | No | `24` | Lookback window in hours |
+| `notifications.enabled` | boolean | No | `true` | Master on/off switch. Set to `false` to silence all channels without removing config |
+| `notifications.slack.webhookUrl` | string | No | — | Slack incoming webhook URL. Presence of this field (with `enabled !== false`) activates Slack notifications |
+| `notifications.slack.channel` | string | No | webhook default | Slack channel override (e.g., `#incidents`) |
+| `notifications.slack.notifyOn` | string[] | No | all severities | Severity filter: only send when ticket severity matches a value in this array |
+| `notifications.slack.username` | string | No | `"PipelineIQ"` | Display name for the Slack bot |
+| `notifications.slack.includeMetrics` | boolean | No | `true` | Include MTTR and blast-radius in the Slack message |
+| `notifications.teams.webhookUrl` | string | No | — | Microsoft Teams incoming webhook URL. Activates Teams notifications |
+| `notifications.teams.notifyOn` | string[] | No | all severities | Severity filter for Teams notifications |
+| `notifications.teams.includeMetrics` | boolean | No | `true` | Include MTTR and blast-radius in the Teams Adaptive Card |
 
 ---
 
@@ -228,10 +255,31 @@ All override the corresponding `pipelineiq.json` value for the current run.
 | Flag | Default | Description |
 |---|---|---|
 | `--ai-mode <mode>` | `disabled` | `disabled` — deterministic only; `assist` — AI adds RCA + remediation; `full` — AI enriches all fields |
-| `--ai-provider <provider>` | `gemini` | `openai`, `anthropic`, `azure-openai`, `gemini` |
+| `--ai-provider <provider>` | `gemini` | `openai`, `anthropic`, `azure-openai`, `gemini`, `local` |
 | `-m, --ai-model <model>` | provider default | Model name: `gpt-4o`, `claude-3-5-sonnet-20241022`, `gemini-2.5-flash`, etc. |
-| `--ai-api-key <key>` | — | API key for the selected provider |
+| `--ai-api-key <key>` | — | API key for the selected provider (not required for `local`) |
+| `--ai-endpoint <url>` | — | Override the API base URL. **Required** for `local` (e.g., `http://localhost:11434/v1`). Also accepts `azure-openai` deployment URLs |
 | `--ai-max-tokens <tokens>` | `4000` | Maximum tokens for the AI response |
+
+---
+
+### Notification Flags
+
+Send notifications to Slack and/or Microsoft Teams when a Jira ticket is created or updated. All notification flags are **optional** — notifications are disabled by default unless a webhook URL is provided in the config file or via `--slack-webhook` / `--teams-webhook`.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--slack-webhook <url>` | — | Slack incoming webhook URL. Providing this flag enables Slack notifications for the current run |
+| `--slack-channel <channel>` | webhook default | Override the Slack channel (e.g., `#incidents`). Takes precedence over the webhook's default channel |
+| `--slack-notify-on <severities>` | all | Comma-separated severity filter (e.g., `Critical,High`). Only matching severities fire the notification |
+| `--slack-username <name>` | `PipelineIQ` | Display name shown as the Slack bot sender |
+| `--no-slack-metrics` | metrics on | Omit MTTR and blast-radius fields from the Slack message |
+| `--teams-webhook <url>` | — | Microsoft Teams incoming webhook URL. Providing this flag enables Teams notifications for the current run |
+| `--teams-notify-on <severities>` | all | Comma-separated severity filter for Teams (e.g., `Critical,High`) |
+| `--no-teams-metrics` | metrics on | Omit MTTR and blast-radius fields from the Teams Adaptive Card |
+| `--no-notifications` | — | Disable **all** notification channels for this run, even if webhooks are configured in `pipelineiq.json` |
+
+**Severity values:** `Critical`, `High`, `Medium`, `Low` (case-insensitive when filtering).
 
 ---
 
@@ -790,3 +838,78 @@ pipelineiq test --jira --ai
 pipelineiq config --init
 pipelineiq config --validate
 ```
+
+---
+
+### Local LLM (Ollama)
+
+Run AI enrichment against a locally hosted model — no API key required.
+
+```bash
+pipelineiq analyze \
+  --logs ./build.log \
+  --jira-project DEVOPS \
+  --ai-mode assist \
+  --ai-provider local \
+  --ai-endpoint http://localhost:11434/v1 \
+  --ai-model llama3
+```
+
+Or pin in `pipelineiq.json` to avoid repeating flags every run:
+
+```json
+{
+  "ai": {
+    "mode": "assist",
+    "provider": "local",
+    "endpoint": "http://localhost:11434/v1",
+    "model": "llama3"
+  }
+}
+```
+
+---
+
+### Slack notification on every ticket
+
+```bash
+pipelineiq analyze \
+  --logs ./build.log \
+  --jira-project DEVOPS \
+  --slack-webhook $SLACK_WEBHOOK_URL \
+  --slack-channel "#ci-failures" \
+  --slack-notify-on "Critical,High"
+```
+
+Only fires when the ticket severity is `Critical` or `High`. Medium and Low failures still create Jira tickets but are silent on Slack.
+
+---
+
+### Slack + Teams — critical failures only
+
+```bash
+pipelineiq analyze \
+  --logs ./build.log \
+  --jira-project DEVOPS \
+  --ai-mode full \
+  --ai-provider gemini \
+  --ai-api-key $GEMINI_API_KEY \
+  --slack-webhook $SLACK_WEBHOOK_URL \
+  --slack-channel "#incidents" \
+  --slack-notify-on "Critical" \
+  --teams-webhook $TEAMS_WEBHOOK_URL \
+  --teams-notify-on "Critical"
+```
+
+---
+
+### Disable notifications for a one-off run
+
+```bash
+pipelineiq analyze \
+  --logs ./build.log \
+  --jira-project DEVOPS \
+  --no-notifications
+```
+
+Useful when replaying failures in a dev environment without spamming production channels.
