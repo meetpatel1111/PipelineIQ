@@ -67,7 +67,7 @@ export const PipelineIQConfigSchema = z.object({
   ai: AIConfigSchema.default({ mode: "disabled" }),
   dedup: DedupConfigSchema.default({}),
   maskSecrets: z.boolean().default(true),
-  logExcerptLines: z.number().int().positive().default(80),
+  logExcerptLines: z.number().int().positive().default(150),
   displayMetadata: z.array(z.string()).optional(),
   notifications: NotificationsConfigSchema.optional(),
 });

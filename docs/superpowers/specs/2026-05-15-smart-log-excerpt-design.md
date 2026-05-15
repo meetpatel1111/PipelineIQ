@@ -127,7 +127,7 @@ Icons:
 
 Full output of the identified failing step, rendered in a `log` code block with the step name as a header.
 
-**Line budget:** `floor(maxLines * 0.75)`, minimum 20 lines.
+**Line budget:** `floor(maxLines * 0.75)`, minimum 20 lines. Default `maxLines` is 150.
 
 **Trimming strategy:** If step output exceeds budget, remove lines from the **top** of the step (setup/initialization noise), keeping lines closest to the error. A trim notice is added:
 
