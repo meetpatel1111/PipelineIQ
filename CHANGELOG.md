@@ -4,6 +4,90 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.14.0] - 2026-05-15
+
+### Added — Notification Channels, Local LLM Support & Operational Metrics
+
+Three cohesive features shipped as a single release. All are **optional and configurable** — callers with no config changes see identical behaviour.
+
+#### Notification Channels
+
+- **Slack notifications** (`src/core/notifications/slack.ts`): Post-ticket Slack alerts using Block Kit. Severity maps to emoji (🔴 Critical / 🟠 High / 🟡 Medium / 🔵 Low). Includes Jira key link, pipeline/branch context, root cause summary, and an optional metrics row.
+- **Microsoft Teams notifications** (`src/core/notifications/teams.ts`): Adaptive Card webhook format with a header block, fact set (pipeline, branch, Jira key, priority), and conditional metrics facts.
+- **`NotificationService`** (`src/core/notifications/index.ts`): Orchestrates channels via `Promise.allSettled` — one channel failing never blocks the other. Respects a per-channel `notifyOn` severity filter and a master `enabled` switch.
+- **Non-fatal by design**: Webhook failures are captured into `ProcessResult.notifications.{slack,teams}.error` and emitted as `console.warn`. `processFailureEvent()` always resolves successfully.
+- **New config block** (`PipelineIQConfig.notifications`):
+
+```typescript
+notifications?: {
+  enabled?: boolean;
+  slack?: { webhookUrl: string; channel?: string; notifyOn?: Severity[]; includeMetrics?: boolean; username?: string };
+  teams?: { webhookUrl: string; notifyOn?: Severity[]; includeMetrics?: boolean };
+}
+```
+
+#### Local LLM Support
+
+- **`LocalAIProvider`** (`src/core/ai/providers.ts`): Fully implemented for any OpenAI-compatible endpoint — Ollama, LM Studio, vLLM, llama.cpp. Uses the `openai` SDK with a configurable `baseURL`. Reuses the same prompt-building and JSON-parse fallback logic as `OpenAIProvider`.
+- **New config fields** (`PipelineIQConfig.ai`):
+
+```typescript
+ai: {
+  provider: "local";     // now accepted alongside openai/anthropic/azure-openai/gemini
+  endpoint: string;      // e.g. "http://localhost:11434/v1" for Ollama
+  model: string;         // e.g. "llama3.2", "mistral", "codellama"
+  apiKey?: string;       // "ollama" for Ollama; omit for unauthenticated endpoints
+}
+```
+
+- Throws `Error` with a descriptive message at construction time if `endpoint` or `model` is missing — before any network call.
+- Confidence gating (`minConfidence`) and the deterministic fallback apply identically to cloud providers.
+
+#### Operational Metrics
+
+- **`HistoryService.getMetrics()`** (`src/core/jira/history.ts`): Computes MTTR and blast radius from resolved Jira issues sharing the same `piq-sig:` label within a configurable window (default 30 days).
+  - **MTTR**: `avg(resolutionDate − createdDate)` across resolved issues, rounded to one decimal place (`parseFloat(avg.toFixed(1))`).
+  - **Blast radius**: count of distinct `piq-repo:*` label values across those issues; only surfaced when `> 1`.
+  - **`sampleSize`**: total issues returned by JQL, regardless of resolution status.
+- **`ctx.metrics`** (`EnrichmentContext`): History enricher now fetches `getHistory()` and `getMetrics()` in parallel via `Promise.all`. Failure is non-fatal — `ctx.metrics` is left undefined and the ticket is still created.
+- **Reliability Context section** (`src/core/renderer.ts`): Two new conditional lines appended to the existing section:
+
+```
+- **MTTR:** 4.2h avg (from 3 incidents)     ← omitted when no resolved tickets
+- **Blast radius:** 2 repos affected          ← omitted when blastRadius ≤ 1
+```
+
+- **`ProcessResult.metrics`**: Callers receive structured metrics alongside the Jira key — no need to parse the ticket description string.
+
+### Changed
+
+- **`ProcessResult` type** (`src/core/pipeline.ts`): Extended with `metrics?: ComputedMetrics` and `notifications?: NotificationResult`. Both fields are absent (not `undefined`) when the feature is not configured, honouring `exactOptionalPropertyTypes: true`.
+- **`renderDescription` signature** (`src/core/renderer.ts`): Accepts an optional 7th `metrics?: ComputedMetrics` parameter. Existing call sites are unaffected.
+
+### New Public Exports (`src/core/index.ts`)
+
+| Export | Type |
+|---|---|
+| `NotificationService` | class |
+| `NotificationPayload` | type |
+| `NotificationResult` | type |
+| `NotificationsConfig` | type |
+| `ComputedMetrics` | type |
+
+### New Files
+
+| Path | Purpose |
+|---|---|
+| `src/core/notifications/types.ts` | `NotificationPayload`, `NotificationResult`, `ChannelResult`, `NotificationMetrics` |
+| `src/core/notifications/slack.ts` | Block Kit webhook sender |
+| `src/core/notifications/teams.ts` | Adaptive Card webhook sender |
+| `src/core/notifications/index.ts` | `NotificationService` orchestrator |
+| `src/core/notifications/__tests__/slack.test.ts` | 8 tests |
+| `src/core/notifications/__tests__/teams.test.ts` | 7 tests |
+| `src/core/notifications/__tests__/service.test.ts` | 8 tests |
+
+---
+
 ## [0.13.0] - 2026-05-15
 
 ### Added — AI-First Diagnostics & Historical Reliability Context
