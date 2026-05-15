@@ -138,6 +138,16 @@ program
     memo.push(val);
     return memo;
   }, [])
+  .option("--ai-endpoint <url>", "Base URL for local AI provider (e.g. http://localhost:11434/v1)")
+  .option("--slack-webhook <url>", "Slack incoming webhook URL — enables Slack notifications")
+  .option("--slack-channel <channel>", "Slack channel override (e.g. #incidents)")
+  .option("--slack-notify-on <severities>", "Comma-separated severities that trigger Slack (e.g. Critical,High)", (val) => val.split(","))
+  .option("--slack-username <name>", "Slack bot display name")
+  .option("--no-slack-metrics", "Omit MTTR/blast-radius row from Slack messages")
+  .option("--teams-webhook <url>", "Teams incoming webhook URL — enables Teams notifications")
+  .option("--teams-notify-on <severities>", "Comma-separated severities that trigger Teams (e.g. Critical)", (val) => val.split(","))
+  .option("--no-teams-metrics", "Omit MTTR/blast-radius facts from Teams messages")
+  .option("--no-notifications", "Disable all notifications for this run (overrides config)")
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -200,7 +210,31 @@ async function handleAnalyze(options: any) {
     if (options.aiProvider) configData.ai.provider = options.aiProvider.trim();
     if (options.aiModel) configData.ai.model = options.aiModel.trim();
     if (options.aiMaxTokens) configData.ai.maxLogTokens = Number.parseInt(options.aiMaxTokens, 10);
+    if (options.aiEndpoint) configData.ai.endpoint = options.aiEndpoint.trim();
     if (options.displayMeta) configData.displayMetadata = options.displayMeta;
+
+    // Notification flag overrides — build up notifications block from CLI flags
+    if (options.notifications === false) {
+      // --no-notifications: disable master switch (keeps any existing config)
+      configData.notifications = { ...configData.notifications, enabled: false };
+    } else {
+      if (options.slackWebhook) {
+        configData.notifications ??= {};
+        configData.notifications.slack ??= { webhookUrl: options.slackWebhook };
+        configData.notifications.slack.webhookUrl = options.slackWebhook.trim();
+        if (options.slackChannel) configData.notifications.slack.channel = options.slackChannel.trim();
+        if (options.slackNotifyOn) configData.notifications.slack.notifyOn = options.slackNotifyOn;
+        if (options.slackUsername) configData.notifications.slack.username = options.slackUsername.trim();
+        if (options.slackMetrics === false) configData.notifications.slack.includeMetrics = false;
+      }
+      if (options.teamsWebhook) {
+        configData.notifications ??= {};
+        configData.notifications.teams ??= { webhookUrl: options.teamsWebhook };
+        configData.notifications.teams.webhookUrl = options.teamsWebhook.trim();
+        if (options.teamsNotifyOn) configData.notifications.teams.notifyOn = options.teamsNotifyOn;
+        if (options.teamsMetrics === false) configData.notifications.teams.includeMetrics = false;
+      }
+    }
 
     // Now validate the fully merged configuration
     const config = PipelineIQConfigSchema.parse(configData);
