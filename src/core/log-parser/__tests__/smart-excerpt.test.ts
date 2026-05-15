@@ -46,6 +46,21 @@ describe("parseSteps — GitHub Actions", () => {
     expect(steps[1]!.status).toBe("failed");
     expect(steps[2]!.status).toBe("skipped");
   });
+
+  it("handles empty step (no content between markers)", () => {
+    const lines = [
+      "##[group]Cache",
+      "##[endgroup]",
+      "##[group]Build",
+      "npm run build",
+      "##[endgroup]",
+    ];
+    const steps = parseSteps(lines, "github");
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toMatchObject({ name: "Cache", status: "passed" });
+    expect(steps[0]!.endLine).toBeLessThan(steps[0]!.startLine); // empty: endLine < startLine
+    expect(steps[1]).toMatchObject({ name: "Build", status: "passed" });
+  });
 });
 
 describe("parseSteps — Azure DevOps", () => {
@@ -61,6 +76,19 @@ describe("parseSteps — Azure DevOps", () => {
     expect(steps).toHaveLength(2);
     expect(steps[0]).toMatchObject({ name: "Checkout", status: "passed" });
     expect(steps[1]).toMatchObject({ name: "Run tests", status: "failed" });
+  });
+
+  it("sets correct startLine and endLine indices for Azure steps", () => {
+    const lines = [
+      "##[section]Starting: Setup",   // 0
+      "Setting up",                    // 1
+      "##[section]Finishing: Setup",  // 2
+      "##[section]Starting: Build",   // 3
+      "##[error]build failed",        // 4
+    ];
+    const steps = parseSteps(lines, "azure-devops");
+    expect(steps[0]).toMatchObject({ startLine: 1, endLine: 1 });
+    expect(steps[1]).toMatchObject({ startLine: 4, endLine: 4 });
   });
 });
 

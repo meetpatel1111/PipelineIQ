@@ -13,7 +13,7 @@ export type StepInfo = {
   name: string;
   status: StepStatus;
   startLine: number;  // index of first content line (after the opening marker)
-  endLine: number;    // index of last content line (-1 if log ends before closing marker)
+  endLine: number;    // index of last content line; for truncated final step: lines.length-1; for empty step: startLine-1
 };
 
 export type ExcerptStrategy = "step-aware" | "error-anchored" | "tail-fallback";
@@ -27,9 +27,8 @@ export type SmartExcerptResult = {
 // Lines matching any of these patterns are error anchors
 const ERROR_ANCHOR_PATTERNS: RegExp[] = [
   /^\s*##\[error\]/i,
-  /\b(error|fatal|failed|failure)\b/i,
-  /exit\s+code\s+[1-9]/i,
-  /process\s+exited\s+with\s+code\s+[1-9]/i,
+  /exit\s+code\s+[1-9]\d*/i,
+  /process\s+exited\s+with\s+code\s+[1-9]\d*/i,
   /\b(FAIL|FAILED|ERROR)\b/,
   /exception\s+in\s+thread/i,
   /traceback\s+\(most\s+recent\s+call\s+last\)/i,
