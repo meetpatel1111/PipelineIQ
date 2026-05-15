@@ -130,3 +130,27 @@ function markSkippedSteps(steps: StepInfo[]): StepInfo[] {
     i > failIdx ? { ...s, status: "skipped" as StepStatus } : s,
   );
 }
+
+/**
+ * Return indices of all lines that match an error anchor pattern.
+ */
+export function findErrorAnchors(lines: string[]): number[] {
+  return lines.reduce<number[]>((acc, line, i) => {
+    if (ERROR_ANCHOR_PATTERNS.some(p => p.test(line))) acc.push(i);
+    return acc;
+  }, []);
+}
+
+/**
+ * Render a compact one-line breadcrumb from the step list.
+ * Truncated at 120 chars with "…" if needed.
+ */
+export function renderBreadcrumb(steps: StepInfo[]): string {
+  const icon = (s: StepStatus): string =>
+    s === "passed" ? "✓" : s === "failed" ? "✗" : "○";
+  const parts = steps.map(s => `${icon(s.status)} ${s.name}`);
+  const joined = parts.join(" → ");
+  const full = "Steps: " + joined;
+  if (full.length <= 120) return full;
+  return full.slice(0, 120) + "…";
+}

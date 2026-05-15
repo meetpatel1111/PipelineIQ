@@ -98,3 +98,61 @@ describe("parseSteps — non-structured source", () => {
     expect(parseSteps(lines, "generic")).toEqual([]);
   });
 });
+
+import { findErrorAnchors, renderBreadcrumb } from "../smart-excerpt.js";
+
+describe("findErrorAnchors", () => {
+  it("finds ERROR keyword line (uppercase FAIL)", () => {
+    const lines = ["Starting build", "FAIL src/core/foo.test.ts", "done"];
+    expect(findErrorAnchors(lines)).toEqual([1]);
+  });
+
+  it("finds ##[error] annotation", () => {
+    const lines = ["ok", "##[error]Tests failed"];
+    expect(findErrorAnchors(lines)).toEqual([1]);
+  });
+
+  it("finds non-zero exit code", () => {
+    const lines = ["running", "exit code 127", "done"];
+    expect(findErrorAnchors(lines)).toEqual([1]);
+  });
+
+  it("returns all matching line indices", () => {
+    const lines = ["ok", "FAIL suite A", "ok", "##[error]fatal: bad config"];
+    const anchors = findErrorAnchors(lines);
+    expect(anchors).toContain(1);
+    expect(anchors).toContain(3);
+  });
+
+  it("returns empty array when no errors", () => {
+    expect(findErrorAnchors(["all good", "✓ passed"])).toEqual([]);
+  });
+});
+
+describe("renderBreadcrumb", () => {
+  it("formats steps with correct icons and separators", () => {
+    const steps: StepInfo[] = [
+      { name: "Set up job", status: "passed", startLine: 0, endLine: 1 },
+      { name: "Run tests", status: "failed", startLine: 2, endLine: 5 },
+      { name: "Upload", status: "skipped", startLine: 6, endLine: 7 },
+    ];
+    const crumb = renderBreadcrumb(steps);
+    expect(crumb).toBe("Steps: ✓ Set up job → ✗ Run tests → ○ Upload");
+  });
+
+  it("truncates long breadcrumb at 120 chars with ellipsis", () => {
+    const steps: StepInfo[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `A very long step name number ${i}`,
+      status: "passed" as StepStatus,
+      startLine: i,
+      endLine: i,
+    }));
+    const crumb = renderBreadcrumb(steps);
+    expect(crumb.length).toBeLessThanOrEqual(121); // 120 chars + "…"
+    expect(crumb.endsWith("…")).toBe(true);
+  });
+
+  it("returns just the prefix for empty step list", () => {
+    expect(renderBreadcrumb([])).toBe("Steps: ");
+  });
+});
