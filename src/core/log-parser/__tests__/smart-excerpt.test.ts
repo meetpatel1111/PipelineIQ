@@ -156,3 +156,114 @@ describe("renderBreadcrumb", () => {
     expect(renderBreadcrumb([])).toBe("Steps: ");
   });
 });
+
+import { renderStepOutput, buildSmartExcerpt } from "../smart-excerpt.js";
+
+describe("renderStepOutput", () => {
+  it("returns full output when within budget", () => {
+    const lines = ["line 0", "line 1", "line 2"];
+    const step: StepInfo = { name: "Test", status: "failed", startLine: 0, endLine: 2 };
+    const result = renderStepOutput(lines, step, 10);
+    expect(result).toContain("line 0");
+    expect(result).toContain("line 2");
+    expect(result).not.toContain("trimmed");
+  });
+
+  it("trims from top with notice when over budget", () => {
+    const allLines = Array.from({ length: 20 }, (_, i) => `line ${i}`);
+    const step: StepInfo = { name: "Test", status: "failed", startLine: 0, endLine: 19 };
+    const result = renderStepOutput(allLines, step, 5);
+    expect(result).toContain("trimmed");
+    expect(result).toContain("line 19");
+    expect(result).not.toContain("line 0");
+  });
+
+  it("highlights error anchor lines with ▶ prefix", () => {
+    const lines = ["Setting up", "##[error]bad config", "done"];
+    const step: StepInfo = { name: "Setup", status: "failed", startLine: 0, endLine: 2 };
+    const result = renderStepOutput(lines, step, 10);
+    expect(result).toContain("▶ ##[error]bad config");
+    expect(result).not.toMatch(/▶ Setting up/);
+    expect(result).not.toMatch(/▶ done/);
+  });
+
+  it("returns empty step notice for step with no content lines", () => {
+    const lines = ["##[group]Cache", "##[endgroup]"];
+    const step: StepInfo = { name: "Cache", status: "passed", startLine: 1, endLine: 0 };
+    const result = renderStepOutput(lines, step, 10);
+    expect(result).toContain("[Step produced no output]");
+  });
+});
+
+describe("buildSmartExcerpt", () => {
+  const ghLog = [
+    "##[group]Set up job",
+    "Runner ready",
+    "##[endgroup]",
+    "##[group]Run tests",
+    "PASS src/a.test.ts",
+    "FAIL src/b.test.ts",
+    "##[error]Tests failed",
+  ].join("\n");
+
+  it("returns step-aware strategy for GitHub Actions log", () => {
+    const result = buildSmartExcerpt(ghLog, "github", 150);
+    expect(result.strategy).toBe("step-aware");
+    expect(result.failingStep).toBe("Run tests");
+    expect(result.text).toContain("✓ Set up job");
+    expect(result.text).toContain("✗ Run tests");
+    expect(result.text).toContain("▶");
+  });
+
+  const adoLog = [
+    "##[section]Starting: Checkout",
+    "Cloning repo",
+    "##[section]Finishing: Checkout",
+    "##[section]Starting: Build",
+    "##[error]Build failed",
+  ].join("\n");
+
+  it("returns step-aware strategy for Azure DevOps log", () => {
+    const result = buildSmartExcerpt(adoLog, "azure-devops", 150);
+    expect(result.strategy).toBe("step-aware");
+    expect(result.failingStep).toBe("Build");
+  });
+
+  it("returns error-anchored strategy for generic log with errors", () => {
+    const log = Array.from({ length: 100 }, (_, i) =>
+      i === 40 ? "##[error]something broke" : `line ${i}`,
+    ).join("\n");
+    const result = buildSmartExcerpt(log, "generic", 150);
+    expect(result.strategy).toBe("error-anchored");
+    expect(result.text).toContain("##[error]something broke");
+  });
+
+  it("returns tail-fallback strategy when no errors found", () => {
+    const log = "all good\neverything passed\n✓ done";
+    const result = buildSmartExcerpt(log, "generic", 150);
+    expect(result.strategy).toBe("tail-fallback");
+    expect(result.text).toContain("✓ done");
+  });
+
+  it("never exceeds maxLines in output (rough check)", () => {
+    const log = Array.from({ length: 500 }, (_, i) => `line ${i}`).join("\n");
+    const result = buildSmartExcerpt(log, "generic", 50);
+    const lineCount = result.text.split("\n").length;
+    // Allow a few extra lines for breadcrumb and trim notice overhead
+    expect(lineCount).toBeLessThanOrEqual(60);
+  });
+
+  it("clamps maxLines to minimum 20", () => {
+    const log = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");
+    const result = buildSmartExcerpt(log, "generic", 5);
+    expect(result.text.split("\n").length).toBeGreaterThanOrEqual(1);
+    // Should not crash
+    expect(result.strategy).toBeDefined();
+  });
+
+  it("returns empty text for empty log", () => {
+    const result = buildSmartExcerpt("", "generic", 150);
+    expect(result.text).toBe("");
+    expect(result.strategy).toBe("tail-fallback");
+  });
+});

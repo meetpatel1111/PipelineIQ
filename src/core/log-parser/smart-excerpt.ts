@@ -154,3 +154,99 @@ export function renderBreadcrumb(steps: StepInfo[]): string {
   if (full.length <= 120) return full;
   return full.slice(0, 120) + "…";
 }
+
+/**
+ * Render the output of a single step within the line budget.
+ * Trims from the top when over budget. Highlights error anchors with ▶.
+ * Returns "[Step produced no output]" for empty steps.
+ */
+export function renderStepOutput(
+  allLines: string[],
+  step: StepInfo,
+  budget: number,
+): string {
+  const endLine = step.endLine === -1 ? allLines.length - 1 : step.endLine;
+
+  // Empty step: startLine > endLine (e.g., immediate ##[endgroup])
+  if (step.startLine > endLine) {
+    return "[Step produced no output]";
+  }
+
+  let stepLines = allLines.slice(step.startLine, endLine + 1);
+
+  let trimNotice = "";
+  if (stepLines.length > budget) {
+    const trimmed = stepLines.length - budget;
+    stepLines = stepLines.slice(-budget);
+    trimNotice = `[... ${trimmed} lines trimmed from top of step output ...]\n`;
+  }
+
+  const highlighted = stepLines.map(line =>
+    ERROR_ANCHOR_PATTERNS.some(p => p.test(line)) ? `▶ ${line}` : line,
+  );
+
+  return trimNotice + highlighted.join("\n");
+}
+
+/**
+ * Build a smart log excerpt. Called by the renderer instead of tailLines().
+ *
+ * Strategy chain:
+ *   1. step-aware     — GitHub Actions or Azure DevOps markers detected
+ *   2. error-anchored — generic log with detectable error lines
+ *   3. tail-fallback  — last maxLines lines (original behaviour)
+ */
+export function buildSmartExcerpt(
+  log: string,
+  source: string,
+  maxLines: number,
+): SmartExcerptResult {
+  if (!log) return { text: "", strategy: "tail-fallback" };
+
+  const clampedMax = Math.max(maxLines, 20);
+  const lines = log.split("\n");
+
+  // ── Strategy 1: step-aware ────────────────────────────────────────────────
+  const steps = parseSteps(lines, source);
+  if (steps.length > 0) {
+    const failingStep = steps.find(s => s.status === "failed");
+    const breadcrumb = renderBreadcrumb(steps);
+
+    if (failingStep) {
+      const stepBudget = Math.max(Math.floor(clampedMax * 0.75), 20);
+      const stepOutput = renderStepOutput(lines, failingStep, stepBudget);
+      const text = `${breadcrumb}\n\n${stepOutput}`;
+      return { text, strategy: "step-aware", failingStep: failingStep.name };
+    }
+
+    // Steps parsed but none failed (all passed) — fall through to anchors
+  }
+
+  // ── Strategy 2: error-anchored ────────────────────────────────────────────
+  const anchors = findErrorAnchors(lines);
+  if (anchors.length > 0) {
+    const BEFORE = 40;
+    const AFTER = 20;
+    const first = anchors[0]!;
+    const start = Math.max(0, first - BEFORE);
+    const end = Math.min(lines.length - 1, first + AFTER);
+    const contextLines = lines.slice(start, end + 1);
+
+    const highlighted = contextLines.map(line =>
+      ERROR_ANCHOR_PATTERNS.some(p => p.test(line)) ? `▶ ${line}` : line,
+    );
+
+    const prefix = start > 0 ? `[... ${start} lines above omitted ...]\n` : "";
+    return {
+      text: prefix + highlighted.join("\n"),
+      strategy: "error-anchored",
+    };
+  }
+
+  // ── Strategy 3: tail fallback ─────────────────────────────────────────────
+  const tail = lines.length <= clampedMax
+    ? log
+    : lines.slice(-clampedMax).join("\n");
+
+  return { text: tail, strategy: "tail-fallback" };
+}
