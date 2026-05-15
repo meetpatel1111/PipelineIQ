@@ -1,6 +1,7 @@
 import type { FailureEvent, JiraTicketSpec } from "./types/index.js";
 import type { ComputedMetrics } from "./types/index.js";
 import { maskSecrets } from "./secret-mask.js";
+import { buildSmartExcerpt } from "./log-parser/smart-excerpt.js";
 
 /**
  * Build the markdown ticket description from the event + already-populated fields.
@@ -360,16 +361,17 @@ export function renderDescription(
     out.push("");
   }
 
-  // Log excerpt — trimmed + secret-masked
+  // Log excerpt — step-aware smart excerpt + secret-masked
   if (event.failure.logs) {
     const cleaned = maskLogs ? maskSecrets(event.failure.logs) : event.failure.logs;
-    const excerpt = tailLines(cleaned, logExcerptLines);
-    out.push("### Relevant Logs");
+    const { text, failingStep } = buildSmartExcerpt(cleaned, event.source, logExcerptLines);
+    const logHeader = failingStep ? `### Failing Step: ${failingStep}` : "### Relevant Logs";
+    out.push(logHeader);
     if (event.failure.logsTruncated) {
       out.push("> Logs were truncated by the adapter — see attachment for full output.");
     }
     out.push("```log");
-    out.push(excerpt);
+    out.push(text);
     out.push("```");
     out.push("");
   }
