@@ -194,7 +194,7 @@ export class EnhancedJiraClient implements JiraClient {
       expand: options.expand || [],
     };
 
-    return await this.request<any>("POST", "/rest/api/3/search", payload);
+    return await this.request<any>("POST", "/rest/api/3/search/jql", payload);
   }
 
   /**
