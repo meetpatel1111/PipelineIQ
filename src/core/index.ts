@@ -17,3 +17,10 @@ export * from "./ai/index.js";
 export * from "./log-parser/index.js";
 export * from "./jira/index.js";
 
+// Notifications
+export { NotificationService } from "./notifications/index.js";
+export type { NotificationPayload, NotificationResult, NotificationsConfig } from "./notifications/index.js";
+
+// Operational metrics (ComputedMetrics is part of ProcessResult)
+export type { ComputedMetrics } from "./types/operational-metrics.js";
+

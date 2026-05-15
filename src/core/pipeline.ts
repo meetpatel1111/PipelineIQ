@@ -11,12 +11,21 @@ import { createHistoryEnricher } from "./enrichers/history.js";
 import { computedEnricher } from "./enrichers/computed.js";
 import { deterministicEnricher } from "./enrichers/deterministic.js";
 import type { Enricher, EnrichmentContext } from "./enrichers/types.js";
+import type { ComputedMetrics } from "./types/index.js";
 import { renderDescription } from "./renderer.js";
+import { NotificationService } from "./notifications/index.js";
+import type { NotificationResult, NotificationPayload } from "./notifications/index.js";
+
+type ProcessResultBase = {
+  spec: JiraTicketSpec;
+  metrics?: ComputedMetrics;
+  notifications?: NotificationResult;
+};
 
 export type ProcessResult =
-  | { action: "created"; issueKey: string; spec: JiraTicketSpec }
-  | { action: "updated"; issueKey: string; spec: JiraTicketSpec }
-  | { action: "skipped"; reason: string; spec: JiraTicketSpec };
+  | ({ action: "created"; issueKey: string } & ProcessResultBase)
+  | ({ action: "updated"; issueKey: string } & ProcessResultBase)
+  | ({ action: "skipped"; reason: string } & ProcessResultBase);
 
 export type ProcessOptions = {
   /** Inject extra enrichers (e.g., AI enricher) between computed and rendering. */
@@ -78,6 +87,20 @@ export async function processFailureEvent(
 
   const spec = JiraTicketSpecSchema.parse(ctx.fields);
 
+  const metrics = ctx.metrics;
+
+  async function maybeNotify(issueKey: string, isNewTicket: boolean): Promise<NotificationResult | undefined> {
+    if (!config.notifications) return undefined;
+    const service = new NotificationService(config.notifications);
+    const notifPayload = buildNotificationPayload(ctx, issueKey, isNewTicket, config.jira.baseUrl);
+    try {
+      return await service.send(notifPayload);
+    } catch (error) {
+      console.warn(`[PipelineIQ] Notification stage failed: ${error}`);
+      return undefined;
+    }
+  }
+
   // Dedup path
   if (config.dedup.enabled) {
     const existing = await jira.findBySignature(
@@ -94,11 +117,52 @@ export async function processFailureEvent(
         existing.key,
         `Failure recurred at ${new Date().toISOString()} — ${event.pipeline.url}`,
       );
-      return { action: "updated", issueKey: existing.key, spec };
+      const notifications = await maybeNotify(existing.key, false);
+      return {
+        action: "updated",
+        issueKey: existing.key,
+        spec,
+        ...(metrics !== undefined && { metrics }),
+        ...(notifications !== undefined && { notifications }),
+      };
     }
   }
 
   const created = await jira.createIssue(spec);
   logger.info({ key: created.key, signature: spec.dedupSignature }, "created Jira issue");
-  return { action: "created", issueKey: created.key, spec };
+  const notifications = await maybeNotify(created.key, true);
+  return {
+    action: "created",
+    issueKey: created.key,
+    spec,
+    ...(metrics !== undefined && { metrics }),
+    ...(notifications !== undefined && { notifications }),
+  };
+}
+
+function buildNotificationPayload(
+  ctx: EnrichmentContext,
+  issueKey: string,
+  isNewTicket: boolean,
+  jiraBaseUrl: string,
+): NotificationPayload {
+  return {
+    title: ctx.fields.summary ?? "Pipeline failure",
+    ...(ctx.fields.rca !== undefined && { summary: ctx.fields.rca }),
+    severity: (ctx.fields.severity as string) ?? "Medium",
+    priority: (ctx.fields.priority as string) ?? "Medium",
+    jiraKey: issueKey,
+    jiraUrl: `${jiraBaseUrl}/browse/${issueKey}`,
+    repo: ctx.event.repository.name,
+    pipeline: ctx.event.pipeline.name,
+    branch: ctx.event.branch,
+    isNewTicket,
+    ...(ctx.history?.similarCount !== undefined && { dedupCount: ctx.history.similarCount }),
+    ...(ctx.metrics !== undefined && {
+      metrics: {
+        ...(ctx.metrics.mttrHours !== undefined && { mttrHours: ctx.metrics.mttrHours }),
+        ...(ctx.metrics.blastRadius !== undefined && { blastRadius: ctx.metrics.blastRadius }),
+      },
+    }),
+  };
 }
