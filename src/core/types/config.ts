@@ -20,6 +20,9 @@ export const DedupConfigSchema = z.object({
   enabled: z.boolean().default(true),
   windowHours: z.number().int().positive().default(24),
   minSimilarity: z.number().min(0).max(1).default(0.85),
+  onClosedHit: z.enum(["reopen", "create-new", "skip"]).default("create-new"),
+  reopenTransition: z.string().default("Reopen Issue"),
+  closedStatuses: z.array(z.string()).default(["Done", "Resolved", "Closed"]),
 });
 export type DedupConfig = z.infer<typeof DedupConfigSchema>;
 
@@ -58,10 +61,19 @@ export const NotificationsConfigSchema = z.object({
 });
 export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 
+export const JiraCustomFieldMappingSchema = z.object({
+  externalLinks: z.string().optional(), // Default: customfield_10010
+  provenance: z.string().optional(),     // Default: customfield_10011
+  dedupSignature: z.string().optional(), // Default: customfield_10012
+  metrics: z.string().optional(),        // Default: customfield_10013
+});
+export type JiraCustomFieldMapping = z.infer<typeof JiraCustomFieldMappingSchema>;
+
 export const PipelineIQConfigSchema = z.object({
   jira: JiraAuthSchema,
   jiraProject: z.string().min(1),
   issueType: z.string().default("Bug"),
+  jiraCustomFields: JiraCustomFieldMappingSchema.optional(),
   defaultAssignee: z.string().optional(),
   defaultLabels: z.array(z.string()).default(["pipelineiq", "ci-failure"]),
   ai: AIConfigSchema.default({ mode: "disabled" }),
@@ -69,6 +81,7 @@ export const PipelineIQConfigSchema = z.object({
   maskSecrets: z.boolean().default(true),
   logExcerptLines: z.number().int().positive().default(150),
   displayMetadata: z.array(z.string()).optional(),
+  autoWorklog: z.boolean().default(false),
   notifications: NotificationsConfigSchema.optional(),
 });
 

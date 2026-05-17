@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type ComputedMetrics } from "./operational-metrics.js";
 
 export const SeveritySchema = z.enum(["Critical", "High", "Medium", "Low"]);
 export type Severity = z.infer<typeof SeveritySchema>;
@@ -48,6 +49,7 @@ export const JiraTicketSpecSchema = z.object({
   dedupSignature: z.string(),
   externalLinks: z.array(ExternalLinkSchema).default([]),
   provenance: z.record(z.string(), FieldProvenanceSchema).default({}),
+  metrics: z.custom<ComputedMetrics>().optional(),
 });
 
 export type JiraTicketSpec = z.infer<typeof JiraTicketSpecSchema>;

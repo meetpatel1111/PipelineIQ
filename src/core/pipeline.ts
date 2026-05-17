@@ -1,9 +1,10 @@
 import { pino, type Logger } from "pino";
 import {
-  type FailureEvent,
   type JiraTicketSpec,
+  type FailureEvent,
   type PipelineIQConfig,
   JiraTicketSpecSchema,
+  type ComputedMetrics,
 } from "./types/index.js";
 import { createEnhancedJiraClient, EnhancedJiraClient } from "./jira/index.js";
 import { JiraClient } from "./jira/client.js";
@@ -11,7 +12,6 @@ import { createHistoryEnricher } from "./enrichers/history.js";
 import { computedEnricher } from "./enrichers/computed.js";
 import { deterministicEnricher } from "./enrichers/deterministic.js";
 import type { Enricher, EnrichmentContext } from "./enrichers/types.js";
-import type { ComputedMetrics } from "./types/index.js";
 import { renderDescription } from "./renderer.js";
 import { NotificationService } from "./notifications/index.js";
 import type { NotificationResult, NotificationPayload } from "./notifications/index.js";
@@ -59,7 +59,7 @@ export async function processFailureEvent(
     provenance: {},
   };
 
-  const jira = options.jiraClient ?? createEnhancedJiraClient(config.jira);
+  const jira = options.jiraClient ?? createEnhancedJiraClient(config.jira, config.jiraCustomFields);
 
   const enrichers: Enricher[] = [
     deterministicEnricher,
@@ -84,6 +84,11 @@ export async function processFailureEvent(
     ctx.metrics,
   );
   ctx.fields.provenance = ctx.provenance;
+  
+  // Propagate computed metrics to fields for Jira custom field mapping
+  if (ctx.metrics) {
+    ctx.fields.metrics = ctx.metrics;
+  }
 
   const spec = JiraTicketSpecSchema.parse(ctx.fields);
 
@@ -105,31 +110,105 @@ export async function processFailureEvent(
   if (config.dedup.enabled) {
     const existing = await jira.findBySignature(
       config.jiraProject,
-      spec.dedupSignature,
+      spec.dedupSignature as string,
       config.dedup.windowHours,
     );
     if (existing) {
-      logger.info(
-        { existingKey: existing.key, signature: spec.dedupSignature },
-        "dedup hit — updating existing issue",
-      );
-      await jira.addComment(
-        existing.key,
-        `Failure recurred at ${new Date().toISOString()} — ${event.pipeline.url}`,
-      );
-      const notifications = await maybeNotify(existing.key, false);
-      return {
-        action: "updated",
-        issueKey: existing.key,
-        spec,
-        ...(metrics !== undefined && { metrics }),
-        ...(notifications !== undefined && { notifications }),
-      };
+      const isClosed = config.dedup.closedStatuses.includes(existing.status);
+
+      if (isClosed && config.dedup.onClosedHit === "create-new") {
+        logger.info(
+          { existingKey: existing.key, signature: spec.dedupSignature },
+          "closed duplicate found — creating new ticket as per strategy",
+        );
+        // We continue to creation block, but we'll link it later
+      } else if (isClosed && config.dedup.onClosedHit === "skip") {
+        logger.info(
+          { existingKey: existing.key, signature: spec.dedupSignature },
+          "closed duplicate found — skipping as per strategy",
+        );
+        return {
+          action: "skipped",
+          reason: `Duplicate closed issue: ${existing.key}`,
+          spec,
+          ...(metrics !== undefined && { metrics }),
+        };
+      } else {
+        logger.info(
+          { existingKey: existing.key, signature: spec.dedupSignature },
+          "dedup hit — updating existing issue",
+        );
+
+        // Auto-reopen if closed and strategy is reopen
+        if (isClosed && config.dedup.onClosedHit === "reopen") {
+          logger.info({ issueKey: existing.key, status: existing.status }, "re-opening closed issue");
+          try {
+            await (jira as EnhancedJiraClient).transitionIssue(existing.key, config.dedup.reopenTransition);
+            await jira.addComment(
+              existing.key,
+              `⚠️ Failure re-occurred while issue was ${existing.status}. Re-opening for investigation.`
+            );
+          } catch (e) {
+            logger.warn({ err: e, issueKey: existing.key }, "failed to re-open issue");
+          }
+        }
+
+        await jira.addComment(
+          existing.key,
+          `Failure recurred at ${new Date().toISOString()} — ${event.pipeline.url}`,
+        );
+
+        if (config.autoWorklog && event.durationMs) {
+          const seconds = Math.floor(event.durationMs / 1000);
+          if (seconds > 0) {
+            await (jira as EnhancedJiraClient).addWorklog(existing.key, seconds, `Pipeline recurrence duration: ${seconds}s`);
+          }
+        }
+
+        const notifications = await maybeNotify(existing.key, false);
+        return {
+          action: "updated",
+          issueKey: existing.key,
+          spec,
+          ...(metrics !== undefined && { metrics }),
+          ...(notifications !== undefined && { notifications }),
+        };
+      }
     }
   }
 
   const created = await jira.createIssue(spec);
   logger.info({ key: created.key, signature: spec.dedupSignature }, "created Jira issue");
+
+  // If this was a "create-new" dedup hit, link to the old one
+  if (config.dedup.enabled) {
+    // Re-check for existing issue (or pass it down)
+    const existing = await jira.findBySignature(
+      config.jiraProject,
+      spec.dedupSignature as string,
+      config.dedup.windowHours,
+    );
+    // Find the one that ISN'T the one we just created
+    if (existing && existing.key !== created.key && config.dedup.closedStatuses.includes(existing.status) && config.dedup.onClosedHit === "create-new") {
+       try {
+         await (jira as EnhancedJiraClient).linkIssues(created.key, existing.key, "Relates");
+         await jira.addComment(
+           created.key,
+           `ℹ️ This failure was previously tracked in ${existing.key} (Status: ${existing.status}). A new ticket has been opened to track the fresh effort.`
+         );
+       } catch (e) {
+         logger.warn({ err: e }, "failed to link new issue to previous one");
+       }
+    }
+  }
+
+  if (config.autoWorklog && event.durationMs) {
+    const seconds = Math.floor(event.durationMs / 1000);
+    if (seconds > 0) {
+      await (jira as EnhancedJiraClient).addWorklog(created.key, seconds, `Initial failure duration: ${seconds}s`);
+    }
+  }
+
   const notifications = await maybeNotify(created.key, true);
   return {
     action: "created",
@@ -147,7 +226,7 @@ function buildNotificationPayload(
   jiraBaseUrl: string,
 ): NotificationPayload {
   return {
-    title: ctx.fields.summary ?? "Pipeline failure",
+    title: (ctx.fields.summary as string) ?? "Pipeline failure",
     ...(ctx.fields.rca !== undefined && { summary: ctx.fields.rca }),
     severity: (ctx.fields.severity as string) ?? "Medium",
     priority: (ctx.fields.priority as string) ?? "Medium",

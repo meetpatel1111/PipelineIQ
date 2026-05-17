@@ -33,8 +33,8 @@ export function renderDescription(
 
   out.push("### Failure Summary");
   let summary = fields.summary ?? "Pipeline failure detected.";
-  if (fields.customFields?._matchConfidence !== undefined) {
-    const conf = Math.round(Number(fields.customFields._matchConfidence) * 100);
+  if (fields.customFields?.["_matchConfidence"] !== undefined) {
+    const conf = Math.round(Number(fields.customFields["_matchConfidence"]) * 100);
     summary += ` (Match Confidence: ${conf}%)`;
   }
   out.push(summary);
@@ -46,7 +46,7 @@ export function renderDescription(
     out.push("");
   }
 
-  if (remediation && remediation.length > 0) {
+  if (remediation && Array.isArray(remediation) && remediation.length > 0) {
     out.push("### Suggested Remediation");
     remediation.forEach((step, i) => out.push(`${i + 1}. ${step}`));
     out.push("");
@@ -392,7 +392,8 @@ export function renderDescription(
     out.push(`- [Pull Request #${(event as any).pullRequest.number}](${(event as any).pullRequest.url})`);
   }
   // Additional external links from fields
-  for (const link of fields.externalLinks ?? []) {
+  const externalLinks = fields.externalLinks as any[] || [];
+  for (const link of externalLinks) {
     out.push(`- [${link.title}](${link.url})`);
   }
   out.push("");

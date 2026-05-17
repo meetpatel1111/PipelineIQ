@@ -99,8 +99,8 @@ class JiraCloudClient implements JiraClient {
       const res = await this.client.issues.createIssue({
         fields: {
           project: { key: spec.projectKey },
-          summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
-          description: markdownToAdf(spec.description) as any,
+          summary: (spec.summary as string).length > 255 ? (spec.summary as string).substring(0, 252) + "..." : (spec.summary as string),
+          description: markdownToAdf(spec.description as string) as any,
           issuetype: { name: spec.issueType },
           labels: spec.labels,
           ...(spec.priority ? { priority: { name: spec.priority } } : {}),
@@ -156,7 +156,7 @@ class JiraCloudClient implements JiraClient {
 
   async findBySignature(projectKey: string, signature: string, windowHours: number): Promise<FoundIssue | null> {
     const label = `piq-sig:${signature}`;
-    const jql = `project = "${projectKey}" AND labels = "${label}" AND resolution = Unresolved AND created >= -${windowHours}h ORDER BY created DESC`;
+    const jql = `project = "${projectKey}" AND labels = "${label}" AND created >= -${windowHours}h ORDER BY created DESC`;
 
     try {
       // Atlassian deprecated /rest/api/3/search in favor of /rest/api/3/search/jql
@@ -336,8 +336,8 @@ class JiraCloudClient implements JiraClient {
         issueUpdates: specs.map((spec) => ({
           fields: {
             project: { key: spec.projectKey },
-            summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
-            description: markdownToAdf(spec.description) as any,
+            summary: (spec.summary as string).length > 255 ? (spec.summary as string).substring(0, 252) + "..." : (spec.summary as string),
+            description: markdownToAdf(spec.description as string) as any,
             issuetype: { name: spec.issueType },
             labels: spec.labels,
             ...(spec.priority ? { priority: { name: spec.priority } } : {}),
@@ -358,7 +358,7 @@ class JiraCloudClient implements JiraClient {
         const result = results[i];
         if (spec && result && spec.assignee !== undefined && result.key) {
           try {
-            await this.assignIssue(result.key, spec.assignee);
+            await this.assignIssue(result.key, spec.assignee as string | null);
           } catch (assignError) {
             console.warn(`[PipelineIQ] Failed to bulk-assign issue ${result.key} to "${spec.assignee}": ${assignError}`);
           }
@@ -426,9 +426,20 @@ class JiraServerClient implements JiraClient {
   }
 
   async request<T>(method: string, url: string, data?: any, params?: any): Promise<T> {
-    // jira-client doesn't expose a clean sendRequest, but we can use its internal doRequest if needed
-    // or just implement a simple fetch wrapper. For now, we'll use a placeholder.
-    throw new Error("Generic request not yet implemented for Jira Server");
+    try {
+      // jira-client doesn't expose a clean sendRequest, but we can use its internal request method
+      // which is usually available on the instance.
+      const options = {
+        method: method,
+        uri: (this.client as any).makeUri({ pathname: url, query: params }),
+        body: data,
+        json: true,
+      };
+      
+      return await (this.client as any).doRequest(options);
+    } catch (error: any) {
+      throw JiraApiError.from(error);
+    }
   }
 
   async createIssue(spec: JiraTicketSpec): Promise<CreateIssueResult> {
@@ -436,9 +447,9 @@ class JiraServerClient implements JiraClient {
       const res = await this.client.addNewIssue({
         fields: {
           project: { key: spec.projectKey },
-          summary: spec.summary,
+          summary: spec.summary as string,
           // Jira Server uses Wiki Markup, not ADF
-          description: spec.description,
+          description: spec.description as string,
           issuetype: { name: spec.issueType },
           labels: spec.labels,
           ...(spec.priority ? { priority: { name: spec.priority } } : {}),
@@ -493,7 +504,7 @@ class JiraServerClient implements JiraClient {
 
   async findBySignature(projectKey: string, signature: string, windowHours: number): Promise<FoundIssue | null> {
     const label = `piq-sig:${signature}`;
-    const jql = `project = "${projectKey}" AND labels = "${label}" AND resolution = Unresolved AND created >= -${windowHours}h ORDER BY created DESC`;
+    const jql = `project = "${projectKey}" AND labels = "${label}" AND created >= -${windowHours}h ORDER BY created DESC`;
 
     try {
       const result = await this.client.searchJira(jql, {

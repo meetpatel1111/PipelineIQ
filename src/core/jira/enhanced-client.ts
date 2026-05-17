@@ -1,4 +1,5 @@
-import type { JiraAuth, JiraTicketSpec, ExternalLink } from "../types/index.js";
+import type { JiraAuth, JiraCustomFieldMapping } from "../types/index.js";
+import { type JiraTicketSpec, type ExternalLink } from "../types/jira-ticket.js";
 import { createJiraClient, type JiraClient } from "./client.js";
 import { JiraApiError } from "./errors.js";
 import { markdownToAdf } from "./adf.js";
@@ -9,9 +10,11 @@ import { markdownToAdf } from "./adf.js";
  */
 export class EnhancedJiraClient implements JiraClient {
   private client: JiraClient;
+  private customFieldMapping: JiraCustomFieldMapping;
 
-  constructor(auth: JiraAuth) {
+  constructor(auth: JiraAuth, customFieldMapping: JiraCustomFieldMapping = {}) {
     this.client = createJiraClient(auth);
+    this.customFieldMapping = customFieldMapping;
   }
 
   // Required JiraClient interface methods - delegate to wrapped client
@@ -119,7 +122,7 @@ export class EnhancedJiraClient implements JiraClient {
     // Assign separately to handle invalid users gracefully
     if (spec.assignee !== undefined) {
       try {
-        await this.assignIssue(res.key || res.id, spec.assignee);
+        await this.assignIssue(res.key || res.id, spec.assignee as string | null);
       } catch (assignError) {
         console.warn(`[PipelineIQ] Failed to assign enhanced issue to "${spec.assignee}": ${assignError}`);
       }
@@ -141,7 +144,7 @@ export class EnhancedJiraClient implements JiraClient {
     // Assign separately to handle invalid users gracefully
     if (spec.assignee !== undefined) {
       try {
-        await this.assignIssue(issueKey, spec.assignee);
+        await this.assignIssue(issueKey, spec.assignee as string | null);
       } catch (assignError) {
         console.warn(`[PipelineIQ] Failed to update assignee for enhanced issue ${issueKey} to "${spec.assignee}": ${assignError}`);
       }
@@ -170,7 +173,7 @@ export class EnhancedJiraClient implements JiraClient {
         },
       };
 
-      await this.request<void>("POST", `/rest/api/3/issue/${issueKey}/remotelink`, payload);
+      await this.request<void>("POST", this.getApiPath(`/issue/${issueKey}/remotelink`), payload);
     }
   }
 
@@ -194,7 +197,7 @@ export class EnhancedJiraClient implements JiraClient {
       expand: options.expand || [],
     };
 
-    return await this.request<any>("POST", "/rest/api/3/search/jql", payload);
+    return await this.request<any>("POST", this.getApiPath("/search/jql"), payload);
   }
 
   /**
@@ -269,7 +272,7 @@ export class EnhancedJiraClient implements JiraClient {
       comment: comment ? markdownToAdf(comment) : undefined,
     };
 
-    await this.request<void>("POST", `/rest/api/3/issue/${issueKey}/worklog`, payload);
+    await this.request<void>("POST", this.getApiPath(`/issue/${issueKey}/worklog`), payload);
   }
 
   /**
@@ -277,7 +280,7 @@ export class EnhancedJiraClient implements JiraClient {
    */
   async transitionIssue(issueKey: string, transitionName: string, comment?: string): Promise<void> {
     // First get available transitions
-    const transitions = await this.request<any>("GET", `/rest/api/3/issue/${issueKey}/transitions`);
+    const transitions = await this.request<any>("GET", this.getApiPath(`/issue/${issueKey}/transitions`));
     
     const transition = transitions.transitions.find((t: any) => 
       t.name.toLowerCase() === transitionName.toLowerCase()
@@ -297,7 +300,7 @@ export class EnhancedJiraClient implements JiraClient {
       };
     }
 
-    await this.request<void>("POST", `/rest/api/3/issue/${issueKey}/transitions`, payload);
+    await this.request<void>("POST", this.getApiPath(`/issue/${issueKey}/transitions`), payload);
   }
 
   /**
@@ -305,7 +308,7 @@ export class EnhancedJiraClient implements JiraClient {
    */
   async addWatchers(issueKey: string, watchers: string[]): Promise<void> {
     for (const watcher of watchers) {
-      await this.request<void>("POST", `/rest/api/3/issue/${issueKey}/watchers`, watcher);
+      await this.request<void>("POST", this.getApiPath(`/issue/${issueKey}/watchers`), watcher);
     }
   }
 
@@ -355,25 +358,33 @@ export class EnhancedJiraClient implements JiraClient {
   private buildEnhancedFields(spec: JiraTicketSpec): any {
     const baseFields = {
       project: { key: spec.projectKey },
-      summary: spec.summary.length > 255 ? spec.summary.substring(0, 252) + "..." : spec.summary,
-      description: this.formatDescription(spec.description),
+      summary: (spec.summary as string).length > 255 ? (spec.summary as string).substring(0, 252) + "..." : (spec.summary as string),
+      description: this.formatDescription(spec.description as string),
       issuetype: { name: spec.issueType },
       labels: spec.labels,
       ...(spec.priority ? { priority: { name: spec.priority } } : {}),
-      ...(spec.environment ? { environment: this.formatDescription(spec.environment) } : {}),
+      ...(spec.environment ? { environment: this.formatDescription(spec.environment as string) } : {}),
       ...(spec.components.length > 0 
         ? { components: spec.components.map((name) => ({ name })) }
         : {}),
       ...spec.customFields,
     };
 
+    // Use configured mapping or defaults
+    const mapping = {
+      externalLinks: this.customFieldMapping.externalLinks || "customfield_10010",
+      provenance: this.customFieldMapping.provenance || "customfield_10011",
+      dedupSignature: this.customFieldMapping.dedupSignature || "customfield_10012",
+      metrics: this.customFieldMapping.metrics || "customfield_10013",
+    };
+
     // Add PipelineIQ-specific custom fields
     const enhancedFields = {
       ...baseFields,
-      // External links as custom field
-      ...(spec.externalLinks && spec.externalLinks.length > 0
+      // External links
+      ...(spec.externalLinks && Array.isArray(spec.externalLinks) && spec.externalLinks.length > 0
         ? {
-            "customfield_10010": {
+            [mapping.externalLinks]: {
               type: "com.atlassian.jira.plugin.system.external-links:external-links",
               value: spec.externalLinks,
             },
@@ -382,7 +393,7 @@ export class EnhancedJiraClient implements JiraClient {
       // Provenance tracking
       ...(spec.provenance && Object.keys(spec.provenance).length > 0
         ? {
-            "customfield_10011": {
+            [mapping.provenance]: {
               type: "json",
               value: JSON.stringify(spec.provenance),
             },
@@ -391,7 +402,16 @@ export class EnhancedJiraClient implements JiraClient {
       // Dedup signature
       ...(spec.dedupSignature
         ? {
-            "customfield_10012": spec.dedupSignature,
+            [mapping.dedupSignature]: spec.dedupSignature,
+          }
+        : {}),
+      // Operational Metrics
+      ...(spec.metrics
+        ? {
+            [mapping.metrics]: {
+              type: "json",
+              value: JSON.stringify(spec.metrics),
+            },
           }
         : {}),
     };

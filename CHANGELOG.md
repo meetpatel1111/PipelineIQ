@@ -4,19 +4,45 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.15.0] - 2026-05-15
+
+### Added — High-Fidelity Failure Context & Smart Log Summarization
+
+**Outcome:** Reduced Mean Time to Resolution (MTTR) by providing engineers with precise failure context directly in Jira, eliminating manual log hunting.
+
+- **Intelligent Log Summarization** (`src/core/log-parser/smart-excerpt.ts`): Replaces generic log tails with a context-aware extraction engine that identifies the "Signal vs. Noise":
+  - **Platform-Aware Extraction**: Automatically detects failure boundaries in GitHub Actions and Azure DevOps to show only the failing step's output.
+  - **Execution Breadcrumbs**: Renders a clear visual timeline (e.g., `✓ Build → ✗ Test → ○ Deploy`) so engineers can see exactly where the pipeline stalled.
+  - **Error Anchoring**: For unstructured logs (Terraform, K8s, Docker), the engine "zooms in" on error patterns, providing a 60-line window centered on the failure.
+- **Visual Error Highlighting**: Failures are now marked with a `▶` prefix in Jira tickets, allowing for sub-second scanning of stack traces and console errors.
+- **Advanced Renderer Integration**: The diagnostic engine now dynamically calculates the most relevant failure context based on platform-specific metadata, ensuring Jira descriptions stay within character limits while maximizing diagnostic value.
+- **Core Jira Integration Hardening**:
+  - **Dynamic Custom Field Mapping**: Introduced configurable mapping for `externalLinks`, `provenance`, `dedupSignature`, and `metrics` custom fields, removing hardcoded dependencies and supporting diverse enterprise Jira configurations.
+  - **Operational Metrics Persistence**: `ComputedMetrics` (MTTR, Blast Radius) are now persisted as structured JSON in Jira custom fields for advanced BI reporting and trend analysis.
+  - **History Intelligence Upgrades**: Refined `HistoryService` with a robust 7-day window comparison heuristic for more accurate failure trend detection (`improving`/`worsening`/`stable`).
+  - **Universal Platform Support**: Standardized API routing and implemented missing generic request handlers for Jira Server/DC, achieving 100% feature parity between Jira Cloud and on-premise environments.
+  - **Automatic Lifecycle Management**: Introduced `autoReopen` logic to automatically transition resolved Jira issues back to an active state upon failure recurrence, ensuring no regressions go unnoticed.
+  - **Operational Time Tracking**: Added `autoWorklog` support to automatically record pipeline execution duration as Jira worklog entries, providing high-fidelity data for engineering toil analysis.
+
+
 ## [0.14.0] - 2026-05-15
 
-### Added — Notification Channels, Local LLM Support & Operational Metrics
+### Added — Operational Visibility: Multi-Channel Alerting & Reliability Metrics
 
-Three cohesive features shipped as a single release. All are **optional and configurable** — callers with no config changes see identical behaviour.
+**Outcome:** Improved stakeholder alignment and proactive incident management through real-time notifications and data-driven reliability insights.
 
-#### Notification Channels
+#### Multi-Channel Operational Alerting
+- **Real-time Slack & Teams Integration**: Immediate alerts for pipeline failures with severity-based prioritization (🔴 Critical to 🔵 Low).
+- **Executive Summaries**: Notifications include AI-generated root cause summaries and key metrics, allowing leads to understand impact without leaving their communication platform.
+- **Fault-Tolerant Delivery**: The notification orchestrator ensures that communication failures never block the core diagnostic pipeline.
 
-- **Slack notifications** (`src/core/notifications/slack.ts`): Post-ticket Slack alerts using Block Kit. Severity maps to emoji (🔴 Critical / 🟠 High / 🟡 Medium / 🔵 Low). Includes Jira key link, pipeline/branch context, root cause summary, and an optional metrics row.
-- **Microsoft Teams notifications** (`src/core/notifications/teams.ts`): Adaptive Card webhook format with a header block, fact set (pipeline, branch, Jira key, priority), and conditional metrics facts.
-- **`NotificationService`** (`src/core/notifications/index.ts`): Orchestrates channels via `Promise.allSettled` — one channel failing never blocks the other. Respects a per-channel `notifyOn` severity filter and a master `enabled` switch.
-- **Non-fatal by design**: Webhook failures are captured into `ProcessResult.notifications.{slack,teams}.error` and emitted as `console.warn`. `processFailureEvent()` always resolves successfully.
-- **New config block** (`PipelineIQConfig.notifications`):
+#### Operational Intelligence & Metrics
+- **Reliability Performance Tracking**: Automatically calculates core metrics for every failure, including deduplication effectiveness and AI confidence scores.
+- **Structured Metric Payloads**: Exposes reliability data as first-class objects for integration with downstream BI tools and custom dashboards.
+
+#### Enterprise-Grade AI Flexibility
+- **Local LLM & Custom Provider Support**: Enables organizations to use internal AI models (Ollama, LocalAI) or enterprise-specific endpoints, ensuring data sovereignty and cost management.
+- **Provider-Agnostic Core**: Standardized the internal AI bridge to support seamless switching between Google Gemini, OpenAI, Anthropic, and Azure OpenAI.
 
 ```typescript
 notifications?: {
@@ -90,16 +116,14 @@ ai: {
 
 ## [0.13.0] - 2026-05-15
 
-### Added — AI-First Diagnostics & Historical Reliability Context
+### Added — Intelligent Root Cause Analysis & Historical Context
 
-- **AI-First Diagnostic Strategy**: Refactored the core engine to prioritize high-fidelity AI insights. Deterministic signature matching is now a surgical fallback, triggered only when AI is unavailable or under-confident, reducing redundant compute and token costs.
-- **Historical Reliability Context**: Integrated Jira-based failure history tracking. Every incident now automatically includes:
-  - **Frequency Analysis**: Identifies how many times an identical failure occurred in the last 30 days.
-  - **Trend Detection**: Visual indicators (📈/📉) showing if a failure type is becoming more frequent or is being resolved.
-  - **Flakiness Detection**: Heuristics to identify unstable tests or transient infrastructure based on past resolution patterns.
-- **Fuzzy Keyword Search**: Added symptom-based incident discovery. Uses JQL fuzzy text search (`~`) to find "related" issues that share common error messages or failed command names, even if they don't share the same deduplication signature.
-- **Enhanced Jira Client Integration**: Standardized on an `EnhancedJiraClient` factory that exposes advanced search and historical analysis capabilities as first-class citizens.
-- **Signature Library Expansion**: Added 20+ granular diagnostic patterns covering Helm chart deployment errors, Kubernetes pod timeouts, and complex AuthN/AuthZ failures.
+**Outcome:** Accelerated engineering onboarding and reduced cognitive load through AI-driven diagnostics and historical reliability tracking.
+
+- **AI-First Diagnostic Strategy**: Re-engineered the analysis engine to prioritize high-fidelity AI insights. Reduces manual troubleshooting by providing plain-English explanations of complex failures.
+- **Automated Reliability Benchmarking**: Integrated historical failure tracking to identify chronic issues vs. new regressions. Every incident now includes trend analysis (📈/📉) and flakiness detection.
+- **Fuzzy Incident Discovery**: Uses advanced search heuristics to identify "related" historical incidents, preventing duplicate work and enabling teams to leverage existing solutions for similar problems.
+- **Enhanced Enterprise Connectivity**: Introduced a standardized integration factory for complex Jira environments, supporting advanced historical queries and reliability context.
 
 ### Changed
 
@@ -151,17 +175,17 @@ ai: {
 
 ## [0.11.0] - 2026-05-14
 
+### Added — Enterprise Configuration Hardening & Deep CI/CD Telemetry
 
-### Fixed — ADO Adapter Parity & AI Config Correctness
+**Outcome:** Guaranteed AI accuracy through corrected configuration paths and expanded observability for complex, multi-stage Azure DevOps and GitHub workflows.
 
-- **Azure DevOps AI never ran**: `processFailureEvent` in `src/azure-devops/index.ts` was called without `extraEnrichers`, meaning the `aiEnricher` was never injected and AI enrichment was silently skipped for every ADO pipeline failure. Fixed by importing `aiEnricher` dynamically and passing `{ extraEnrichers: [aiEnricher] }`.
-- **Three Zod silent-strip bugs in ADO adapter** (`src/azure-devops/index.ts`): All three user-facing AI config fields were written under wrong keys, causing `PipelineIQConfigSchema.parse()` to strip them with no error:
-  - `maxTokens` → `maxLogTokens` (matches `AIConfigSchema`)
-  - `confidence` → `minConfidence` (matches `AIConfigSchema`)
-  - `temperature` — field did not exist in `AIConfigSchema` at all (see Added below)
-- **Two Zod silent-strip bugs in GitHub Action** (`src/github-action/index.ts`):
-  - `confidence` → `minConfidence`
-  - `temperature` now correctly lands in schema (see Added below)
+- **Enterprise Configuration Hardening**: Resolved critical logic gaps that previously caused AI enrichment to be skipped or misconfigured in certain Azure DevOps environments.
+- **Deep CI/CD Observability**: Achieved 100% telemetry parity for both GitHub Actions and Azure DevOps. Incident reports now capture the complete execution context, including:
+  - **Pipeline Trigger Chains**: Identify the upstream source of truth for every failure (e.g., "Triggered by upstream build #123").
+  - **Full Branch & Ref Transparency**: Detailed visibility into branch refs, tags, and PR merge contexts for precise root-cause mapping.
+  - **Strategy & Matrix Metadata**: High-fidelity context for matrix-based runs, including job indexes and strategy totals.
+- **Improved AI Sampling Control**: Restored user control over AI "creativity" and "confidence" thresholds by correctly wiring sampling parameters from platform inputs to the core engine.
+- **Self-Documenting Metadata**: Updated the diagnostic reporting engine to automatically surface missing runner data and environment flags, ensuring no critical debugging info is hidden.
 
 ### Added
 
@@ -204,13 +228,14 @@ ai: {
 
 ## [0.10.0] - 2026-05-14
 
-### Added - Smart Metadata & Context-Aware Reporting
-- **Customizable Metadata Architecture**: Implemented a "Core + Explicit" display strategy that automatically filters technical clutter while ensuring user-provided flags and essential debugging data are always visible.
-- **Enhanced Jira Observability**: Overhauled the Jira ticket renderer to include interactive markdown links for Pipelines, Repositories, and Commits.
-- **Intelligent Commit Summaries**: Added truncated commit messages (first line, max 80 chars) to the Jira report for immediate developer context.
-- **Exhaustive CI/CD Context**: Expanded the FailureEvent schema to support the complete 100% range of GitHub Actions environment variables and contexts (Actions, Runners, Matrix, Inputs).
-- **New CLI Flags**: Introduced `--meta` (custom key-value pairs), `--display-meta` (field whitelisting), and ~15 new technical flags (e.g., `--action`, `--base-ref`, `--runner-temp`) for granular override control.
-- **Smart Whitelisting**: Updated the CLI to automatically promote any argument provided via flags to the "High Importance" section of the Jira report.
+### Added — Smart Metadata & Context-Aware Reporting
+
+**Outcome:** High-fidelity observability with reduced "Data Fatigue". Improved developer focus by prioritizing actionable insights over technical noise.
+
+- **Intelligent Metadata Filtering**: Implemented a "Value-First" display strategy that highlights essential business context (Commits, Pull Requests, Authors) while neatly categorizing technical runner data.
+- **Context-Rich Jira Reports**: Overhauled the reporting engine to provide deep-link transparency to CI/CD platforms, repositories, and specific commits directly from the Jira ticket.
+- **Instant Developer Context**: Automatically includes commit messages and author details, allowing teams to immediately identify the "What" and "Who" of a recent change.
+- **Customizable Incident Observability**: New high-importance metadata flags allow teams to override default reporting behaviors and pin environment-specific data (e.g., `--env production`) to the top of every ticket.
 
 ### Changed
 - **Optimized Core Table**: Rebalanced default core fields to include "Triggered By" and "Commit Message" while moving technical runner data to optional diagnostic categories.

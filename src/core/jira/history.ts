@@ -1,6 +1,5 @@
 import type { EnhancedJiraClient } from "./enhanced-client.js";
-import type { FailureEvent, FailureCategory } from "../types/index.js";
-import type { ComputedMetrics } from "../types/index.js";
+import type { FailureEvent, FailureCategory, ComputedMetrics } from "../types/index.js";
 
 export type FailureHistory = {
   similarCount: number;
@@ -74,11 +73,12 @@ export class HistoryService {
   }
 
   async getMetrics(signature: string, windowDays: number = 30): Promise<ComputedMetrics> {
+    // Only resolved tickets provide MTTR
     const jql = `project = "${this.projectKey}" AND labels = "piq-sig:${signature}" AND resolution != Unresolved AND created >= -${windowDays}d ORDER BY created DESC`;
 
     try {
       const result = await this.jira.advancedSearch(jql, {
-        maxResults: 20,
+        maxResults: 50, // Increase sample for better metrics
         fields: ["created", "resolutiondate", "labels"],
       });
 
@@ -111,7 +111,7 @@ export class HistoryService {
       return {
         ...(mttrHours !== undefined && { mttrHours }),
         ...(repoSet.size > 1 && { blastRadius: repoSet.size }),
-        sampleSize: result.issues.length,
+        sampleSize: result.total,
       };
     } catch (error) {
       console.warn(`[PipelineIQ] Metrics computation failed: ${error}`);
@@ -120,23 +120,25 @@ export class HistoryService {
   }
 
   private calculateTrend(issues: any[]): "improving" | "worsening" | "stable" {
-    if (issues.length < 3) return "stable";
+    if (issues.length < 5) return "stable";
     
-    // Group by day and see if frequency is increasing
-    const dailyCount: Record<string, number> = {};
-    for (const issue of issues) {
-      const day = new Date(issue.fields.created).toISOString().split("T")[0]!;
-      dailyCount[day] = (dailyCount[day] || 0) + 1;
-    }
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
     
-    const counts = Object.values(dailyCount);
-    if (counts.length < 2) return "stable";
+    // Compare frequency: last 7 days vs 7-14 days ago
+    const recentWeek = issues.filter(i => {
+      const created = new Date(i.fields.created).getTime();
+      return created > now - weekMs;
+    }).length;
     
-    const recent = counts[0]!;
-    const previous = counts[1]!;
+    const priorWeek = issues.filter(i => {
+      const created = new Date(i.fields.created).getTime();
+      return created <= now - weekMs && created > now - 2 * weekMs;
+    }).length;
     
-    if (recent > previous * 1.5) return "worsening";
-    if (recent < previous * 0.5) return "improving";
+    // Heuristic for trend shift
+    if (recentWeek > priorWeek + 1) return "worsening";
+    if (recentWeek < priorWeek - 1 && priorWeek > 0) return "improving";
     return "stable";
   }
 }
