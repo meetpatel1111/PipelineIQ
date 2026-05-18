@@ -5,6 +5,7 @@ import {
   type PipelineIQConfig,
   JiraTicketSpecSchema,
   type ComputedMetrics,
+  type SelfHealingResult,
 } from "./types/index.js";
 import { createEnhancedJiraClient, EnhancedJiraClient } from "./jira/index.js";
 import { JiraClient } from "./jira/client.js";
@@ -15,11 +16,13 @@ import type { Enricher, EnrichmentContext } from "./enrichers/types.js";
 import { renderDescription } from "./renderer.js";
 import { NotificationService } from "./notifications/index.js";
 import type { NotificationResult, NotificationPayload } from "./notifications/index.js";
+import { SelfHealingEngine } from "./self-healing/index.js";
 
 type ProcessResultBase = {
   spec: JiraTicketSpec;
   metrics?: ComputedMetrics;
   notifications?: NotificationResult;
+  selfHealing?: SelfHealingResult;
 };
 
 export type ProcessResult =
@@ -209,6 +212,74 @@ export async function processFailureEvent(
     }
   }
 
+  // ── Self-Healing: attempt autonomous fix ────────────────────────────────
+  let selfHealingResult: SelfHealingResult | undefined;
+  if (config.selfHealing?.enabled) {
+    logger.info({ issueKey: created.key }, "self-healing enabled — attempting fix");
+    try {
+      const healEngine = new SelfHealingEngine(
+        config.selfHealing,
+        {
+          provider: config.ai.provider as any,
+          apiKey: config.ai.apiKey,
+          model: config.ai.model,
+          endpoint: config.ai.endpoint,
+          maxTokens: 8192,
+          temperature: 0.2,
+          timeout: 60000,
+          retryAttempts: 2,
+          minConfidence: config.selfHealing.minConfidence,
+        },
+      );
+
+      const rootCause = (ctx.fields.rca as string) ?? "";
+      const remediation = Array.isArray(ctx.fields.remediationSteps)
+        ? (ctx.fields.remediationSteps as string[])
+        : [];
+      const category = (ctx.fields.category as string) ?? "Unknown";
+
+      selfHealingResult = await healEngine.attemptFix(
+        event,
+        rootCause,
+        remediation,
+        category,
+        created.key,
+      );
+
+      if (selfHealingResult.success && selfHealingResult.prUrl) {
+        logger.info(
+          { issueKey: created.key, prUrl: selfHealingResult.prUrl },
+          "self-healing PR created",
+        );
+        // Add a comment on the Jira ticket linking to the PR
+        await jira.addComment(
+          created.key,
+          `🤖 **Self-Healing Fix Available**\n\n` +
+            `PipelineIQ has generated an automated fix and opened a Pull Request for review:\n\n` +
+            `🔗 [${selfHealingResult.prUrl}](${selfHealingResult.prUrl})\n\n` +
+            `| Field | Value |\n| --- | --- |\n` +
+            `| Confidence | ${Math.round((selfHealingResult.fix?.confidence ?? 0) * 100)}% |\n` +
+            `| Risk | ${selfHealingResult.fix?.riskLevel ?? "unknown"} |\n` +
+            `| Files Changed | ${selfHealingResult.fix?.changes.length ?? 0} |\n\n` +
+            `> ⚠️ This fix requires human review and approval before merging.`,
+        );
+      } else if (selfHealingResult.attempted) {
+        logger.info(
+          { issueKey: created.key, reason: selfHealingResult.reason },
+          "self-healing attempted but did not produce a PR",
+        );
+      }
+    } catch (error) {
+      logger.warn({ err: error }, "self-healing stage failed");
+      selfHealingResult = {
+        attempted: true,
+        success: false,
+        reason: `Self-healing engine error: ${error}`,
+        dryRun: config.selfHealing.dryRun ?? false,
+      };
+    }
+  }
+
   const notifications = await maybeNotify(created.key, true);
   return {
     action: "created",
@@ -216,6 +287,7 @@ export async function processFailureEvent(
     spec,
     ...(metrics !== undefined && { metrics }),
     ...(notifications !== undefined && { notifications }),
+    ...(selfHealingResult !== undefined && { selfHealing: selfHealingResult }),
   };
 }
 

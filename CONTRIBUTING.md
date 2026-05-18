@@ -41,7 +41,8 @@ pipelineiq/
 │   │   ├── ai/               # AI enrichment with fallbacks
 │   │   ├── parser/           # Multi-format log parsing
 │   │   ├── enrichers/        # Deterministic and computed enrichers
-│   │   └── signatures/      # Failure pattern library
+│   │   ├── self-healing/     # Autonomous patch generation and PR orchestration
+│   │   └── signatures/       # Failure pattern library
 │   ├── cli/                  # Command-line interface
 │   ├── github-action/        # GitHub Actions integration
 │   ├── azure-devops/         # Azure DevOps integration
@@ -101,6 +102,13 @@ Examples:
 - **Fallbacks**: Improve deterministic fallback logic
 - **Prompts**: Optimize AI prompts for better results
 - **Local Models**: Add support for local LLM runners
+
+### Self-Healing Engine
+
+- **Git Providers**: Add support for GitLab, Bitbucket, etc.
+- **Safety**: Enhance guardrails and dry-run reporting
+- **Context Engine**: Improve workspace file context gathering
+- **Patch Generation**: Optimize AI prompt for snippet patching
 
 ### Log Parser
 

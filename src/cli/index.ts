@@ -148,6 +148,15 @@ program
   .option("--teams-notify-on <severities>", "Comma-separated severities that trigger Teams (e.g. Critical)", (val) => val.split(","))
   .option("--no-teams-metrics", "Omit MTTR/blast-radius facts from Teams messages")
   .option("--no-notifications", "Disable all notifications for this run (overrides config)")
+  .option("--self-heal", "Enable self-healing (auto-fix + PR creation)")
+  .option("--self-heal-dry-run", "Generate fix but don't create PR")
+  .option("--self-heal-confidence <threshold>", "Minimum AI confidence for self-healing (0-1)")
+  .option("--self-heal-max-files <count>", "Maximum files a fix can change")
+  .option("--self-heal-max-lines <count>", "Maximum lines a fix can change")
+  .option("--self-heal-draft", "Create draft PR (default: true)")
+  .option("--self-heal-reviewers <users>", "Comma-separated PR reviewers", (val) => val.split(","))
+  .option("--self-heal-labels <labels>", "Comma-separated PR labels", (val) => val.split(","))
+  .option("--self-heal-categories <cats>", "Comma-separated allowed failure categories", (val) => val.split(","))
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -234,6 +243,20 @@ async function handleAnalyze(options: any) {
         if (options.teamsNotifyOn) configData.notifications.teams.notifyOn = options.teamsNotifyOn;
         if (options.teamsMetrics === false) configData.notifications.teams.includeMetrics = false;
       }
+    }
+
+    // Self-healing flag overrides
+    if (options.selfHeal) {
+      configData.selfHealing ??= { enabled: true };
+      configData.selfHealing.enabled = true;
+      if (options.selfHealDryRun) configData.selfHealing.dryRun = true;
+      if (options.selfHealConfidence) configData.selfHealing.minConfidence = parseFloat(options.selfHealConfidence);
+      if (options.selfHealMaxFiles) configData.selfHealing.maxFilesChanged = parseInt(options.selfHealMaxFiles);
+      if (options.selfHealMaxLines) configData.selfHealing.maxLinesChanged = parseInt(options.selfHealMaxLines);
+      if (options.selfHealDraft !== undefined) configData.selfHealing.draftPr = options.selfHealDraft;
+      if (options.selfHealReviewers) configData.selfHealing.reviewers = options.selfHealReviewers;
+      if (options.selfHealLabels) configData.selfHealing.prLabels = options.selfHealLabels;
+      if (options.selfHealCategories) configData.selfHealing.allowedCategories = options.selfHealCategories;
     }
 
     // Now validate the fully merged configuration
@@ -357,6 +380,26 @@ async function handleAnalyze(options: any) {
         console.log(chalk.yellow(`⚠ ${result.action}: ${result.reason}`));
       } else {
         console.log(chalk.green(`✓ ${result.action}: ${result.issueKey}`));
+      }
+
+      // Display self-healing results
+      if (result.selfHealing) {
+        const sh = result.selfHealing;
+        if (sh.success && sh.prUrl) {
+          console.log(chalk.magenta(`\n🤖 Self-Healing PR Created:`));
+          console.log(chalk.magenta(`   PR: ${sh.prUrl}`));
+          console.log(chalk.magenta(`   Branch: ${sh.branchName}`));
+          console.log(chalk.magenta(`   Confidence: ${Math.round((sh.fix?.confidence ?? 0) * 100)}%`));
+          console.log(chalk.magenta(`   Risk: ${sh.fix?.riskLevel ?? "unknown"}`));
+          console.log(chalk.dim(`   ⚠ Requires human review before merging`));
+        } else if (sh.dryRun && sh.fix) {
+          console.log(chalk.cyan(`\n🧪 Self-Healing Dry Run — Fix Generated:`));
+          console.log(chalk.cyan(`   Title: ${sh.fix.title}`));
+          console.log(chalk.cyan(`   Files: ${sh.fix.changes.length}`));
+          console.log(chalk.cyan(`   Confidence: ${Math.round(sh.fix.confidence * 100)}%`));
+        } else if (sh.attempted && !sh.success) {
+          console.log(chalk.yellow(`\n⚠ Self-Healing: ${sh.reason}`));
+        }
       }
     }
   } catch (error) {

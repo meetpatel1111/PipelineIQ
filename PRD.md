@@ -27,6 +27,7 @@ and creates intelligent Jira issues enriched with:
 * remediation guidance
 * failure categorization
 * deduplication
+* autonomous self-healing (auto-fix PRs)
 
 Unlike existing Jira integrations that focus on metadata synchronization or simple automation, PipelineIQ focuses on:
 
@@ -248,7 +249,7 @@ pipelineiq/
 # GitHub Actions
 
 ```yaml
-- uses: meetpatel1111/PipelineIQ@v0.14.0
+- uses: meetpatel1111/PipelineIQ@v0.16.0
   if: failure()
   with:
     jira-url: ${{ secrets.JIRA_URL }}
@@ -417,6 +418,18 @@ pipelineiq/
 | 73 | Release reliability insights   |
 | 74 | AI-generated remediation plans |
 | 75 | Flaky test intelligence        |
+
+---
+
+# K. Autonomous Self-Healing Features
+
+| #  | Feature                        |
+| -- | ------------------------------ |
+| 76 | AI patch generation            |
+| 77 | Atomic git patching            |
+| 78 | Local workspace context engine |
+| 79 | Automated draft PR creation    |
+| 80 | Safety guardrails (dry run, limits) |
 
 ---
 

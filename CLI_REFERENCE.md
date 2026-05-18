@@ -260,6 +260,15 @@ All override the corresponding `pipelineiq.json` value for the current run.
 | `--ai-api-key <key>` | — | API key for the selected provider (not required for `local`) |
 | `--ai-endpoint <url>` | — | Override the API base URL. **Required** for `local` (e.g., `http://localhost:11434/v1`). Also accepts `azure-openai` deployment URLs |
 | `--ai-max-tokens <tokens>` | `4000` | Maximum tokens for the AI response |
+| `--self-heal` | `false` | Enable Autonomous Self-Healing (creates Git PRs for fixes) |
+| `--self-heal-dry-run` | `false` | Generate the AI fix but do not create a PR (useful for testing) |
+| `--self-heal-min-confidence <n>` | `0.8` | Minimum AI confidence required to create a PR |
+| `--self-heal-branch-prefix <prefix>` | `pipelineiq/fix` | Branch name prefix for the fix PR |
+| `--self-heal-max-files <n>` | `3` | Maximum number of files the AI is allowed to modify |
+| `--self-heal-max-lines <n>` | `50` | Maximum number of total lines the AI is allowed to modify |
+| `--self-heal-blocked-paths <paths>` | (various) | Comma-separated glob patterns of files the AI is never allowed to touch (e.g. `*.env`, `Dockerfile`) |
+| `--self-heal-reviewers <users>` | — | Comma-separated list of GitHub/ADO usernames to add as PR reviewers |
+| `--self-heal-labels <labels>` | `pipelineiq,self-healing,auto-fix` | Comma-separated list of labels to add to the PR |
 
 ---
 

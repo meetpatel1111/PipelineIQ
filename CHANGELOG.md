@@ -4,6 +4,63 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.16.0] - 2026-05-18
+
+### Added — Autonomous Self-Healing Pipeline
+
+**Outcome:** PipelineIQ can now autonomously generate code fixes for CI/CD failures and open human-approved Pull Requests, reducing Mean Time to Resolution from hours to minutes.
+
+#### Self-Healing Engine (`src/core/self-healing/`)
+- **AI-Powered Fix Generation** (`fix-generator.ts`): Specialized AI engine that analyzes failure context — root cause, logs, stack traces, and remediation steps — to produce minimal, surgical code patches. Generates structured `CodeFix` objects with per-file changes, confidence scores, and risk assessments.
+- **Safety Guardrails**: Multi-layer validation prevents dangerous or overly broad fixes:
+  - **Confidence threshold** (`minConfidence: 0.8`): Rejects low-confidence patches.
+  - **Scope limits** (`maxFilesChanged: 3`, `maxLinesChanged: 50`): Prevents sweeping changes.
+  - **Blocked paths**: Auto-rejects changes to sensitive files (`.env`, `*.key`, `Dockerfile`, CI configs).
+  - **Risk assessment**: High-risk fixes are rejected with explanatory messages.
+- **Human-in-the-Loop**: All fixes are submitted as **Draft Pull Requests** requiring explicit human review. No code is ever merged automatically.
+
+#### Git Provider Abstraction (`src/core/self-healing/types.ts`)
+- **Platform-Agnostic Interface** (`GitProvider`): Unified contract for branch creation, atomic commits, and PR creation across Git platforms.
+- **GitHub Provider** (`github-provider.ts`): Implements Octokit + Git Trees API for atomic, single-commit PRs with reviewer assignment and label support.
+- **Azure DevOps Provider** (`azure-provider.ts`): Implements ADO Git API for pushes and PRs with auto-complete and reviewer policies.
+
+#### Orchestration (`engine.ts`)
+- **5-Stage Pipeline**: Category eligibility → AI availability → Fix generation → Guardrail validation → PR creation.
+- **Dry Run Mode** (`selfHealing.dryRun`): Generate fixes without pushing to Git — ideal for testing and auditing.
+- **Jira Cross-Linking**: On successful PR creation, adds a rich comment to the Jira ticket with PR link, confidence score, risk level, and file change count.
+
+#### Integration Points
+- **Pipeline Integration** (`src/core/pipeline.ts`): Self-healing runs as a post-diagnostic step after Jira ticket creation.
+- **CLI** (`--self-heal`, `--self-heal-dry-run`, `--self-heal-confidence`, etc.): Full command-line control.
+- **GitHub Action** (`action.yml`): New inputs (`self-healing`, `self-healing-confidence`, `self-healing-reviewers`, etc.) and outputs (`self-healing-pr-url`, `self-healing-status`).
+
+#### Type System
+- **`SelfHealingConfig`** (`src/core/types/self-healing.ts`): Zod-validated configuration schema with sensible defaults.
+- **`CodeFix`**, **`FileChange`**, **`SelfHealingResult`**: Full type-safety for the fix pipeline.
+- **`ProcessResult.selfHealing`**: Pipeline consumers receive structured self-healing results.
+
+### New Files
+
+| Path | Purpose |
+|---|---|
+| `src/core/self-healing/types.ts` | `GitProvider`, `CodeFix`, `FileChange`, `PROptions`, `PRCreationResult` interfaces |
+| `src/core/self-healing/fix-generator.ts` | AI-powered code fix generation engine |
+| `src/core/self-healing/github-provider.ts` | GitHub Git Trees API provider |
+| `src/core/self-healing/azure-provider.ts` | Azure DevOps Git API provider |
+| `src/core/self-healing/engine.ts` | Self-healing orchestrator with safety guardrails |
+| `src/core/self-healing/index.ts` | Barrel exports |
+| `src/core/types/self-healing.ts` | `SelfHealingConfigSchema` and result types |
+
+### Changed
+
+- **`ProcessResult`** (`pipeline.ts`): Extended with optional `selfHealing?: SelfHealingResult` field.
+- **`PipelineIQConfig`** (`config.ts`): Added optional `selfHealing?: SelfHealingConfig` block.
+- **CLI** (`cli/index.ts`): 9 new `--self-heal-*` flags with rich terminal output.
+- **GitHub Action** (`action.yml`): 9 new inputs and 2 new outputs for self-healing control.
+- **GitHub Action entrypoint** (`github-action/index.ts`): Reads self-healing inputs and sets outputs.
+
+---
+
 ## [0.15.0] - 2026-05-15
 
 ### Added — High-Fidelity Failure Context & Smart Log Summarization

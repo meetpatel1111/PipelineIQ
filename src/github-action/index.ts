@@ -80,6 +80,23 @@ async function run(): Promise<void> {
     const issueKey = result.action === "skipped" ? "" : result.issueKey;
     core.setOutput("jira-issue-key", issueKey);
     core.setOutput("action-taken", result.action);
+
+    // Self-healing outputs
+    if (result.selfHealing) {
+      core.setOutput("self-healing-pr-url", result.selfHealing.prUrl ?? "");
+      const status = result.selfHealing.dryRun
+        ? "dry-run"
+        : result.selfHealing.success
+          ? "success"
+          : result.selfHealing.attempted
+            ? "failed"
+            : "skipped";
+      core.setOutput("self-healing-status", status);
+      if (result.selfHealing.prUrl) {
+        core.info(`PipelineIQ Self-Healing: PR created at ${result.selfHealing.prUrl}`);
+      }
+    }
+
     core.info(`PipelineIQ: ${result.action} ${issueKey || "(no issue)"}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -123,6 +140,28 @@ function readConfig(): PipelineIQConfig {
       enabled: true,
       windowHours: Number.parseInt(core.getInput("dedup-window-hours") || "24", 10),
     },
+    // Self-healing configuration
+    ...(core.getInput("self-healing") === "true" ? {
+      selfHealing: {
+        enabled: true,
+        dryRun: core.getInput("self-healing-dry-run") === "true",
+        minConfidence: Number.parseFloat(core.getInput("self-healing-confidence") || "0.8"),
+        maxFilesChanged: Number.parseInt(core.getInput("self-healing-max-files") || "3", 10),
+        maxLinesChanged: Number.parseInt(core.getInput("self-healing-max-lines") || "50", 10),
+        draftPr: core.getInput("self-healing-draft") !== "false",
+        githubToken: core.getInput("github-token"),
+        platform: "github" as const,
+        ...(core.getInput("self-healing-reviewers") ? {
+          reviewers: core.getInput("self-healing-reviewers").split(",").map(s => s.trim()),
+        } : {}),
+        ...(core.getInput("self-healing-labels") ? {
+          prLabels: core.getInput("self-healing-labels").split(",").map(s => s.trim()),
+        } : {}),
+        ...(core.getInput("self-healing-categories") ? {
+          allowedCategories: core.getInput("self-healing-categories").split(",").map(s => s.trim()),
+        } : {}),
+      },
+    } : {}),
   };
 
   return PipelineIQConfigSchema.parse(raw);

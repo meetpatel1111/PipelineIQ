@@ -132,15 +132,25 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 - **Deduplication**: Prevents duplicate tickets with smart signature matching.
 - **Rich Context**: 80-120 operational fields vs typical 5-10.
 - **Multi-Platform**: Native support for GitHub Actions and Azure DevOps.
+- **Autonomous Self-Healing**: Automatically generates and submits Draft Pull Requests to fix pipeline failures, complete with AI-generated code patches and strict safety guardrails.
 
 ### AI Features
 
 - **Optional AI**: Works fully without AI - deterministic fallbacks always available.
 - **Multi-Provider AI Hub**: Native support for **Google Gemini** (v1.5/2.0), **OpenAI** (GPT-4o), **Anthropic** (Claude 3.5), and **Azure OpenAI**.
 - **AI Prompt Factory**: Advanced context aggregation including log snippets, Git history, and signature heuristics with a Token Limit Guard.
+- **Local Workspace Context**: The AI can dynamically read failing source code files directly from the runner's workspace to fix complex application logic bugs.
 - **Smart Analysis**: Instant Root Cause Analysis (RCA), remediation guidance, and severity prediction.
 - **Confidence Gating**: Threshold-based logic (`>= 0.6`) that discards low-confidence output and triggers deterministic fallbacks.
 - **Dynamic Model Selection**: Override models at runtime via CLI (e.g., `--ai-model gpt-4o`).
+
+### Autonomous Self-Healing
+
+- **AI Code Fixer**: Generates precise snippet-level code patches based on diagnostic context and source code.
+- **Atomic Pull Requests**: Automatically creates isolated branches and Draft PRs in GitHub or Azure DevOps.
+- **Safety Guardrails**: Strict limits on files changed (default: 3), lines changed (default: 50), and blocked paths (e.g., `.env`, `Dockerfile`).
+- **Human-in-the-Loop**: All fixes are submitted as Draft PRs requiring human review before merging.
+- **Jira Integration**: Successfully created fix PRs are automatically cross-linked in the generated Jira incident ticket.
 
 ## Log Parsing
 
@@ -244,12 +254,12 @@ pipelineiq analyze \
   --api-url "${{ github.api_url }}" \
   --job-name "${{ github.job }}" \
   --repository-owner "${{ github.repository_owner }}" \
-  --format github-actions
+  --format github-actions \
+  --self-heal \
+  --self-heal-min-confidence 0.8
 
-# To enable assignment, add: --assignee "${{ secrets.JIRA_ASSIGNEE_ID }}"
-
-# Override AI model at runtime
-pipelineiq analyze --logs ./logs --ai-model gemini-2.5-flash-lite
+# To run a self-healing dry run (generates AI patch but doesn't push to GitHub):
+pipelineiq analyze --logs ./logs --self-heal --self-heal-dry-run
 
 ```
 

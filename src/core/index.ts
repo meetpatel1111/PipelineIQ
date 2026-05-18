@@ -24,3 +24,7 @@ export type { NotificationPayload, NotificationResult, NotificationsConfig } fro
 // Operational metrics (ComputedMetrics is part of ProcessResult)
 export type { ComputedMetrics } from "./types/operational-metrics.js";
 
+// Self-Healing
+export { SelfHealingEngine, FixGenerator } from "./self-healing/index.js";
+export type { GitProvider, PRCreationResult } from "./self-healing/index.js";
+

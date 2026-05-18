@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: '0.15.0'
+version: '0.16.0'
 author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
@@ -77,6 +77,43 @@ inputs:
     description: Hours to look back for duplicate issues
     required: false
     default: "24"
+
+  # Self-Healing (Autonomous Fix + PR)
+  self-healing:
+    description: Enable self-healing — generate code fix and open PR for review
+    required: false
+    default: "false"
+  self-healing-dry-run:
+    description: Generate fix but don't push branch or create PR
+    required: false
+    default: "false"
+  self-healing-confidence:
+    description: Minimum AI confidence to attempt a fix (0.0 to 1.0)
+    required: false
+    default: "0.8"
+  self-healing-max-files:
+    description: Maximum number of files a fix can change
+    required: false
+    default: "3"
+  self-healing-max-lines:
+    description: Maximum total lines a fix can change
+    required: false
+    default: "50"
+  self-healing-draft:
+    description: Create PR as draft (recommended)
+    required: false
+    default: "true"
+  self-healing-reviewers:
+    description: Comma-separated GitHub usernames to request as PR reviewers
+    required: false
+  self-healing-labels:
+    description: Comma-separated labels to apply to the fix PR
+    required: false
+    default: pipelineiq,self-healing,auto-fix
+  self-healing-categories:
+    description: Comma-separated failure categories eligible for self-healing
+    required: false
+    default: Dependency,Build,Test,Configuration
 
   # GitHub Actions Default Variable Overrides (Optional)
   github-action:
@@ -257,6 +294,10 @@ outputs:
     description: Key of the Jira issue created or updated
   action-taken:
     description: One of created / updated / skipped
+  self-healing-pr-url:
+    description: URL of the self-healing Pull Request (if created)
+  self-healing-status:
+    description: Self-healing outcome (success / failed / skipped / dry-run)
 
 runs:
   using: node20

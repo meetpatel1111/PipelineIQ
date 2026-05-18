@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SeveritySchema } from "./jira-ticket.js";
+import { SelfHealingConfigSchema } from "./self-healing.js";
 
 export const AIModeSchema = z.enum(["disabled", "assist", "full"]);
 export type AIMode = z.infer<typeof AIModeSchema>;
@@ -83,6 +84,7 @@ export const PipelineIQConfigSchema = z.object({
   displayMetadata: z.array(z.string()).optional(),
   autoWorklog: z.boolean().default(false),
   notifications: NotificationsConfigSchema.optional(),
+  selfHealing: SelfHealingConfigSchema.optional(),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;

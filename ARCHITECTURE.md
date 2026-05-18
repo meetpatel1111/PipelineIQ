@@ -25,7 +25,6 @@ PipelineIQ bridges the "Intelligence Gap" between automated CI/CD pipelines (Git
 - Support for Jira Cloud and Jira Server/Data Center.
 - Deterministic and AI-driven enrichment.
 
-### Future Vision
 - Autonomous remediation (Self-healing pipelines).
 - Reliability analytics dashboard.
 - Deployment risk scoring and SRE intelligence.
@@ -265,7 +264,23 @@ Most integrations provide ~10 fields. PipelineIQ provides **80-120 operational f
 
 ---
 
-## 11. Security Architecture
+## 11. Autonomous Self-Healing Architecture
+
+### The Self-Healing Engine (`src/core/self-healing/`)
+PipelineIQ features a fully autonomous self-healing orchestrator that transforms diagnostic metadata and source code into surgical pull requests.
+
+1. **Local Workspace Context**: Instead of guessing based on logs, the engine extracts file paths from the stack trace and uses Node's `fs` to read the exact source code of the failing files directly from the runner's checked-out workspace.
+2. **AI Fix Generator**: A specialized prompt constrains the AI to output precise, snippet-level JSON patches instead of sweeping refactors.
+3. **Guardrails**:
+   - **Confidence Gating**: Requires a minimum AI confidence (default: 0.8).
+   - **Scope Limits**: Restricts fixes to a maximum of 3 files and 50 lines.
+   - **Path Blocking**: Hardcodes blocked paths (`.env`, `Dockerfile`, `*.key`) to prevent security risks.
+4. **Git Provider Abstraction**: Supports both GitHub (Octokit + Git Trees API) and Azure DevOps (REST API). It fetches the original file content, applies the AI's snippet patch locally, and pushes the fully mutated file in an atomic commit.
+5. **Draft Pull Requests**: Fixes are always isolated on a new branch (`pipelineiq/fix/*`) and submitted as Draft PRs for human-in-the-loop review.
+
+---
+
+## 12. Security Architecture
 
 ### Secret Masking (`secret-mask.ts`)
 A heuristic-based defense-in-depth layer that redacts:
@@ -304,16 +319,17 @@ A heuristic-based defense-in-depth layer that redacts:
 
 ## 15. Future Roadmap Architecture
 
-### Phase 1: Foundation (Current)
+### Phase 1: Foundation (Complete)
 - Robust multi-platform ingestion.
 - High-fidelity Jira reporting.
 
-### Phase 2: Intelligence
+### Phase 2: Autonomy (Current)
+- Automated PR creation for known dependency/config fixes via the Self-Healing Engine.
+- Local Workspace Context reading for complex logic bugs.
+
+### Phase 3: Intelligence (Future)
 - Historical failure correlation.
 - Team-level reliability scoring.
-
-### Phase 3: Autonomy
-- Automated PR creation for known dependency/config fixes.
 - Slack-based interactive incident management.
 
 ---
