@@ -47,29 +47,14 @@ export class AzureDevOpsProvider implements GitProvider {
 
     const branchName = options.branchName;
 
-    // Fetch original files and apply patches BEFORE pushing to ADO
-    // This allows us to detect if the changes are completely empty (no actual modifications)
-    let actualChangeCount = 0;
-    const changePromises = fix.changes.map(async (change) => {
+    // 1. Create branch + commit changes in a single push
+    const changes = fix.changes.map(async (change) => {
       if (change.action === "delete") {
-        actualChangeCount++;
         return {
           changeType: "delete" as const,
           item: { path: `/${change.filePath}` },
         };
       } else if (change.action === "create") {
-        const isIdentical = await this.isFileIdentical(
-          axios,
-          apiBase,
-          apiVersion,
-          baseSha,
-          change.filePath,
-          change.newContent ?? "",
-          headers,
-        );
-        if (!isIdentical) {
-          actualChangeCount++;
-        }
         return {
           changeType: "add" as const,
           item: { path: `/${change.filePath}` },
@@ -79,7 +64,8 @@ export class AzureDevOpsProvider implements GitProvider {
           },
         };
       } else if (change.action === "modify" && change.originalContent) {
-        const patchResult = await this.fetchOriginalAndPatch(
+        // We must fetch the original file and apply the patch because the API requires full content
+        const fullContent = await this.fetchAndPatch(
           axios,
           apiBase,
           apiVersion,
@@ -89,19 +75,16 @@ export class AzureDevOpsProvider implements GitProvider {
           change.newContent ?? "",
           headers,
         );
-        if (patchResult.isModified) {
-          actualChangeCount++;
-        }
+
         return {
           changeType: "edit" as const,
           item: { path: `/${change.filePath}` },
           newContent: {
-            content: patchResult.content,
+            content: fullContent,
             contentType: "rawtext" as const,
           },
         };
       } else {
-        actualChangeCount++;
         return {
           changeType: "edit" as const,
           item: { path: `/${change.filePath}` },
@@ -113,11 +96,7 @@ export class AzureDevOpsProvider implements GitProvider {
       }
     });
 
-    const resolvedChanges = await Promise.all(changePromises);
-
-    if (actualChangeCount === 0) {
-      throw new Error("No actual file changes detected after applying the patch. Aborting PR creation to prevent empty commits.");
-    }
+    const resolvedChanges = await Promise.all(changes);
 
     const commitMessage = this.buildCommitMessage(fix, issueKey);
 
@@ -235,27 +214,11 @@ export class AzureDevOpsProvider implements GitProvider {
     ].join("\n");
   }
 
-  private async isFileIdentical(
-    axios: any,
-    apiBase: string,
-    apiVersion: string,
-    baseSha: string,
-    filePath: string,
-    newContent: string,
-    headers: Record<string, string>,
-  ): Promise<boolean> {
-    try {
-      const response = await axios.get(
-        `${apiBase}/items?path=/${filePath}&versionDescriptor.version=${baseSha}&versionDescriptor.versionType=commit&${apiVersion}`,
-        { headers, responseType: "text" },
-      );
-      return response.data === newContent;
-    } catch {
-      return false;
-    }
-  }
-
-  private async fetchOriginalAndPatch(
+  /**
+   * Fetch the original file content from ADO and apply the AI's
+   * snippet-level patch to produce the full modified file.
+   */
+  private async fetchAndPatch(
     axios: any,
     apiBase: string,
     apiVersion: string,
@@ -264,7 +227,7 @@ export class AzureDevOpsProvider implements GitProvider {
     originalSnippet: string,
     newSnippet: string,
     headers: Record<string, string>,
-  ): Promise<{ content: string; isModified: boolean }> {
+  ): Promise<string> {
     try {
       const response = await axios.get(
         `${apiBase}/items?path=/${filePath}&versionDescriptor.version=${baseSha}&versionDescriptor.versionType=commit&${apiVersion}`,
@@ -272,41 +235,32 @@ export class AzureDevOpsProvider implements GitProvider {
       );
 
       const originalFile = response.data;
-      let fullContent = originalFile;
 
       // Apply the patch: find the original snippet and replace
       if (originalFile.includes(originalSnippet)) {
-        fullContent = originalFile.replace(originalSnippet, newSnippet);
-      } else {
-        // Fallback: try trimmed matching
-        const trimmedOriginal = originalSnippet.trim();
-        const lines = originalFile.split("\n");
-        const matchIdx = lines.findIndex((_: string, i: number) => {
-          const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
-          return block === trimmedOriginal;
-        });
-
-        if (matchIdx !== -1) {
-          const snippetLineCount = trimmedOriginal.split("\n").length;
-          const before = lines.slice(0, matchIdx).join("\n");
-          const after = lines.slice(matchIdx + snippetLineCount).join("\n");
-          fullContent = [before, newSnippet, after].filter(Boolean).join("\n");
-        } else {
-          console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
-          fullContent = originalFile + "\n" + newSnippet;
-        }
+        return originalFile.replace(originalSnippet, newSnippet);
       }
 
-      return {
-        content: fullContent,
-        isModified: fullContent !== originalFile,
-      };
+      // Fallback: try trimmed matching
+      const trimmedOriginal = originalSnippet.trim();
+      const lines = originalFile.split("\n");
+      const matchIdx = lines.findIndex((_: string, i: number) => {
+        const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
+        return block === trimmedOriginal;
+      });
+
+      if (matchIdx !== -1) {
+        const snippetLineCount = trimmedOriginal.split("\n").length;
+        const before = lines.slice(0, matchIdx).join("\n");
+        const after = lines.slice(matchIdx + snippetLineCount).join("\n");
+        return [before, newSnippet, after].filter(Boolean).join("\n");
+      }
+
+      console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
+      return originalFile + "\n" + newSnippet;
     } catch (error) {
       console.warn(`[PipelineIQ] Could not fetch ${filePath} for patching: ${error}`);
-      return {
-        content: newSnippet,
-        isModified: true,
-      };
+      return newSnippet;
     }
   }
 }

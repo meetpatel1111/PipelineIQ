@@ -4,6 +4,13 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.18.2] - 2026-05-19
+
+### Fixed
+- **Self-Healing Git Providers Restoration**: Restored both the GitHub (`GitHubProvider`) and Azure DevOps (`AzureDevOpsProvider`) self-healing Git providers to their original stable structure and sequential workflow, ensuring maximum reliability when creating fixing branches, committing patches, and opening Pull Requests.
+
+---
+
 ## [0.18.1] - 2026-05-19
 
 ### Changed
