@@ -37,12 +37,14 @@ export class OpenAIProvider implements AIProviderInterface {
     const { OpenAI } = await import("openai");
     const openai = new OpenAI({ apiKey: this.apiKey });
 
-    const prompt = this.buildPrompt(request);
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
 
     try {
       const completion = await openai.chat.completions.create({
         model: this.model,
-        messages: [
+        messages: request.isRawPrompt ? [
+          { role: "user", content: prompt }
+        ] : [
           {
             role: "system",
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
@@ -70,6 +72,10 @@ export class OpenAIProvider implements AIProviderInterface {
       const content = completion.choices[0]?.message?.content;
       if (!content) {
         throw new Error("No response from OpenAI");
+      }
+
+      if (request.isRawPrompt) {
+        return { rootCause: content };
       }
 
       return this.parseResponse(content);
@@ -189,7 +195,7 @@ export class AnthropicProvider implements AIProviderInterface {
     const { Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: this.apiKey });
 
-    const prompt = this.buildPrompt(request);
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
 
     try {
       const message = await anthropic.messages.create({
@@ -199,7 +205,7 @@ export class AnthropicProvider implements AIProviderInterface {
         messages: [
           {
             role: "user",
-            content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+            content: request.isRawPrompt ? prompt : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
 Return a JSON object with the following fields:
 - summary: Brief human-readable failure description (max 255 characters)
@@ -220,6 +226,10 @@ ${prompt}`,
       const content = message.content[0]?.type === "text" ? message.content[0].text : "";
       if (!content) {
         throw new Error("No response from Anthropic");
+      }
+
+      if (request.isRawPrompt) {
+        return { rootCause: content };
       }
 
       return this.parseResponse(content);
@@ -350,12 +360,14 @@ export class AzureOpenAIProvider implements AIProviderInterface {
       defaultHeaders: { "api-key": this.apiKey },
     });
 
-    const prompt = this.buildPrompt(request);
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
 
     try {
       const completion = await openai.chat.completions.create({
         model: this.deployment,
-        messages: [
+        messages: request.isRawPrompt ? [
+          { role: "user", content: prompt }
+        ] : [
           {
             role: "system",
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
@@ -383,6 +395,10 @@ export class AzureOpenAIProvider implements AIProviderInterface {
       const content = completion.choices[0]?.message?.content;
       if (!content) {
         throw new Error("No response from Azure OpenAI");
+      }
+
+      if (request.isRawPrompt) {
+        return { rootCause: content };
       }
 
       return this.parseResponse(content);
@@ -502,9 +518,12 @@ export class LocalAIProvider implements AIProviderInterface {
     try {
       const { OpenAI } = await import("openai");
       const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
+      const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
       const completion = await client.chat.completions.create({
         model: this.model,
-        messages: [
+        messages: request.isRawPrompt ? [
+          { role: "user", content: prompt }
+        ] : [
           {
             role: "system",
             content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
@@ -520,7 +539,7 @@ Return a JSON object with the following fields:
 
 Be concise but thorough. Focus on actionable insights.`,
           },
-          { role: "user", content: this.buildPrompt(request) },
+          { role: "user", content: prompt },
         ],
         max_tokens: this.maxTokens,
         temperature: this.temperature,
@@ -528,6 +547,11 @@ Be concise but thorough. Focus on actionable insights.`,
 
       const content = completion.choices[0]?.message?.content;
       if (!content) throw new Error("No response from local AI");
+      
+      if (request.isRawPrompt) {
+        return { rootCause: content };
+      }
+      
       return this.parseResponse(content);
     } catch (error) {
       throw new Error(`Local AI error: ${error}`);

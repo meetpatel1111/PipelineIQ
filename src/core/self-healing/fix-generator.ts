@@ -78,6 +78,7 @@ export class FixGenerator {
         repositoryName: event.repository.name,
         branch: event.branch,
         category,
+        isRawPrompt: true,
       });
 
       // The response's rootCause field will contain the JSON fix (we instruct the AI this way)

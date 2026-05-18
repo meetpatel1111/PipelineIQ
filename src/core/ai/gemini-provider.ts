@@ -27,29 +27,50 @@ export class GeminiProvider implements AIProviderInterface {
   }
 
   async generateInsights(request: AIRequest): Promise<AIResponse> {
-    try {
-      // Import Google Generative AI library dynamically
-      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const maxRetries = 3;
+    let attempt = 0;
+    
+    // Import Google Generative AI library dynamically
+    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+    const genAI = new GoogleGenerativeAI(this.apiKey);
+    const model = genAI.getGenerativeModel({
+      model: this.model,
+      generationConfig: {
+        maxOutputTokens: this.maxTokens,
+        temperature: this.temperature,
+        responseMimeType: "application/json",
+      },
+    });
 
-      const genAI = new GoogleGenerativeAI(this.apiKey);
-      const model = genAI.getGenerativeModel({
-        model: this.model,
-        generationConfig: {
-          maxOutputTokens: this.maxTokens,
-          temperature: this.temperature,
-          responseMimeType: "application/json",
-        },
-      });
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
 
-      const prompt = this.buildPrompt(request);
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+    while (attempt <= maxRetries) {
+      try {
+        const result = await model.generateContent(prompt);
+        const text = result.response.text();
 
-      return this.parseResponse(text);
-    } catch (error: any) {
-      console.error("Gemini API error:", error);
-      throw new Error(`Gemini API error: ${error.message}`);
+        if (request.isRawPrompt) {
+          return { rootCause: text };
+        }
+
+        return this.parseResponse(text);
+      } catch (error: any) {
+        attempt++;
+        const isRetryable = error.message?.includes("503") || error.message?.includes("Service Unavailable") || error.message?.includes("429");
+        
+        if (isRetryable && attempt <= maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.warn(`[PipelineIQ] Gemini API error (${error.message}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        console.error("Gemini API error:", error);
+        throw new Error(`Gemini API error: ${error.message}`);
+      }
     }
+    
+    throw new Error("Gemini API error: Max retries exceeded");
   }
 
   private buildPrompt(request: AIRequest): string {

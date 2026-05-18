@@ -24,6 +24,7 @@ export const AIRequestSchema = z.object({
   environment: z.string().optional(),
   category: z.string().optional(),
   historicalContext: z.string().optional(),
+  isRawPrompt: z.boolean().optional(),
 });
 
 export type AIRequest = z.infer<typeof AIRequestSchema>;
