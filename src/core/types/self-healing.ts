@@ -41,6 +41,8 @@ export type CodeFix = z.infer<typeof CodeFixSchema>;
 export const SelfHealingConfigSchema = z.object({
   /** Master switch for self-healing */
   enabled: z.boolean().default(false),
+  /** Master switch for safety guardrails */
+  enableGuardrails: z.boolean().default(false),
   /** Generate the fix but don't push/create PR */
   dryRun: z.boolean().default(false),
   /** Minimum AI confidence required to attempt a fix (0–1) */

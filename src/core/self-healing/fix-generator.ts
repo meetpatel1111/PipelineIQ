@@ -168,8 +168,8 @@ export class FixGenerator {
     return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.
 
 IMPORTANT RULES:
-- Generate ONLY surgical, minimal fixes. Never rewrite entire files.
-- Each fix must change AT MOST 3 files and 50 lines total.
+- Generate comprehensive fixes that address the root cause entirely.
+- You may modify as many files and lines as necessary to ensure the pipeline succeeds.
 - NEVER modify files containing secrets, credentials, or environment variables.
 - Output ONLY valid JSON — no markdown fences, no explanation outside JSON.
 - If you cannot generate a confident fix, return: {"canFix": false, "reason": "explanation"}

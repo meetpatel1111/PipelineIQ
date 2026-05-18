@@ -153,6 +153,11 @@ export class SelfHealingEngine {
    * Returns an error message if the fix is rejected, or null if it passes.
    */
   private validateGuardrails(fix: CodeFix): string | null {
+    // Skip guardrails if disabled in config
+    if (!this.config.enableGuardrails) {
+      return null;
+    }
+
     // Confidence threshold
     if (fix.confidence < this.config.minConfidence) {
       return `Fix confidence ${Math.round(fix.confidence * 100)}% is below threshold ${Math.round(this.config.minConfidence * 100)}%`;
@@ -191,6 +196,8 @@ export class SelfHealingEngine {
   }
 
   private isCategoryAllowed(category: string): boolean {
+    if (!this.config.enableGuardrails) return true;
+    
     return this.config.allowedCategories.some(
       (allowed) => allowed.toLowerCase() === category.toLowerCase(),
     );

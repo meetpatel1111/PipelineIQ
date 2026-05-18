@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram id="ikhGKlWrqOuEKTYh6_VA" name="Page-1">
-    <mxGraphModel dx="1848" dy="1175" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1400" math="0" shadow="0" adaptiveColors="auto">
+    <mxGraphModel dx="1601" dy="1027" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1400" math="0" shadow="0" adaptiveColors="auto">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -13,8 +13,8 @@
         <mxCell id="gh_pipeline" parent="gh_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#adb5bd;shadow=1;" value="&lt;font color=&quot;#1c7ed6&quot;&gt;&lt;b&gt;CI Pipeline Steps&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ubuntu-latest / windows-latest&lt;/small&gt;" vertex="1">
           <mxGeometry height="60" width="180" x="20" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="gh_action" parent="gh_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Action&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
-          <mxGeometry height="80" width="180" x="240" y="40" as="geometry" />
+        <mxCell id="gh_action" parent="gh_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;dashed=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Action&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;[ROADMAP]&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
+          <mxGeometry height="90" width="180" x="240" y="35" as="geometry" />
         </mxCell>
         <mxCell id="gh_env" parent="gh_runner" style="text;html=1;strokeColor=none;fillColor=#fff9db;rounded=1;strokeColor=#f59f00;" value="&lt;small&gt;GH_TOKEN, REPO, SHA, REF&lt;br&gt;injected as ENV vars&lt;/small&gt;" vertex="1">
           <mxGeometry height="40" width="200" x="20" y="130" as="geometry" />
@@ -25,8 +25,8 @@
         <mxCell id="ado_pipeline" parent="ado_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;strokeColor=#adb5bd;shadow=1;" value="&lt;font color=&quot;#ae3ec9&quot;&gt;&lt;b&gt;Pipeline Task&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Self-Hosted / Microsoft-Hosted&lt;/small&gt;" vertex="1">
           <mxGeometry height="60" width="180" x="20" y="50" as="geometry" />
         </mxCell>
-        <mxCell id="ado_task" parent="ado_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Task&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
-          <mxGeometry height="80" width="180" x="240" y="40" as="geometry" />
+        <mxCell id="ado_task" parent="ado_runner" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#37b24d;strokeWidth=2;shadow=1;dashed=1;" value="&lt;font color=&quot;#37b24d&quot;&gt;&lt;b&gt;PipelineIQ Task&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;[ROADMAP]&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;ESM Bundle (Node 20+)&lt;br&gt;In-Process Execution&lt;/small&gt;" vertex="1">
+          <mxGeometry height="90" width="180" x="240" y="35" as="geometry" />
         </mxCell>
         <mxCell id="ado_env" parent="ado_runner" style="text;html=1;strokeColor=none;fillColor=#fff9db;rounded=1;strokeColor=#f59f00;" value="&lt;small&gt;AGENT_*, BUILD_*, SYSTEM_*&lt;br&gt;injected as ENV vars&lt;/small&gt;" vertex="1">
           <mxGeometry height="40" width="200" x="20" y="130" as="geometry" />
@@ -49,17 +49,26 @@
         <mxCell id="ai_hub" parent="lane2" style="swimlane;startSize=30;fillColor=#fff5f5;strokeColor=#f03e3e;html=1;rounded=1;arcSize=10;shadow=1;" value="&lt;b&gt;AI Providers (HTTPS)&lt;/b&gt;" vertex="1">
           <mxGeometry height="160" width="500" x="640" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="gemini" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="Google Gemini API" vertex="1">
-          <mxGeometry height="50" width="140" x="20" y="50" as="geometry" />
+        <mxCell id="gemini" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="Google Gemini" vertex="1">
+          <mxGeometry height="50" width="100" x="20" y="50" as="geometry" />
         </mxCell>
         <mxCell id="openai" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="OpenAI API" vertex="1">
-          <mxGeometry height="50" width="140" x="180" y="50" as="geometry" />
+          <mxGeometry height="50" width="100" x="130" y="50" as="geometry" />
         </mxCell>
         <mxCell id="anthropic" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8f9fa;" value="Anthropic API" vertex="1">
-          <mxGeometry height="50" width="140" x="340" y="50" as="geometry" />
+          <mxGeometry height="50" width="100" x="240" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="local_ai" parent="ai_hub" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3fafc;strokeColor=#0b7285;" value="LocalAI / Ollama" vertex="1">
+          <mxGeometry height="50" width="130" x="350" y="50" as="geometry" />
         </mxCell>
         <mxCell id="no_egress" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff5f5;strokeColor=#f03e3e;strokeWidth=1;dashed=1;shadow=0;arcSize=15;" value="&lt;font color=&quot;#f03e3e&quot;&gt;&lt;b&gt;AI OPTIONAL&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Skip if PIPELINEIQ_AI_DISABLED=true&lt;br&gt;No data leaves runner if disabled&lt;/small&gt;" vertex="1">
           <mxGeometry height="80" width="260" x="1200" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="slack_teams" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3fafc;strokeColor=#0b7285;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#0b7285&quot;&gt;&lt;b&gt;Slack / Teams API&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;Webhooks &amp; REST&lt;br&gt;Real-Time Alerts&lt;/small&gt;" vertex="1">
+          <mxGeometry height="100" width="200" x="1200" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="git_api" parent="lane2" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff0f6;strokeColor=#d9480f;strokeWidth=2;shadow=1;arcSize=10;" value="&lt;font color=&quot;#d9480f&quot;&gt;&lt;b&gt;Git Provider APIs&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;small&gt;GH Trees API / ADO REST&lt;br&gt;Patching &amp; Draft PRs&lt;/small&gt;" vertex="1">
+          <mxGeometry height="89" width="200" x="845" y="185.5" as="geometry" />
         </mxCell>
         <mxCell id="lane3" parent="1" style="swimlane;horizontal=0;startSize=110;fillColor=#fff5f5;html=1;fontColor=#495057;strokeColor=#dee2e6;glass=1;rounded=1;arcSize=5;" value="&lt;b&gt;03 SECURITY &amp; SECRET FLOW&lt;/b&gt;" vertex="1">
           <mxGeometry height="280" width="1600" y="580" as="geometry" />
@@ -113,6 +122,12 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="e7" edge="1" parent="1" source="clean_data" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#1c7ed6;" target="jira_out">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="clean_data" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#0b7285;" target="slack_teams">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" edge="1" parent="1" source="clean_data" style="edgeStyle=orthogonalEdgeStyle;curved=1;rounded=1;html=1;strokeWidth=2;strokeColor=#d9480f;" target="git_api">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
       </root>
