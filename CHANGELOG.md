@@ -4,16 +4,24 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.16.2] - 2026-05-18
+
+### Added
+- **Gemini API Resilience**: Implemented exponential backoff retry logic (up to 3 retries starting at 1000ms delay) in the Gemini provider to gracefully handle temporary `503 Service Unavailable` spikes and rate limits.
+
+### Changed
+- **AI Providers Hardening**: Added support for a raw generation mode (`isRawPrompt`) across OpenAI, Anthropic, Gemini, Azure OpenAI, and Local AI providers to bypass standard diagnostic system prompts when performing self-healing. This eliminates the JSON-schema conflict and prevents parsing errors.
+
+---
+
 ## [0.16.1] - 2026-05-18
 
 ### Added
 - **Configurable Guardrails**: Added an `enableGuardrails` flag (defaulting to `false`) to the Self-Healing config allowing users to seamlessly bypass AI constraints.
-- **Gemini API Resilience**: Implemented exponential backoff retry logic (up to 3 retries starting at 1000ms delay) in the Gemini provider to gracefully handle temporary `503 Service Unavailable` spikes and rate limits.
 
 ### Changed
 - **Comprehensive Fix Generation**: Updated the internal AI prompt within the `FixGenerator` to encourage multi-file and multi-line comprehensive patches instead of heavily constrained, single-file minimal patches.
 - **Guardrail Bypass Logic**: Integrated the new `enableGuardrails` config property in the Self-Healing Engine to optionally bypass strict category, file size, and confidence checks, empowering the AI to attempt fixes on a wider variety of failures.
-- **AI Providers Hardening**: Added support for a raw generation mode (`isRawPrompt`) across OpenAI, Anthropic, Gemini, Azure OpenAI, and Local AI providers to bypass standard diagnostic system prompts when performing self-healing. This eliminates the JSON-schema conflict and prevents parsing errors.
 
 ### Fixed
 - **NPM Package Build**: Fixed an issue where version `0.16.0` was published without the latest CLI build, resolving the `unknown option '--self-heal'` error in global CLI installations.
