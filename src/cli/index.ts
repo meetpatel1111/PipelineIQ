@@ -158,6 +158,10 @@ program
   .option("--self-heal-reviewers <users>", "Comma-separated PR reviewers", (val) => val.split(","))
   .option("--self-heal-labels <labels>", "Comma-separated PR labels", (val) => val.split(","))
   .option("--self-heal-categories <cats>", "Comma-separated allowed failure categories", (val) => val.split(","))
+  .option("--self-heal-verify", "Enable local verification commands (compilation/testing/regeneration)")
+  .option("--self-heal-verification-commands <commands>", "Comma-separated verification commands", (val) => val.split(","))
+  .option("--self-heal-auto-lockfile", "Enable automatic package-lock.json regeneration (default: true)", true)
+  .option("--no-self-heal-auto-lockfile", "Disable automatic package-lock.json regeneration")
   .action(async (options) => {
     await handleAnalyze(options);
   });
@@ -258,6 +262,9 @@ async function handleAnalyze(options: any) {
       if (options.selfHealReviewers) configData.selfHealing.reviewers = options.selfHealReviewers;
       if (options.selfHealLabels) configData.selfHealing.prLabels = options.selfHealLabels;
       if (options.selfHealCategories) configData.selfHealing.allowedCategories = options.selfHealCategories;
+      if (options.selfHealVerify !== undefined) configData.selfHealing.enableVerification = options.selfHealVerify;
+      if (options.selfHealVerificationCommands !== undefined) configData.selfHealing.verificationCommands = options.selfHealVerificationCommands;
+      if (options.selfHealAutoLockfile !== undefined) configData.selfHealing.autoRegenerateLockfile = options.selfHealAutoLockfile;
     }
 
     if (configData.selfHealing) {

@@ -4,6 +4,17 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.19.0] - 2026-05-19
+
+### Added
+- **GitHub Classic PAT Self-Healing & PR Integration**: Successfully tested and verified the complete PipelineIQ self-healing and Pull Request creation pipeline using high-fidelity GitHub Classic Personal Access Tokens, resolving repository 403 authorization bottlenecks.
+- **Enterprise Lockfile Alignment & Local Verification**: Hardened the self-healing orchestrator's local code patching, lockfile regeneration (`npm install`), and build validation routines (`npm run build`) to guarantee robust, error-free fixes before PR submission.
+
+### Changed
+- **Unified Version Standardization**: Bumped package manifests (`package.json`, `package-lock.json`, `action.yml`, and `task.json`) to version `0.19.0` and successfully ran sync scripts to ensure compile-time and runtime alignment across platforms.
+
+---
+
 ## [0.18.2] - 2026-05-19
 
 ### Fixed

@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { execSync } from "node:child_process";
 import type { FailureEvent, SelfHealingConfig, SelfHealingResult, CodeFix } from "../types/index.js";
 import type { AIEngineConfig } from "../ai/types.js";
 import type { GitProvider } from "./types.js";
@@ -104,6 +107,127 @@ export class SelfHealingEngine {
         reason: "Dry run — fix generated but not applied",
         dryRun: true,
       };
+    }
+
+    // ── Stage 3.5: Local Verification and Lockfile Regeneration ──────────────
+    if (this.config.enableVerification || (this.config.autoRegenerateLockfile && this.isLockfileDesync(event))) {
+      const root = this.getWorkspaceRoot();
+      const backups = new Map<string, string | null>(); // filePath -> originalContent (null if it didn't exist)
+
+      try {
+        console.log("[PipelineIQ] Starting local verification/regeneration...");
+
+        // 1. If it's a lockfile desync, let's first regenerate the lockfile
+        if (this.config.autoRegenerateLockfile && this.isLockfileDesync(event)) {
+          console.log("[PipelineIQ] Lockfile desync detected — regenerating lockfile locally via npm install...");
+          try {
+            // Backup package-lock.json if it exists
+            const lockPath = path.resolve(root, "package-lock.json");
+            if (fs.existsSync(lockPath)) {
+              backups.set("package-lock.json", fs.readFileSync(lockPath, "utf-8"));
+            } else {
+              backups.set("package-lock.json", null);
+            }
+
+            // Run npm install to synchronize
+            execSync("npm install", { cwd: root, stdio: "inherit" });
+            console.log("[PipelineIQ] Successfully regenerated package-lock.json");
+
+            // Read the newly regenerated lockfile
+            if (fs.existsSync(lockPath)) {
+              const newLockContent = fs.readFileSync(lockPath, "utf-8");
+              
+              // Remove any existing package-lock.json changes from the fix
+              fix.changes = fix.changes.filter(c => c.filePath !== "package-lock.json");
+              
+              // Append the regenerated lockfile to the changes list
+              fix.changes.push({
+                filePath: "package-lock.json",
+                action: backups.get("package-lock.json") !== null ? "modify" : "create",
+                originalContent: backups.get("package-lock.json") || "",
+                newContent: newLockContent,
+                changeDescription: "Regenerated package-lock.json to resolve desynchronization with package.json",
+              });
+            }
+          } catch (lockError) {
+            console.warn(`[PipelineIQ] Lockfile regeneration failed: ${lockError}`);
+            throw new Error(`Failed to regenerate package-lock.json: ${lockError}`);
+          }
+        }
+
+        // 2. Backup and apply the rest of the code fixes
+        for (const change of fix.changes) {
+          if (change.filePath === "package-lock.json") continue; // Already handled above
+          const fullPath = path.resolve(root, change.filePath);
+          if (fs.existsSync(fullPath)) {
+            backups.set(change.filePath, fs.readFileSync(fullPath, "utf-8"));
+          } else {
+            backups.set(change.filePath, null);
+          }
+
+          // Write new content
+          if (change.action === "delete") {
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath);
+            }
+          } else if (change.action === "modify" && change.originalContent) {
+            const originalContent = backups.get(change.filePath) || "";
+            const patched = this.patchLocalFile(originalContent, change.originalContent, change.newContent ?? "");
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+            fs.writeFileSync(fullPath, patched, "utf-8");
+          } else {
+            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+            fs.writeFileSync(fullPath, change.newContent ?? "", "utf-8");
+          }
+        }
+
+        // 3. Run verification commands
+        if (this.config.enableVerification && this.config.verificationCommands.length > 0) {
+          console.log(`[PipelineIQ] Running verification commands: ${this.config.verificationCommands.join(" && ")}`);
+          for (const cmd of this.config.verificationCommands) {
+            try {
+              execSync(cmd, { cwd: root, stdio: "inherit" });
+            } catch (cmdError) {
+              console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
+              throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
+            }
+          }
+          console.log("[PipelineIQ] Verification commands completed successfully.");
+        }
+
+        // 4. Restore the local files so the workspace remains clean
+        for (const [relPath, originalContent] of backups.entries()) {
+          const fullPath = path.resolve(root, relPath);
+          if (originalContent === null) {
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath);
+            }
+          } else {
+            fs.writeFileSync(fullPath, originalContent, "utf-8");
+          }
+        }
+        console.log("[PipelineIQ] Restored workspace files, local verification complete.");
+
+      } catch (verifyError: any) {
+        // Restore local files so workspace is clean
+        for (const [relPath, originalContent] of backups.entries()) {
+          const fullPath = path.resolve(root, relPath);
+          if (originalContent === null) {
+            if (fs.existsSync(fullPath)) {
+              fs.unlinkSync(fullPath);
+            }
+          } else {
+            fs.writeFileSync(fullPath, originalContent, "utf-8");
+          }
+        }
+        return {
+          attempted: true,
+          success: false,
+          fix,
+          reason: `Local verification/regeneration failed: ${verifyError.message || verifyError}`,
+          dryRun: this.config.dryRun,
+        };
+      }
     }
 
     // ── Stage 4: Create PR via GitProvider ───────────────────────────────
@@ -247,6 +371,44 @@ export class SelfHealingEngine {
       .replace(/^-+|-+$/g, "")
       .slice(0, 40);
     return `${this.config.branchPrefix}/${issueKey.toLowerCase()}-${slug}`;
+  }
+
+  private getWorkspaceRoot(): string {
+    return (
+      process.env.GITHUB_WORKSPACE ||
+      process.env.SYSTEM_DEFAULTWORKINGDIRECTORY ||
+      process.cwd()
+    );
+  }
+
+  private isLockfileDesync(event: FailureEvent): boolean {
+    const errorText = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}`;
+    return errorText.includes("package-lock.json is out of sync") ||
+           errorText.includes("package.json and package-lock.json or npm-shrinkwrap.json are in sync") ||
+           errorText.includes("npm ci failed") ||
+           errorText.includes("cipm can only install packages");
+  }
+
+  private patchLocalFile(originalContent: string, originalSnippet: string, newSnippet: string): string {
+    if (originalContent.includes(originalSnippet)) {
+      return originalContent.replace(originalSnippet, newSnippet);
+    }
+
+    const trimmedOriginal = originalSnippet.trim();
+    const lines = originalContent.split("\n");
+    const matchIdx = lines.findIndex((_, i) => {
+      const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
+      return block === trimmedOriginal;
+    });
+
+    if (matchIdx !== -1) {
+      const snippetLineCount = trimmedOriginal.split("\n").length;
+      const before = lines.slice(0, matchIdx).join("\n");
+      const after = lines.slice(matchIdx + snippetLineCount).join("\n");
+      return [before, newSnippet, after].filter(Boolean).join("\n");
+    }
+
+    return originalContent + "\n" + newSnippet;
   }
 }
 

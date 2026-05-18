@@ -12,8 +12,8 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 18,
-    "Patch": 3
+    "Minor": 19,
+    "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
   "inputs": [

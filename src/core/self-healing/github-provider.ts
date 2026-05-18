@@ -38,12 +38,45 @@ export class GitHubProvider implements GitProvider {
     const ref = `refs/heads/${branchName}`;
 
     // 1. Create branch from the base SHA
-    await octokit.git.createRef({
-      owner: repoOwner,
-      repo: repoName,
-      ref,
-      sha: baseSha,
-    });
+    try {
+      await octokit.git.createRef({
+        owner: repoOwner,
+        repo: repoName,
+        ref,
+        sha: baseSha,
+      });
+    } catch (e: any) {
+      if (e.status === 422 && String(e).includes("Reference already exists")) {
+        console.warn(`[PipelineIQ] Branch ${branchName} already exists. Deleting it to recreate cleanly...`);
+        try {
+          await octokit.git.deleteRef({
+            owner: repoOwner,
+            repo: repoName,
+            ref: `heads/${branchName}`,
+          });
+          await octokit.git.createRef({
+            owner: repoOwner,
+            repo: repoName,
+            ref,
+            sha: baseSha,
+          });
+        } catch (deleteError: any) {
+          console.error(`[PipelineIQ] Failed to recreate branch reference:`, {
+            status: deleteError.status,
+            message: deleteError.message,
+            data: deleteError.response?.data,
+          });
+          throw deleteError;
+        }
+      } else {
+        console.error(`[PipelineIQ] Failed to create branch reference:`, {
+          status: e.status,
+          message: e.message,
+          data: e.response?.data,
+        });
+        throw e;
+      }
+    }
 
     // 2. Build a Git tree with all file changes
     //    - create: use newContent directly (full file)
@@ -121,15 +154,25 @@ export class GitHubProvider implements GitProvider {
 
     // 5. Create the Pull Request
     const prBody = this.buildPRBody(fix, issueKey);
-    const pr = await octokit.pulls.create({
-      owner: repoOwner,
-      repo: repoName,
-      title: `🤖 [PipelineIQ] ${fix.title}`,
-      head: branchName,
-      base: baseBranch,
-      body: prBody,
-      draft: options.draft,
-    });
+    let pr;
+    try {
+      pr = await octokit.pulls.create({
+        owner: repoOwner,
+        repo: repoName,
+        title: `🤖 [PipelineIQ] ${fix.title}`,
+        head: branchName,
+        base: baseBranch,
+        body: prBody,
+        draft: options.draft,
+      });
+    } catch (error: any) {
+      console.error(`[PipelineIQ] GitHub pulls.create API call failed:`, {
+        status: error.status,
+        message: error.message,
+        data: error.response?.data,
+      });
+      throw error;
+    }
 
     // 6. Request reviewers (best-effort)
     if (options.reviewers.length > 0) {

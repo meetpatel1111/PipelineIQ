@@ -172,6 +172,7 @@ IMPORTANT RULES:
 - Generate comprehensive fixes that address the root cause entirely.
 - You may modify as many files and lines as necessary to ensure the pipeline succeeds.
 - NEVER modify files containing secrets, credentials, or environment variables.
+- NEVER attempt to manually generate or edit auto-generated lockfiles (e.g., package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, Gemfile.lock). If you need to add, update, or remove dependencies, edit only the package specification file (e.g., package.json, Cargo.toml, Gemfile). The Self-Healing Engine will automatically execute the necessary package installation commands (like npm install) locally to safely regenerate and synchronize the lockfile. Therefore, you do not need to include any lockfile files in your 'changes' list.
 - Output ONLY valid JSON — no markdown fences, no explanation outside JSON.
 - If you cannot generate a confident fix, return: {"canFix": false, "reason": "explanation"}
 
@@ -260,6 +261,7 @@ Generate a JSON response with this EXACT structure:
       };
     } catch (error) {
       console.warn(`[PipelineIQ] Failed to parse AI fix response: ${error}`);
+      console.warn(`[PipelineIQ] Raw AI response was:`, rawResponse);
       return null;
     }
   }
