@@ -139,9 +139,11 @@ export class SelfHealingEngine {
       const errorMessage = String(error);
       let reason = `PR creation failed: ${errorMessage}`;
       
-      // Provide a friendly error if GITHUB_TOKEN lacks workflow scope
-      if (errorMessage.includes("Resource not accessible by integration") && fix.changes.some(c => c.filePath.startsWith(".github/workflows/"))) {
-        reason = `Cannot modify .github/workflows/ files without a Personal Access Token (PAT) with the 'workflow' scope. Standard GITHUB_TOKEN is restricted.`;
+      // Provide a friendly error if token lacks workflow scope
+      if ((errorMessage.includes("Resource not accessible by integration") || errorMessage.includes("Resource not accessible by personal access token")) && fix.changes.some(c => c.filePath.startsWith(".github/workflows/"))) {
+        reason = `Cannot modify .github/workflows/ files without a Personal Access Token (PAT) with the 'workflow' scope. Token is restricted.`;
+      } else if (errorMessage.includes("Resource not accessible")) {
+        reason = `Insufficient GitHub token permissions. Ensure the token has 'Contents: write' and 'Pull requests: write' access.`;
       }
 
       return {
