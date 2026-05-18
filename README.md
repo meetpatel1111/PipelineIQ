@@ -279,15 +279,22 @@ pipelineiq analyze \
   --self-heal-min-confidence 0.8
 
 > [!IMPORTANT]
-> **GitHub Workflow Permissions for Self-Healing**
+> **GitHub Permissions for Self-Healing**
 >
-> In order for PipelineIQ to create branch references and open Pull Requests, the workflow's `GITHUB_TOKEN` must be granted **write** permissions. Add the following block to your workflow file (e.g., `.github/workflows/main.yml`):
+> In order for PipelineIQ to push branch fixes and open Pull Requests dynamically using the default `GITHUB_TOKEN`, you must configure two settings:
 >
-> ```yaml
-> permissions:
->   contents: write
->   pull-requests: write
-> ```
+> 1. **Workflow File Configuration:** Add the `permissions` block to your workflow YAML file (e.g., `.github/workflows/main.yml`):
+>    ```yaml
+>    permissions:
+>      contents: write
+>      pull-requests: write
+>    ```
+>
+> 2. **Repository Settings Configuration:** On the GitHub Web UI of your repository:
+>    * Navigate to **Settings** -> **Actions** -> **General**.
+>    * Under **Workflow permissions**, select **Read and write permissions**.
+>    * Check **"Allow GitHub Actions to create and approve pull requests"**.
+>    * Click **Save**.
 
 # To run a self-healing dry run (generates AI patch but doesn't push to GitHub):
 pipelineiq analyze --logs ./logs --self-heal --self-heal-dry-run
