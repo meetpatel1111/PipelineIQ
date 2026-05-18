@@ -68,6 +68,7 @@ export const SelfHealingConfigSchema = z.object({
     "*.pem",
     "*.key",
     "*.cert",
+    ".github/workflows/*"
   ]),
   /** Branch name prefix for fix branches */
   branchPrefix: z.string().default("pipelineiq/fix"),

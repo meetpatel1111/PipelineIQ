@@ -40,6 +40,7 @@ program
   .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
   .option("--dry-run", "Show what would be done without creating Jira issues", false)
   .option("--github-token <token>", "GitHub token for API access")
+  .option("--azure-token <token>", "Azure DevOps PAT for API access")
   .option("--environment <env>", "Deployment environment (dev/staging/production)")
   .option("--repository <repo>", "Repository name (owner/repo)")
   .option("--branch <branch>", "Branch name")
@@ -257,6 +258,11 @@ async function handleAnalyze(options: any) {
       if (options.selfHealReviewers) configData.selfHealing.reviewers = options.selfHealReviewers;
       if (options.selfHealLabels) configData.selfHealing.prLabels = options.selfHealLabels;
       if (options.selfHealCategories) configData.selfHealing.allowedCategories = options.selfHealCategories;
+    }
+
+    if (configData.selfHealing) {
+      if (options.githubToken) configData.selfHealing.githubToken = options.githubToken.trim();
+      if (options.azureToken) configData.selfHealing.azureToken = options.azureToken.trim();
     }
 
     // Now validate the fully merged configuration

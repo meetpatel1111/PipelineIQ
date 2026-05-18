@@ -135,12 +135,20 @@ export class SelfHealingEngine {
         branchName: result.branchName,
         dryRun: false,
       };
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = String(error);
+      let reason = `PR creation failed: ${errorMessage}`;
+      
+      // Provide a friendly error if GITHUB_TOKEN lacks workflow scope
+      if (errorMessage.includes("Resource not accessible by integration") && fix.changes.some(c => c.filePath.startsWith(".github/workflows/"))) {
+        reason = `Cannot modify .github/workflows/ files without a Personal Access Token (PAT) with the 'workflow' scope. Standard GITHUB_TOKEN is restricted.`;
+      }
+
       return {
         attempted: true,
         success: false,
         fix,
-        reason: `PR creation failed: ${error}`,
+        reason,
         dryRun: false,
       };
     }
