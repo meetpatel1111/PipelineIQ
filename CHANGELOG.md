@@ -4,6 +4,17 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.18.1] - 2026-05-19
+
+### Changed
+- **Gemini Model Efficiency & Fallbacks**: Switched the default AI provider model to the fast and lightweight `gemini-3.1-flash-lite`. Upgraded the Gemini fallback candidate sequence to strictly utilize high-speed, lightweight Flash-class models (Gemini 3.1 Flash/Flash-Lite, Gemini 2.5 Flash, Gemini 2.0 Flash/Flash-Lite), completely eliminating heavy Pro models and legacy 1.5 versions.
+
+### Fixed
+- **Operational Telemetry Integrity**: Resolved a diagnostic visibility gap that previously caused internal telemetry and metrics collection errors to be obscured by generic `[object Object]` error messages. Telemetry failures are now captured and displayed as clear, human-readable messages rather than raw technical payloads.
+- **High-Fidelity Integration Diagnostics**: Upgraded the integration diagnostic system to extract and surface precise operational details directly from external services (such as project permissions, missing fields, or query constraints) by parsing JSON error payloads thrown by the Jira client and enforcing strict prototype chains with a custom `toString()` formatter on `JiraApiError`. This ensures that any integration bottlenecks are diagnosed instantly, eliminating manual investigation.
+
+---
+
 ## [0.18.0] - 2026-05-19
 
 ### Added
@@ -14,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Broadened Self-Healing Boundaries**: Increased the default self-healing limits to accommodate larger, more complex multi-file fixes:
   - `maxFilesChanged` increased from `3` to `10`
   - `maxLinesChanged` increased from `50` to `200`
-- **Resilient Snippet Patching Engine**: Refactored the file-patching mechanism to perform whitespace-normalized trimmed matching on failure targets. If precise matching fails, the engine gracefully appends the proposed changes as a safe fallback instead of failing, ensuring a higher rate of successful self-healing loops.
+- **Resilient Snippet Patching Engine**: Refactored the file-patching mechanism to perform whitespace-normalized trimmed matching on failure targets. If precise matching fails, the engine gracefully appends the proposed changes as safe fallback instead of failing, ensuring a higher rate of successful self-healing loops.
 
 ---
 

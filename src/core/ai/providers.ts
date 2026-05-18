@@ -56,6 +56,7 @@ export class OpenAIProvider implements AIProviderInterface {
     let lastError: any = null;
 
     for (const currentModelName of candidateModels) {
+      console.log(`[PipelineIQ] Using OpenAI model: ${currentModelName}`);
       const maxRetries = 2;
       let attempt = 0;
 
@@ -259,6 +260,7 @@ export class AnthropicProvider implements AIProviderInterface {
     let lastError: any = null;
 
     for (const currentModelName of candidateModels) {
+      console.log(`[PipelineIQ] Using Anthropic model: ${currentModelName}`);
       const maxRetries = 2;
       let attempt = 0;
 
@@ -451,6 +453,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
     });
 
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    console.log(`[PipelineIQ] Using Azure OpenAI deployment: ${this.deployment}`);
     const maxRetries = 2;
     let attempt = 0;
     let lastError: any = null;
@@ -628,6 +631,7 @@ export class LocalAIProvider implements AIProviderInterface {
     const { OpenAI } = await import("openai");
     const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    console.log(`[PipelineIQ] Using Local AI model: ${this.model}`);
     
     const maxRetries = 2;
     let attempt = 0;

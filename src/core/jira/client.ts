@@ -86,12 +86,16 @@ class JiraCloudClient implements JiraClient {
   }
 
   async request<T>(method: string, url: string, data?: any, params?: any): Promise<T> {
-    return await this.client.sendRequest<T>({
-      method: method as any,
-      url,
-      data,
-      params,
-    }, undefined as never);
+    try {
+      return await this.client.sendRequest<T>({
+        method: method as any,
+        url,
+        data,
+        params,
+      }, undefined as never);
+    } catch (error: any) {
+      throw JiraApiError.from(error);
+    }
   }
 
   async createIssue(spec: JiraTicketSpec): Promise<CreateIssueResult> {

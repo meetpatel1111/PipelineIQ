@@ -16,7 +16,7 @@ export class GeminiProvider implements AIProviderInterface {
       throw new Error("Gemini API key is required");
     }
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-2.5-flash";
+    this.model = config.model || "gemini-3.1-flash-lite";
     this.maxTokens = config.maxTokens || 4000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint || "https://generativelanguage.googleapis.com/v1beta";
@@ -33,13 +33,12 @@ export class GeminiProvider implements AIProviderInterface {
 
     // List of models to try in sequence if rate-limited or quota-exceeded
     const fallbackModels = [
-      "gemini-3.1-flash-lite",
       "gemini-3.1-flash",
-      "gemini-3.1-pro",
-      "gemini-3-flash",
-      "gemini-3-pro",
+      "gemini-3.1-flash-lite",
+      "gemini-3.0-flash",
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
+      "gemini-2.0-flash",
     ];
 
     const candidateModels = [this.model];
@@ -53,6 +52,7 @@ export class GeminiProvider implements AIProviderInterface {
     let lastError: any = null;
 
     for (const currentModelName of candidateModels) {
+      console.log(`[PipelineIQ] Using Gemini model: ${currentModelName}`);
       try {
         const model = genAI.getGenerativeModel({
           model: currentModelName,

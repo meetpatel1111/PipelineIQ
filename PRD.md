@@ -430,6 +430,8 @@ pipelineiq/
 | 78 | Local workspace context engine |
 | 79 | Automated draft PR creation    |
 | 80 | Safety guardrails (dry run, limits) |
+| 81 | Resilient Snippet Patching     |
+| 82 | Broadened Scope Limits (10 files / 200 lines) |
 
 ---
 
@@ -860,6 +862,8 @@ field value = AI producer (if enabled & succeeds & confidence ≥ threshold)
 | Risk Assessment     | Heuristic: branch + env + recent failure rate                                       |
 | Postmortem Summary  | **Omitted** (AI-only field — gracefully absent)                                     |
 | Predictive Scores   | **Omitted** (AI-only field — gracefully absent)                                     |
+| Autonomous Fix Proposal | **Omitted** or generated locally in Dry Run mode (no git branch/PR pushed)       |
+| Generated PR URL    | **Omitted** (AI/Self-Healing only field — gracefully absent when disabled or failing)|
 
 ## Architectural Contract
 

@@ -264,8 +264,8 @@ All override the corresponding `pipelineiq.json` value for the current run.
 | `--self-heal-dry-run` | `false` | Generate the AI fix but do not create a PR (useful for testing) |
 | `--self-heal-min-confidence <n>` | `0.8` | Minimum AI confidence required to create a PR |
 | `--self-heal-branch-prefix <prefix>` | `pipelineiq/fix` | Branch name prefix for the fix PR |
-| `--self-heal-max-files <n>` | `3` | Maximum number of files the AI is allowed to modify |
-| `--self-heal-max-lines <n>` | `50` | Maximum number of total lines the AI is allowed to modify |
+| `--self-heal-max-files <n>` | `10` | Maximum number of files the AI is allowed to modify (default updated in v0.18.0) |
+| `--self-heal-max-lines <n>` | `200` | Maximum number of total lines the AI is allowed to modify (default updated in v0.18.0) |
 | `--self-heal-blocked-paths <paths>` | (various) | Comma-separated glob patterns of files the AI is never allowed to touch (e.g. `*.env`, `Dockerfile`) |
 | `--self-heal-reviewers <users>` | — | Comma-separated list of GitHub/ADO usernames to add as PR reviewers |
 | `--self-heal-labels <labels>` | `pipelineiq,self-healing,auto-fix` | Comma-separated list of labels to add to the PR |

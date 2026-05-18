@@ -167,8 +167,9 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 ### Autonomous Self-Healing
 
 - **AI Code Fixer**: Generates precise snippet-level code patches based on diagnostic context and source code.
+- **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files. If precise target matching fails, the engine safely appends the proposed changes to the target file as a safe fallback instead of raising a pipeline error.
 - **Atomic Pull Requests**: Automatically creates isolated branches and Draft PRs in GitHub or Azure DevOps.
-- **Safety Guardrails**: Strict limits on files changed (default: 3), lines changed (default: 50), and blocked paths (e.g., `.env`, `Dockerfile`).
+- **Safety Guardrails**: Strict limits on files changed (default: 10, broadened from 3 in v0.18.0), lines changed (default: 200, broadened from 50 in v0.18.0), and blocked paths (e.g., `.env`, `Dockerfile`).
 - **Human-in-the-Loop**: All fixes are submitted as Draft PRs requiring human review before merging.
 - **Jira Integration**: Successfully created fix PRs are automatically cross-linked in the generated Jira incident ticket.
 
@@ -189,6 +190,32 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 > [!TIP]
 > **Jira Workflow Tip**: To ensure issues remain unassigned by default across any organization, you can configure your Jira workflow. Go to the **Create** transition → **Post Functions** → Add **Update Issue Field** → Set **Assignee** to **Unassigned**.
+
+## 📊 CI/CD Platform Integrations & Reporting
+
+### GitHub Actions Step Summary
+
+PipelineIQ v0.18.0 renders a rich, visual **Step Summary** directly to the GitHub Actions run execution page. On a workflow failure, this summary provides instant, at-a-glance feedback without having to open logs or visit Jira:
+* **Direct Links**: Direct clickable links to the created/updated Jira ticket and generated Self-Healing Pull Requests.
+* **Metadata Overview**: Key pipeline variables (Commit SHA, Triggering Actor, Target Environment, Run Attempt).
+* **AI Confidence & Severity Rating**: Instant risk profiling of the failure.
+* **Changed Files & Action Categories**: A detailed, clean table detailing each changed file, its action type (`ADD`/`MODIFY`/`DELETE`), and the proposed remediation path.
+
+### Azure DevOps Self-Healing Config
+
+For teams running Azure Pipelines, PipelineIQ v0.18.0 provides full feature parity with **9 new inputs** inside the Azure DevOps task schema (`task.json`) to control autonomous self-healing directly in pipeline YAML:
+
+| YAML Input | Type | Default | Description |
+|---|---|---|---|
+| `selfHealing` | `boolean` | `false` | Master toggle to enable autonomous self-healing code fix generation |
+| `selfHealingDryRun` | `boolean` | `false` | Generate the AI code fix and display logs, but do not create a git branch/PR |
+| `selfHealingConfidence` | `string` | `0.8` | Minimum AI confidence score required to apply a patch and create a PR |
+| `selfHealingMaxFiles` | `string` | `10` | Maximum number of files allowed to be modified by a single fix (broadened in v0.18.0) |
+| `selfHealingMaxLines` | `string` | `200` | Maximum number of total modified lines allowed in a fix (broadened in v0.18.0) |
+| `selfHealingDraft` | `boolean` | `true` | Create the generated Pull Request as a Draft for human-in-the-loop review |
+| `selfHealingReviewers` | `string` | — | Comma-separated list of Azure DevOps usernames/emails to add as PR reviewers |
+| `selfHealingLabels` | `string` | `pipelineiq,self-healing,auto-fix` | Comma-separated list of tags/labels to apply to the created PR |
+| `selfHealingCategories` | `string` | `Dependency,Build,Test,Configuration` | Comma-separated failure categories allowed for auto-fixing |
 
 ## 🔧 Configuration
 

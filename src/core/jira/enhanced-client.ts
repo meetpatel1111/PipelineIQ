@@ -11,10 +11,12 @@ import { markdownToAdf } from "./adf.js";
 export class EnhancedJiraClient implements JiraClient {
   private client: JiraClient;
   private customFieldMapping: JiraCustomFieldMapping;
+  private isCloud: boolean;
 
   constructor(auth: JiraAuth, customFieldMapping: JiraCustomFieldMapping = {}) {
     this.client = createJiraClient(auth);
     this.customFieldMapping = customFieldMapping;
+    this.isCloud = auth.type !== "server";
   }
 
   // Required JiraClient interface methods - delegate to wrapped client
@@ -189,15 +191,38 @@ export class EnhancedJiraClient implements JiraClient {
       expand?: string[];
     } = {}
   ): Promise<{ issues: any[]; total: number; startAt: number; maxResults: number }> {
-    const payload = {
-      jql,
-      maxResults: options.maxResults || 50,
-      startAt: options.startAt || 0,
-      fields: options.fields || ["summary", "status", "created", "updated", "priority", "labels"],
-      expand: options.expand || [],
-    };
+    if (this.isCloud) {
+      // Jira Cloud uses /search/jql and does not support startAt in the request body (results in 400 Bad Request)
+      // It also expects expand to be a comma-separated string (not a string array in the request body)
+      const payload: any = {
+        jql,
+        maxResults: options.maxResults || 50,
+        fields: options.fields || ["summary", "status", "created", "updated", "priority", "labels"],
+      };
 
-    return await this.request<any>("POST", this.getApiPath("/search/jql"), payload);
+      if (options.expand && options.expand.length > 0) {
+        payload.expand = options.expand.join(",");
+      }
+
+      const result = await this.request<any>("POST", this.getApiPath("/search/jql"), payload);
+      return {
+        issues: result.issues || [],
+        total: result.total ?? 0,
+        startAt: result.startAt ?? 0,
+        maxResults: result.maxResults ?? payload.maxResults,
+      };
+    } else {
+      // Jira Server/Data Center uses the classic /search endpoint and supports startAt
+      const payload = {
+        jql,
+        maxResults: options.maxResults || 50,
+        startAt: options.startAt || 0,
+        fields: options.fields || ["summary", "status", "created", "updated", "priority", "labels"],
+        expand: options.expand || [],
+      };
+
+      return await this.request<any>("POST", this.getApiPath("/search"), payload);
+    }
   }
 
   /**
