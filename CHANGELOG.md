@@ -4,6 +4,19 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.17.0] - 2026-05-19
+
+### Added
+- **Multi-Provider AI Resilience & Fallbacks**: Expanded resilient AI capabilities across all AI providers. Added fallback candidate model lists and automatic retry strategies with exponential backoff to handle quota, rate limits (`429`), temporary unavailability (`503`), and internal server errors (`500`).
+  - **OpenAI**: Dynamic model candidate sequence fallback `["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]`.
+  - **Anthropic**: Dynamic model candidate sequence fallback `["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest", "claude-3-sonnet-20240229", "claude-3-haiku-20240307"]`.
+  - **Azure OpenAI & Local AI**: Integrated multi-attempt exponential backoff retries for robust handling of rate limits and temporary outages.
+
+### Fixed
+- **Deduplicated Jira Links**: Dynamically filtered out duplicate core VCS links (`Pipeline`, `Pipeline Run`, `Repository`, `Commit`, `Pull Request`) from the `externalLinks` array to ensure they are printed exactly once.
+
+---
+
 ## [0.16.2] - 2026-05-18
 
 ### Added

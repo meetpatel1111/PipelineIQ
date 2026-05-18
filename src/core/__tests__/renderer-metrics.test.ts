@@ -72,4 +72,32 @@ describe("renderDescription — metrics section", () => {
     const desc = renderDescription(minEvent, {}, 10, false, undefined, undefined, metrics);
     expect(desc).not.toContain("MTTR");
   });
+
+  it("filters out duplicate links in the links section", () => {
+    const fields = {
+      externalLinks: [
+        { url: "https://github.com/org/repo/actions", title: "Pipeline" },
+        { url: "https://github.com/org/repo/actions/runs/1", title: "Pipeline Run" },
+        { url: "https://github.com/org/repo/commit/abc1234", title: "Commit abc1234" },
+        { url: "https://github.com/org/repo", title: "Repository" },
+        { url: "https://github.com/org/repo/pull/123", title: "Custom Extra Link" },
+      ],
+    };
+    const desc = renderDescription(minEvent, fields, 10, false, undefined, undefined, undefined);
+    
+    // We expect the custom extra link to be rendered
+    expect(desc).toContain("Custom Extra Link");
+    
+    // Check that we don't have duplicated entries
+    const lines = desc.split("\n");
+    const linksSectionIndex = lines.indexOf("### Links");
+    expect(linksSectionIndex).toBeGreaterThan(-1);
+    
+    const linkLines = lines.slice(linksSectionIndex + 1, linksSectionIndex + 10);
+    const pipelineCount = linkLines.filter(line => line.includes("[Pipeline]")).length;
+    const repoCount = linkLines.filter(line => line.includes("[Repository]")).length;
+    
+    expect(pipelineCount).toBe(1);
+    expect(repoCount).toBe(1);
+  });
 });

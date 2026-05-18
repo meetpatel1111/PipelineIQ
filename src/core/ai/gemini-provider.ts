@@ -27,50 +27,89 @@ export class GeminiProvider implements AIProviderInterface {
   }
 
   async generateInsights(request: AIRequest): Promise<AIResponse> {
-    const maxRetries = 3;
-    let attempt = 0;
-    
     // Import Google Generative AI library dynamically
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(this.apiKey);
-    const model = genAI.getGenerativeModel({
-      model: this.model,
-      generationConfig: {
-        maxOutputTokens: this.maxTokens,
-        temperature: this.temperature,
-        responseMimeType: "application/json",
-      },
-    });
 
-    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    // List of models to try in sequence if rate-limited or quota-exceeded
+    const fallbackModels = [
+      "gemini-3.1-flash-lite",
+      "gemini-3.1-flash",
+      "gemini-3.1-pro",
+      "gemini-3-flash",
+      "gemini-3-pro",
+      "gemini-2.5-flash-lite",
+      "gemini-2.5-flash",
+    ];
 
-    while (attempt <= maxRetries) {
-      try {
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-
-        if (request.isRawPrompt) {
-          return { rootCause: text };
-        }
-
-        return this.parseResponse(text);
-      } catch (error: any) {
-        attempt++;
-        const isRetryable = error.message?.includes("503") || error.message?.includes("Service Unavailable") || error.message?.includes("429");
-        
-        if (isRetryable && attempt <= maxRetries) {
-          const delay = Math.pow(2, attempt) * 1000;
-          console.warn(`[PipelineIQ] Gemini API error (${error.message}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-        
-        console.error("Gemini API error:", error);
-        throw new Error(`Gemini API error: ${error.message}`);
+    const candidateModels = [this.model];
+    for (const m of fallbackModels) {
+      if (m !== this.model) {
+        candidateModels.push(m);
       }
     }
-    
-    throw new Error("Gemini API error: Max retries exceeded");
+
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    let lastError: any = null;
+
+    for (const currentModelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: currentModelName,
+          generationConfig: {
+            maxOutputTokens: this.maxTokens,
+            temperature: this.temperature,
+            responseMimeType: "application/json",
+          },
+        });
+
+        const maxRetries = 2;
+        let attempt = 0;
+
+        while (attempt <= maxRetries) {
+          try {
+            const result = await model.generateContent(prompt);
+            const text = result.response.text();
+
+            if (request.isRawPrompt) {
+              return { rootCause: text };
+            }
+
+            return this.parseResponse(text);
+          } catch (error: any) {
+            attempt++;
+            lastError = error;
+            const errorMessage = error.message || "";
+            
+            const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("Quota");
+            const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("Service Unavailable");
+
+            // If it is a quota/429 error, and we have another candidate model, fall back immediately
+            if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
+              console.warn(`[PipelineIQ] Gemini model ${currentModelName} hit quota/rate limit. Falling back to the next available model...`);
+              break;
+            }
+
+            if (isRetryable && attempt <= maxRetries) {
+              const delay = Math.pow(2, attempt) * 1000;
+              console.warn(`[PipelineIQ] Gemini API error (${errorMessage}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+
+            break;
+          }
+        }
+      } catch (err: any) {
+        lastError = err;
+      }
+
+      // If we successfully got a response in the try-catch block, the function has already returned.
+      // If we broke out or caught an error, the loop will progress to the next candidate model.
+    }
+
+    console.error("Gemini API error after trying all candidate models:", lastError);
+    throw new Error(`Gemini API error: ${lastError?.message || "Unknown error"}`);
   }
 
   private buildPrompt(request: AIRequest): string {

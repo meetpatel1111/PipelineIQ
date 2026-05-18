@@ -393,7 +393,16 @@ export function renderDescription(
   }
   // Additional external links from fields
   const externalLinks = fields.externalLinks as any[] || [];
+  const renderedTitles = new Set(["Pipeline", "Pipeline Run", "Repository", "Commit"]);
   for (const link of externalLinks) {
+    if (
+      renderedTitles.has(link.title) ||
+      link.title.startsWith("Commit ") ||
+      link.title.startsWith("PR #") ||
+      link.title.startsWith("Pull Request #")
+    ) {
+      continue;
+    }
     out.push(`- [${link.title}](${link.url})`);
   }
   out.push("");

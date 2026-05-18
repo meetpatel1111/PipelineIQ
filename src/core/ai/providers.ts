@@ -37,51 +37,96 @@ export class OpenAIProvider implements AIProviderInterface {
     const { OpenAI } = await import("openai");
     const openai = new OpenAI({ apiKey: this.apiKey });
 
-    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    const fallbackModels = [
+      "gpt-4o",
+      "gpt-4o-mini",
+      "gpt-4-turbo",
+      "gpt-4",
+      "gpt-3.5-turbo",
+    ];
 
-    try {
-      const completion = await openai.chat.completions.create({
-        model: this.model,
-        messages: request.isRawPrompt ? [
-          { role: "user", content: prompt }
-        ] : [
-          {
-            role: "system",
-            content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-            
-            Return a JSON object with the following fields:
-            - summary: Brief human-readable failure description (max 255 characters)
-            - rootCause: Most likely cause of the failure
-            - remediation: Array of specific remediation steps
-            - severity: Critical/High/Medium/Low based on impact
-            - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
-            - confidence: 0-1 confidence score in your analysis
-            - riskAssessment: Brief risk assessment for the deployment
-            
-            Be concise but thorough. Focus on actionable insights.`
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-      });
-
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("No response from OpenAI");
+    const candidateModels = [this.model];
+    for (const m of fallbackModels) {
+      if (m !== this.model) {
+        candidateModels.push(m);
       }
-
-      if (request.isRawPrompt) {
-        return { rootCause: content };
-      }
-
-      return this.parseResponse(content);
-    } catch (error) {
-      throw new Error(`OpenAI API error: ${error}`);
     }
+
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    let lastError: any = null;
+
+    for (const currentModelName of candidateModels) {
+      const maxRetries = 2;
+      let attempt = 0;
+
+      while (attempt <= maxRetries) {
+        try {
+          const completion = await openai.chat.completions.create({
+            model: currentModelName,
+            messages: request.isRawPrompt ? [
+              { role: "user", content: prompt }
+            ] : [
+              {
+                role: "system",
+                content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+                
+                Return a JSON object with the following fields:
+                - summary: Brief human-readable failure description (max 255 characters)
+                - rootCause: Most likely cause of the failure
+                - remediation: Array of specific remediation steps
+                - severity: Critical/High/Medium/Low based on impact
+                - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
+                - confidence: 0-1 confidence score in your analysis
+                - riskAssessment: Brief risk assessment for the deployment
+                
+                Be concise but thorough. Focus on actionable insights.`
+              },
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            max_tokens: this.maxTokens,
+            temperature: this.temperature,
+          });
+
+          const content = completion.choices[0]?.message?.content;
+          if (!content) {
+            throw new Error("No response from OpenAI");
+          }
+
+          if (request.isRawPrompt) {
+            return { rootCause: content };
+          }
+
+          return this.parseResponse(content);
+        } catch (error: any) {
+          attempt++;
+          lastError = error;
+          const errorMessage = error.message || "";
+          
+          const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("Quota") || errorMessage.includes("rate_limit");
+          const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("Service Unavailable") || errorMessage.includes("500") || errorMessage.includes("Internal Server Error");
+
+          // Fall back to next model on quota/rate limit error
+          if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
+            console.warn(`[PipelineIQ] OpenAI model ${currentModelName} hit quota/rate limit. Falling back to the next available model...`);
+            break;
+          }
+
+          if (isRetryable && attempt <= maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[PipelineIQ] OpenAI API error (${errorMessage}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          break;
+        }
+      }
+    }
+
+    throw new Error(`OpenAI API error: ${lastError?.message || "Unknown error"}`);
   }
 
   private buildPrompt(request: AIRequest): string {
@@ -195,17 +240,38 @@ export class AnthropicProvider implements AIProviderInterface {
     const { Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: this.apiKey });
 
-    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    const fallbackModels = [
+      "claude-3-5-sonnet-latest",
+      "claude-3-5-haiku-latest",
+      "claude-3-opus-latest",
+      "claude-3-sonnet-20240229",
+      "claude-3-haiku-20240307",
+    ];
 
-    try {
-      const message = await anthropic.messages.create({
-        model: this.model,
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-        messages: [
-          {
-            role: "user",
-            content: request.isRawPrompt ? prompt : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+    const candidateModels = [this.model];
+    for (const m of fallbackModels) {
+      if (m !== this.model) {
+        candidateModels.push(m);
+      }
+    }
+
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    let lastError: any = null;
+
+    for (const currentModelName of candidateModels) {
+      const maxRetries = 2;
+      let attempt = 0;
+
+      while (attempt <= maxRetries) {
+        try {
+          const message = await anthropic.messages.create({
+            model: currentModelName,
+            max_tokens: this.maxTokens,
+            temperature: this.temperature,
+            messages: [
+              {
+                role: "user",
+                content: request.isRawPrompt ? prompt : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
 Return a JSON object with the following fields:
 - summary: Brief human-readable failure description (max 255 characters)
@@ -219,23 +285,47 @@ Return a JSON object with the following fields:
 Be concise but thorough. Focus on actionable insights.
 
 ${prompt}`,
-          },
-        ],
-      });
+              },
+            ],
+          });
 
-      const content = message.content[0]?.type === "text" ? message.content[0].text : "";
-      if (!content) {
-        throw new Error("No response from Anthropic");
+          const content = message.content[0]?.type === "text" ? message.content[0].text : "";
+          if (!content) {
+            throw new Error("No response from Anthropic");
+          }
+
+          if (request.isRawPrompt) {
+            return { rootCause: content };
+          }
+
+          return this.parseResponse(content);
+        } catch (error: any) {
+          attempt++;
+          lastError = error;
+          const errorMessage = error.message || "";
+
+          const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("Quota") || errorMessage.includes("rate_limit") || errorMessage.includes("limit_exceeded");
+          const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("Service Unavailable") || errorMessage.includes("500") || errorMessage.includes("Internal Server Error");
+
+          // Fall back to next model on quota/rate limit error
+          if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
+            console.warn(`[PipelineIQ] Anthropic model ${currentModelName} hit quota/rate limit. Falling back to the next available model...`);
+            break;
+          }
+
+          if (isRetryable && attempt <= maxRetries) {
+            const delay = Math.pow(2, attempt) * 1000;
+            console.warn(`[PipelineIQ] Anthropic API error (${errorMessage}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+
+          break;
+        }
       }
-
-      if (request.isRawPrompt) {
-        return { rootCause: content };
-      }
-
-      return this.parseResponse(content);
-    } catch (error) {
-      throw new Error(`Anthropic API error: ${error}`);
     }
+
+    throw new Error(`Anthropic API error: ${lastError?.message || "Unknown error"}`);
   }
 
   private buildPrompt(request: AIRequest): string {
@@ -361,50 +451,70 @@ export class AzureOpenAIProvider implements AIProviderInterface {
     });
 
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    const maxRetries = 2;
+    let attempt = 0;
+    let lastError: any = null;
 
-    try {
-      const completion = await openai.chat.completions.create({
-        model: this.deployment,
-        messages: request.isRawPrompt ? [
-          { role: "user", content: prompt }
-        ] : [
-          {
-            role: "system",
-            content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-            
-            Return a JSON object with the following fields:
-            - summary: Brief human-readable failure description (max 255 characters)
-            - rootCause: Most likely cause of the failure
-            - remediation: Array of specific remediation steps
-            - severity: Critical/High/Medium/Low based on impact
-            - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
-            - confidence: 0-1 confidence score in your analysis
-            - riskAssessment: Brief risk assessment for the deployment
-            
-            Be concise but thorough. Focus on actionable insights.`
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-      });
+    while (attempt <= maxRetries) {
+      try {
+        const completion = await openai.chat.completions.create({
+          model: this.deployment,
+          messages: request.isRawPrompt ? [
+            { role: "user", content: prompt }
+          ] : [
+            {
+              role: "system",
+              content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+              
+              Return a JSON object with the following fields:
+              - summary: Brief human-readable failure description (max 255 characters)
+              - rootCause: Most likely cause of the failure
+              - remediation: Array of specific remediation steps
+              - severity: Critical/High/Medium/Low based on impact
+              - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
+              - confidence: 0-1 confidence score in your analysis
+              - riskAssessment: Brief risk assessment for the deployment
+              
+              Be concise but thorough. Focus on actionable insights.`
+            },
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: this.maxTokens,
+          temperature: this.temperature,
+        });
 
-      const content = completion.choices[0]?.message?.content;
-      if (!content) {
-        throw new Error("No response from Azure OpenAI");
+        const content = completion.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error("No response from Azure OpenAI");
+        }
+
+        if (request.isRawPrompt) {
+          return { rootCause: content };
+        }
+
+        return this.parseResponse(content);
+      } catch (error: any) {
+        attempt++;
+        lastError = error;
+        const errorMessage = error.message || "";
+        
+        const isRetryable = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("rate_limit") || errorMessage.includes("503") || errorMessage.includes("Service Unavailable") || errorMessage.includes("500") || errorMessage.includes("Internal Server Error");
+
+        if (isRetryable && attempt <= maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.warn(`[PipelineIQ] Azure OpenAI API error (${errorMessage}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        break;
       }
-
-      if (request.isRawPrompt) {
-        return { rootCause: content };
-      }
-
-      return this.parseResponse(content);
-    } catch (error) {
-      throw new Error(`Azure OpenAI API error: ${error}`);
     }
+
+    throw new Error(`Azure OpenAI API error: ${lastError?.message || "Unknown error"}`);
   }
 
   private buildPrompt(request: AIRequest): string {
@@ -515,18 +625,24 @@ export class LocalAIProvider implements AIProviderInterface {
   }
 
   async generateInsights(request: AIRequest): Promise<AIResponse> {
-    try {
-      const { OpenAI } = await import("openai");
-      const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
-      const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
-      const completion = await client.chat.completions.create({
-        model: this.model,
-        messages: request.isRawPrompt ? [
-          { role: "user", content: prompt }
-        ] : [
-          {
-            role: "system",
-            content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+    const { OpenAI } = await import("openai");
+    const client = new OpenAI({ baseURL: this.baseURL, apiKey: this.apiKey });
+    const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
+    
+    const maxRetries = 2;
+    let attempt = 0;
+    let lastError: any = null;
+
+    while (attempt <= maxRetries) {
+      try {
+        const completion = await client.chat.completions.create({
+          model: this.model,
+          messages: request.isRawPrompt ? [
+            { role: "user", content: prompt }
+          ] : [
+            {
+              role: "system",
+              content: `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
 Return a JSON object with the following fields:
 - summary: Brief human-readable failure description (max 255 characters)
@@ -538,24 +654,40 @@ Return a JSON object with the following fields:
 - riskAssessment: Brief risk assessment for the deployment
 
 Be concise but thorough. Focus on actionable insights.`,
-          },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: this.maxTokens,
-        temperature: this.temperature,
-      });
+            },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: this.maxTokens,
+          temperature: this.temperature,
+        });
 
-      const content = completion.choices[0]?.message?.content;
-      if (!content) throw new Error("No response from local AI");
-      
-      if (request.isRawPrompt) {
-        return { rootCause: content };
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("No response from local AI");
+        
+        if (request.isRawPrompt) {
+          return { rootCause: content };
+        }
+        
+        return this.parseResponse(content);
+      } catch (error: any) {
+        attempt++;
+        lastError = error;
+        const errorMessage = error.message || "";
+        
+        const isRetryable = errorMessage.includes("429") || errorMessage.includes("rate_limit") || errorMessage.includes("503") || errorMessage.includes("Service Unavailable") || errorMessage.includes("500") || errorMessage.includes("Internal Server Error") || errorMessage.includes("fetch failed");
+
+        if (isRetryable && attempt <= maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.warn(`[PipelineIQ] Local AI error (${errorMessage}). Retrying in ${delay}ms... (Attempt ${attempt} of ${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        break;
       }
-      
-      return this.parseResponse(content);
-    } catch (error) {
-      throw new Error(`Local AI error: ${error}`);
     }
+
+    throw new Error(`Local AI error: ${lastError?.message || "Unknown error"}`);
   }
 
   private buildPrompt(request: AIRequest): string {
