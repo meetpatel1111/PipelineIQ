@@ -61,20 +61,39 @@ npx pipelineiq analyze --jira-project "DEVOPS"
 ## 🏗 How It Works: CI/CD → Jira Integration
 
 ```mermaid
-graph LR
-    A[GitHub Actions] -->|Pipeline Failure| B[PipelineIQ]
-    C[Azure DevOps] -->|Pipeline Failure| B
-    B -->|AI Analysis| D[Rich Jira Ticket]
-    B -->|Context Enrichment| D
-    D -->|Actionable Issue| E[Development Team]
+graph TD
+    subgraph "1. CI/CD Platforms"
+        A[GitHub Actions]
+        C[Azure DevOps]
+    end
+
+    subgraph "2. PipelineIQ Core"
+        B[Context Analysis]
+        AI[AI Intelligence Hub]
+    end
+
+    subgraph "3. Actionable Outputs"
+        D[Rich Jira Incident Ticket]
+        F[Self-Healing Draft PR]
+    end
+
+    A -->|Pipeline Failure| B
+    C -->|Pipeline Failure| B
+    B -->|Enrichment| AI
+    AI -->|RCA & Metadata| D
+    AI -->|Code Patch Generation| F
+    D -.->|Cross-Linked| F
+    D -->|Triage| E[Development Team]
+    F -->|Review & Merge| E
 ```
 
 **Integration Flow:**
 1. **🔍 Failure Detection**: PipelineIQ monitors your CI/CD pipelines for failures
 2. **🧠 Context Analysis**: Extracts repository, branch, commit, and failure details
 3. **🤖 AI Processing**: Generates root cause analysis and remediation suggestions
-4. **🎫 Jira Creation**: Creates comprehensive tickets with all operational context
-5. **🔄 Deduplication**: Prevents duplicate tickets for similar failures
+4. **🔄 Deduplication**: Smart signature matching prevents duplicate tickets for similar failures
+5. **🎫 Jira Creation**: Creates or updates comprehensive tickets with all operational context
+6. **🩹 Self-Healing**: Automatically generates and pushes code patches as Draft PRs
 
 **What Gets Bridged:**
 - ✅ Pipeline metadata → Jira custom fields
@@ -82,6 +101,7 @@ graph LR
 - ✅ Error logs → Jira descriptions
 - ✅ Environment context → Jira labels
 - ✅ AI insights → Jira comments
+- ✅ Automated Code Fixes → Draft Pull Requests
 
 ## 📦 Installation
 
@@ -114,9 +134,9 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 | Diagram | Link | Purpose |
 | :--- | :--- | :--- |
-| **🏗 Structural Architecture** | [pipelineiq-arch-structural.drawio](./pipelineiq-arch-structural.drawio) | ESM Engine, Signatures, and AI Hub |
-| **🔄 Operational Flow** | [pipelineiq-arch-operational-flow.drawio](./pipelineiq-arch-operational-flow.drawio) | End-to-end processing & logic deep-dives |
-| **🌐 Deployment Topology** | [pipelineiq-arch-deployment-topology.drawio](./pipelineiq-arch-deployment-topology.drawio) | Network egress, context boundaries, and security |
+| **🏗 Structural Architecture** | [View in diagrams.net](https://app.diagrams.net/?url=https://raw.githubusercontent.com/meetpatel1111/PipelineIQ/main/pipelineiq-arch-structural.drawio) | ESM Engine, Signatures, and AI Hub |
+| **🔄 Operational Flow** | [View in diagrams.net](https://app.diagrams.net/?url=https://raw.githubusercontent.com/meetpatel1111/PipelineIQ/main/pipelineiq-arch-operational-flow.drawio) | End-to-end processing & logic deep-dives |
+| **🌐 Deployment Topology** | [View in diagrams.net](https://app.diagrams.net/?url=https://raw.githubusercontent.com/meetpatel1111/PipelineIQ/main/pipelineiq-arch-deployment-topology.drawio) | Network egress, context boundaries, and security |
 
 > [!TIP]
 > For a detailed technical breakdown of the engine, AI strategies, and security model, see the full [ARCHITECTURE.md](./ARCHITECTURE.md).
