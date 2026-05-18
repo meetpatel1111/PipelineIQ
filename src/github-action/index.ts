@@ -92,8 +92,52 @@ async function run(): Promise<void> {
             ? "failed"
             : "skipped";
       core.setOutput("self-healing-status", status);
+
+      const filesChanged = result.selfHealing.fix?.changes?.map((c) => c.filePath) ?? [];
+      core.setOutput("self-healing-files-changed", filesChanged.join(","));
+
       if (result.selfHealing.prUrl) {
         core.info(`PipelineIQ Self-Healing: PR created at ${result.selfHealing.prUrl}`);
+      }
+
+      if (result.selfHealing.fix) {
+        const fix = result.selfHealing.fix;
+        core.info(`PipelineIQ Proposed Changes:`);
+        for (const change of fix.changes) {
+          core.info(`  - [${change.action.toUpperCase()}] ${change.filePath}: ${change.changeDescription}`);
+        }
+
+        // Generate GitHub Step Summary for rich visual feedback
+        try {
+          let summary = core.summary.addHeading("🤖 PipelineIQ Self-Healing Fix Summary", 2);
+
+          if (result.selfHealing.success && result.selfHealing.prUrl) {
+            summary = summary.addRaw(`✅ **PR Created:** [${result.selfHealing.prUrl}](${result.selfHealing.prUrl})<br>`);
+            summary = summary.addRaw(`🌿 **Branch:** \`${result.selfHealing.branchName}\`<br>`);
+          } else if (result.selfHealing.dryRun) {
+            summary = summary.addRaw(`🧪 **Dry Run Mode — No PR created**<br>`);
+          } else {
+            summary = summary.addRaw(`❌ **Self-Healing Failed:** ${result.selfHealing.reason}<br>`);
+          }
+
+          summary = summary.addRaw(`🎯 **Confidence:** ${Math.round(fix.confidence * 100)}% | ⚡ **Risk Level:** ${fix.riskLevel}<br><br>`)
+            .addHeading("Proposed File Changes", 3);
+
+          const tableHeaders = [
+            { data: "File Path", header: true },
+            { data: "Action", header: true },
+            { data: "Description", header: true },
+          ];
+          const tableRows = fix.changes.map((c) => [
+            `\`${c.filePath}\``,
+            `**${c.action.toUpperCase()}**`,
+            c.changeDescription,
+          ]);
+
+          await summary.addTable([tableHeaders, ...tableRows]).write();
+        } catch (sumErr) {
+          core.warning(`Failed to write step summary: ${sumErr}`);
+        }
       }
     }
 
@@ -146,8 +190,8 @@ function readConfig(): PipelineIQConfig {
         enabled: true,
         dryRun: core.getInput("self-healing-dry-run") === "true",
         minConfidence: Number.parseFloat(core.getInput("self-healing-confidence") || "0.8"),
-        maxFilesChanged: Number.parseInt(core.getInput("self-healing-max-files") || "3", 10),
-        maxLinesChanged: Number.parseInt(core.getInput("self-healing-max-lines") || "50", 10),
+        maxFilesChanged: Number.parseInt(core.getInput("self-healing-max-files") || "10", 10),
+        maxLinesChanged: Number.parseInt(core.getInput("self-healing-max-lines") || "200", 10),
         draftPr: core.getInput("self-healing-draft") !== "false",
         githubToken: core.getInput("github-token"),
         platform: "github" as const,

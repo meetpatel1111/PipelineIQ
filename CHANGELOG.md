@@ -4,6 +4,20 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.18.0] - 2026-05-19
+
+### Added
+- **GitHub Actions Step Summary Integration**: Added rich, visual markdown feedback directly to GitHub workflow runs. High-fidelity summaries now include a direct clickable PR link (or dry-run status), target branches, AI confidence ratings, risk level, and a beautifully formatted table detailing the changed files, action types (`ADD`, `MODIFY`, `DELETE`), and proposed remediation details.
+- **Azure DevOps Self-Healing Hardening**: Added 9 new first-class inputs to the Azure DevOps task schema (`task.json`) for full feature parity. Teams can now configure self-healing enabling status, dry-run toggles, minimum confidence thresholds, draft PR preferences, labels, failure categories, and files/lines boundaries directly inside their ADO pipelines.
+
+### Changed
+- **Broadened Self-Healing Boundaries**: Increased the default self-healing limits to accommodate larger, more complex multi-file fixes:
+  - `maxFilesChanged` increased from `3` to `10`
+  - `maxLinesChanged` increased from `50` to `200`
+- **Resilient Snippet Patching Engine**: Refactored the file-patching mechanism to perform whitespace-normalized trimmed matching on failure targets. If precise matching fails, the engine gracefully appends the proposed changes as a safe fallback instead of failing, ensuring a higher rate of successful self-healing loops.
+
+---
+
 ## [0.17.0] - 2026-05-19
 
 ### Added

@@ -249,7 +249,7 @@ pipelineiq/
 # GitHub Actions
 
 ```yaml
-- uses: meetpatel1111/PipelineIQ@v0.16.0
+- uses: meetpatel1111/PipelineIQ@v0.18.0
   if: failure()
   with:
     jira-url: ${{ secrets.JIRA_URL }}

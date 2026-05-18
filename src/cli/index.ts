@@ -391,14 +391,26 @@ async function handleAnalyze(options: any) {
           console.log(chalk.magenta(`   Branch: ${sh.branchName}`));
           console.log(chalk.magenta(`   Confidence: ${Math.round((sh.fix?.confidence ?? 0) * 100)}%`));
           console.log(chalk.magenta(`   Risk: ${sh.fix?.riskLevel ?? "unknown"}`));
+          if (sh.fix?.changes) {
+            console.log(chalk.magenta(`   Changes Proposed:`));
+            for (const change of sh.fix.changes) {
+              console.log(chalk.magenta(`     - [${change.action.toUpperCase()}] ${change.filePath} (${change.changeDescription})`));
+            }
+          }
           console.log(chalk.dim(`   ⚠ Requires human review before merging`));
         } else if (sh.dryRun && sh.fix) {
           console.log(chalk.cyan(`\n🧪 Self-Healing Dry Run — Fix Generated:`));
           console.log(chalk.cyan(`   Title: ${sh.fix.title}`));
-          console.log(chalk.cyan(`   Files: ${sh.fix.changes.length}`));
           console.log(chalk.cyan(`   Confidence: ${Math.round(sh.fix.confidence * 100)}%`));
+          console.log(chalk.cyan(`   Risk: ${sh.fix.riskLevel}`));
+          if (sh.fix.changes) {
+            console.log(chalk.cyan(`   Changes Proposed:`));
+            for (const change of sh.fix.changes) {
+              console.log(chalk.cyan(`     - [${change.action.toUpperCase()}] ${change.filePath} (${change.changeDescription})`));
+            }
+          }
         } else if (sh.attempted && !sh.success) {
-          console.log(chalk.yellow(`\n⚠ Self-Healing: ${sh.reason}`));
+          console.log(chalk.yellow(`\n⚠ Self-Healing Failed: ${sh.reason}`));
         }
       }
     }

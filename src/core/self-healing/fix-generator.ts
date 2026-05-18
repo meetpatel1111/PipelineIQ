@@ -129,8 +129,8 @@ export class FixGenerator {
     const root = this.getWorkspaceRoot();
     const fileContents: string[] = [];
 
-    // Limit to max 5 files to preserve token budget
-    for (const p of paths.slice(0, 5)) {
+    // Limit to max 10 files to preserve token budget
+    for (const p of paths.slice(0, 10)) {
       try {
         const fullPath = path.resolve(root, p);
         

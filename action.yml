@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: '0.17.0'
+version: '0.18.0'
 author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
@@ -94,11 +94,11 @@ inputs:
   self-healing-max-files:
     description: Maximum number of files a fix can change
     required: false
-    default: "3"
+    default: "10"
   self-healing-max-lines:
     description: Maximum total lines a fix can change
     required: false
-    default: "50"
+    default: "200"
   self-healing-draft:
     description: Create PR as draft (recommended)
     required: false
@@ -298,6 +298,8 @@ outputs:
     description: URL of the self-healing Pull Request (if created)
   self-healing-status:
     description: Self-healing outcome (success / failed / skipped / dry-run)
+  self-healing-files-changed:
+    description: Comma-separated list of file paths changed by self-healing
 
 runs:
   using: node20

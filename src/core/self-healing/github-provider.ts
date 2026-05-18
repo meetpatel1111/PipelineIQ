@@ -37,18 +37,8 @@ export class GitHubProvider implements GitProvider {
     const branchName = options.branchName;
     const ref = `refs/heads/${branchName}`;
 
-    // 1. Create branch from the base SHA
-    await octokit.git.createRef({
-      owner: repoOwner,
-      repo: repoName,
-      ref,
-      sha: baseSha,
-    });
-
-    // 2. Build a Git tree with all file changes
-    //    - create: use newContent directly (full file)
-    //    - modify: fetch original → apply patch (originalContent → newContent)
-    //    - delete: set sha to null
+    // 1. Fetch original files and apply patches BEFORE creating the branch/PR
+    // This allows us to detect if the changes are completely empty (no actual modifications)
     const treeItems: Array<{
       path: string;
       mode: "100644";
@@ -57,8 +47,11 @@ export class GitHubProvider implements GitProvider {
       sha?: string | null;
     }> = [];
 
+    let actualChangeCount = 0;
+
     for (const change of fix.changes) {
       if (change.action === "delete") {
+        actualChangeCount++;
         // To delete a file via the tree API, set sha to null
         treeItems.push({
           path: change.filePath,
@@ -68,7 +61,7 @@ export class GitHubProvider implements GitProvider {
         });
       } else if (change.action === "modify" && change.originalContent) {
         // For modify: fetch the original file, apply the AI's patch snippet
-        const fullContent = await this.fetchAndPatch(
+        const patchResult = await this.fetchOriginalAndPatch(
           octokit,
           repoOwner,
           repoName,
@@ -77,14 +70,29 @@ export class GitHubProvider implements GitProvider {
           change.originalContent,
           change.newContent ?? "",
         );
+        if (patchResult.isModified) {
+          actualChangeCount++;
+        }
         treeItems.push({
           path: change.filePath,
           mode: "100644",
           type: "blob",
-          content: fullContent,
+          content: patchResult.content,
         });
       } else {
-        // create — newContent is the full file
+        // create — newContent is the full file.
+        // Let's check if the file is identical to an existing one.
+        const isIdentical = await this.isFileIdentical(
+          octokit,
+          repoOwner,
+          repoName,
+          baseSha,
+          change.filePath,
+          change.newContent ?? "",
+        );
+        if (!isIdentical) {
+          actualChangeCount++;
+        }
         treeItems.push({
           path: change.filePath,
           mode: "100644",
@@ -93,6 +101,18 @@ export class GitHubProvider implements GitProvider {
         });
       }
     }
+
+    if (actualChangeCount === 0) {
+      throw new Error("No actual file changes detected after applying the patch. Aborting PR creation to prevent empty commits.");
+    }
+
+    // 2. Create branch from the base SHA now that we know we have changes
+    await octokit.git.createRef({
+      owner: repoOwner,
+      repo: repoName,
+      ref,
+      sha: baseSha,
+    });
 
     const tree = await octokit.git.createTree({
       owner: repoOwner,
@@ -227,17 +247,41 @@ export class GitHubProvider implements GitProvider {
   }
 
   /**
-   * Fetch the original file content from the repo and apply the AI's
-   * snippet-level patch to produce the full modified file.
-   *
-   * The Git Trees API requires full file content for modifications, but
-   * the AI only generates the snippet that needs changing. This method
-   * bridges that gap by:
-   *   1. Fetching the file at the base commit SHA
-   *   2. Finding the originalContent snippet in the file
-   *   3. Replacing it with the newContent snippet
+   * Helper to check if a file already exists in the repository with the exact same content.
    */
-  private async fetchAndPatch(
+  private async isFileIdentical(
+    octokit: InstanceType<typeof import("@octokit/rest").Octokit>,
+    owner: string,
+    repo: string,
+    baseSha: string,
+    filePath: string,
+    newContent: string,
+  ): Promise<boolean> {
+    try {
+      const { data } = await octokit.repos.getContent({
+        owner,
+        repo,
+        path: filePath,
+        ref: baseSha,
+      });
+
+      if (Array.isArray(data) || data.type !== "file" || !("content" in data)) {
+        return false;
+      }
+
+      const originalFile = Buffer.from(data.content, "base64").toString("utf-8");
+      return originalFile === newContent;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Fetch the original file content from the repo and apply the AI's
+   * snippet-level patch to produce the full modified file, as well as
+   * indicating if it was actually modified.
+   */
+  private async fetchOriginalAndPatch(
     octokit: InstanceType<typeof import("@octokit/rest").Octokit>,
     owner: string,
     repo: string,
@@ -245,7 +289,7 @@ export class GitHubProvider implements GitProvider {
     filePath: string,
     originalSnippet: string,
     newSnippet: string,
-  ): Promise<string> {
+  ): Promise<{ content: string; isModified: boolean }> {
     try {
       const { data } = await octokit.repos.getContent({
         owner,
@@ -260,34 +304,43 @@ export class GitHubProvider implements GitProvider {
 
       // GitHub returns base64-encoded content
       const originalFile = Buffer.from(data.content, "base64").toString("utf-8");
+      let fullContent = originalFile;
 
       // Apply the patch: find the original snippet and replace
       if (originalFile.includes(originalSnippet)) {
-        return originalFile.replace(originalSnippet, newSnippet);
+        fullContent = originalFile.replace(originalSnippet, newSnippet);
+      } else {
+        // Fallback: try trimmed matching (whitespace normalization)
+        const trimmedOriginal = originalSnippet.trim();
+        const lines = originalFile.split("\n");
+        const matchIdx = lines.findIndex((_, i) => {
+          const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
+          return block === trimmedOriginal;
+        });
+
+        if (matchIdx !== -1) {
+          const snippetLineCount = trimmedOriginal.split("\n").length;
+          const before = lines.slice(0, matchIdx).join("\n");
+          const after = lines.slice(matchIdx + snippetLineCount).join("\n");
+          fullContent = [before, newSnippet, after].filter(Boolean).join("\n");
+        } else {
+          // Last resort: append the new content with a comment
+          console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
+          fullContent = originalFile + "\n" + newSnippet;
+        }
       }
 
-      // Fallback: try trimmed matching (whitespace normalization)
-      const trimmedOriginal = originalSnippet.trim();
-      const lines = originalFile.split("\n");
-      const matchIdx = lines.findIndex((_, i) => {
-        const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
-        return block === trimmedOriginal;
-      });
-
-      if (matchIdx !== -1) {
-        const snippetLineCount = trimmedOriginal.split("\n").length;
-        const before = lines.slice(0, matchIdx).join("\n");
-        const after = lines.slice(matchIdx + snippetLineCount).join("\n");
-        return [before, newSnippet, after].filter(Boolean).join("\n");
-      }
-
-      // Last resort: append the new content with a comment
-      console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
-      return originalFile + "\n" + newSnippet;
+      return {
+        content: fullContent,
+        isModified: fullContent !== originalFile,
+      };
     } catch (error) {
-      // If we can't fetch the file, fall back to using newContent as full content
+      // If we can't fetch the file, fall back to using newSnippet as full content
       console.warn(`[PipelineIQ] Could not fetch ${filePath} for patching: ${error}`);
-      return newSnippet;
+      return {
+        content: newSnippet,
+        isModified: true,
+      };
     }
   }
 }

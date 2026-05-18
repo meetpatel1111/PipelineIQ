@@ -12,7 +12,7 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 17,
+    "Minor": 18,
     "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
@@ -704,6 +704,68 @@
       "type": "string",
       "label": "PR Target Branch",
       "defaultValue": "$(System.PullRequest.TargetBranch)",
+      "required": false
+    },
+    {
+      "name": "selfHealing",
+      "type": "boolean",
+      "label": "Enable Self-Healing",
+      "defaultValue": "false",
+      "required": false
+    },
+    {
+      "name": "selfHealingDryRun",
+      "type": "boolean",
+      "label": "Self-Healing Dry Run",
+      "defaultValue": "false",
+      "required": false
+    },
+    {
+      "name": "selfHealingConfidence",
+      "type": "string",
+      "label": "Self-Healing Minimum Confidence",
+      "defaultValue": "0.8",
+      "required": false
+    },
+    {
+      "name": "selfHealingMaxFiles",
+      "type": "string",
+      "label": "Self-Healing Maximum Files",
+      "defaultValue": "10",
+      "required": false
+    },
+    {
+      "name": "selfHealingMaxLines",
+      "type": "string",
+      "label": "Self-Healing Maximum Lines",
+      "defaultValue": "200",
+      "required": false
+    },
+    {
+      "name": "selfHealingDraft",
+      "type": "boolean",
+      "label": "Self-Healing Create Draft PR",
+      "defaultValue": "true",
+      "required": false
+    },
+    {
+      "name": "selfHealingReviewers",
+      "type": "string",
+      "label": "Self-Healing Reviewers",
+      "required": false
+    },
+    {
+      "name": "selfHealingLabels",
+      "type": "string",
+      "label": "Self-Healing PR Labels",
+      "defaultValue": "pipelineiq,self-healing,auto-fix",
+      "required": false
+    },
+    {
+      "name": "selfHealingCategories",
+      "type": "string",
+      "label": "Self-Healing Categories",
+      "defaultValue": "Dependency,Build,Test,Configuration",
       "required": false
     }
   ],

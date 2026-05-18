@@ -48,9 +48,9 @@ export const SelfHealingConfigSchema = z.object({
   /** Minimum AI confidence required to attempt a fix (0–1) */
   minConfidence: z.number().min(0).max(1).default(0.8),
   /** Maximum number of files a single fix can touch */
-  maxFilesChanged: z.number().int().positive().default(3),
+  maxFilesChanged: z.number().int().positive().default(10),
   /** Maximum total lines changed across all files */
-  maxLinesChanged: z.number().int().positive().default(50),
+  maxLinesChanged: z.number().int().positive().default(200),
   /** Failure categories eligible for self-healing */
   allowedCategories: z.array(z.string()).default([
     "Dependency",
