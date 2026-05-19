@@ -103,18 +103,26 @@ export class FixGenerator {
     );
   }
 
-  /**
-   * Extract potential file paths from logs and error messages.
-   * Looks for standard file extensions.
-   */
   private extractFilePaths(text: string): string[] {
-    // Regex matches relative or absolute-looking paths with common extensions
-    // e.g., src/utils/auth.ts, lib/core.py, Dockerfile
-    const regex = /(?:[a-zA-Z0-9_.-]+\/)+[a-zA-Z0-9_.-]+\.(?:ts|js|jsx|tsx|json|yml|yaml|py|go|java|rb|php|cs|cpp|c|h)\b/g;
+    // Regex matches relative or absolute-looking paths with any file extension
+    // e.g., src/utils/auth.ts, lib/core.py, package.json, main.tf, Cargo.toml, build.gradle
+    const regex = /(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.[a-zA-Z][a-zA-Z0-9_-]*\b/g;
     const matches = text.match(regex) || [];
     
     // Deduplicate and filter out obvious false positives
-    return [...new Set(matches)].filter(p => !p.includes("node_modules"));
+    const paths = [...new Set(matches)].filter(p => !p.includes("node_modules"));
+
+    // Proactively add package.json if it exists at the root of the workspace
+    const root = this.getWorkspaceRoot();
+    try {
+      if (!paths.includes("package.json") && fs.existsSync(path.resolve(root, "package.json"))) {
+        paths.push("package.json");
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    return paths;
   }
 
   /**

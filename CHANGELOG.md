@@ -4,6 +4,22 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.20.0] - 2026-05-19
+
+### Added
+- **Root-Level Context Ingestion**: Upgraded the files context collector in `FixGenerator` to support root-level configuration files (such as `package.json`), preventing AI model hallucinations and patching mismatches during code repair.
+- **Unified Patch Utility**: Created a centralized patching module (`patch.ts`) to handle newline normalization (CRLF vs LF) and whitespace/indentation mismatches consistently across all execution pathways.
+
+### Changed
+- **Unrestricted Context File Extensions**: Removed the rigid list of restricted file extensions in the failure context file extraction regex, allowing PipelineIQ to read and ingest context for any file type (e.g. Terraform `.tf`, Rust `.rs`, Kotlin `.kt`, Gradle `.gradle`, configuration files, custom scripts, etc.) when diagnosing and healing pipeline failures. Added safety logic to ignore decimal/version numbers.
+- **Unified Local & Remote Patching**: Refactored `SelfHealingEngine`, `GitHubProvider`, and `AzureDevOpsProvider` to consume the new unified `applyPatch` utility, ensuring identical patch application logic is applied locally and remotely.
+- **Git Ignore Hardening**: Added `scratch/` and `piq-test-temp/` to `.gitignore` to keep local testing and replication directories untracked by Git.
+
+### Fixed
+- **Robust Remote Patch Application**: Prevented remote file corruption on GitHub and Azure DevOps by ensuring that when a generated patch snippet cannot be found in the remote repository's file content, an explicit error is thrown and propagated rather than falling back to appending the patch at the end of the file.
+
+---
+
 ## [0.19.0] - 2026-05-19
 
 ### Added

@@ -1,5 +1,6 @@
 import type { GitProvider, PRCreationResult, PROptions } from "./types.js";
 import type { CodeFix } from "../types/self-healing.js";
+import { applyPatch } from "./patch.js";
 
 /**
  * Azure DevOps implementation of GitProvider.
@@ -228,39 +229,20 @@ export class AzureDevOpsProvider implements GitProvider {
     newSnippet: string,
     headers: Record<string, string>,
   ): Promise<string> {
+    let originalFile: string;
     try {
       const response = await axios.get(
         `${apiBase}/items?path=/${filePath}&versionDescriptor.version=${baseSha}&versionDescriptor.versionType=commit&${apiVersion}`,
         { headers, responseType: "text" },
       );
 
-      const originalFile = response.data;
-
-      // Apply the patch: find the original snippet and replace
-      if (originalFile.includes(originalSnippet)) {
-        return originalFile.replace(originalSnippet, newSnippet);
-      }
-
-      // Fallback: try trimmed matching
-      const trimmedOriginal = originalSnippet.trim();
-      const lines = originalFile.split("\n");
-      const matchIdx = lines.findIndex((_: string, i: number) => {
-        const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
-        return block === trimmedOriginal;
-      });
-
-      if (matchIdx !== -1) {
-        const snippetLineCount = trimmedOriginal.split("\n").length;
-        const before = lines.slice(0, matchIdx).join("\n");
-        const after = lines.slice(matchIdx + snippetLineCount).join("\n");
-        return [before, newSnippet, after].filter(Boolean).join("\n");
-      }
-
-      console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
-      return originalFile + "\n" + newSnippet;
+      originalFile = response.data;
     } catch (error) {
       console.warn(`[PipelineIQ] Could not fetch ${filePath} for patching: ${error}`);
       return newSnippet;
     }
+
+    // Apply the patch, throwing an explicit error if patch target is not found
+    return applyPatch(originalFile, originalSnippet, newSnippet, filePath);
   }
 }

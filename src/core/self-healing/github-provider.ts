@@ -1,5 +1,6 @@
 import type { GitProvider, PRCreationResult, PROptions } from "./types.js";
 import type { CodeFix } from "../types/self-healing.js";
+import { applyPatch } from "./patch.js";
 
 /**
  * GitHub implementation of GitProvider.
@@ -289,6 +290,7 @@ export class GitHubProvider implements GitProvider {
     originalSnippet: string,
     newSnippet: string,
   ): Promise<string> {
+    let originalFile: string;
     try {
       const { data } = await octokit.repos.getContent({
         owner,
@@ -302,35 +304,14 @@ export class GitHubProvider implements GitProvider {
       }
 
       // GitHub returns base64-encoded content
-      const originalFile = Buffer.from(data.content, "base64").toString("utf-8");
-
-      // Apply the patch: find the original snippet and replace
-      if (originalFile.includes(originalSnippet)) {
-        return originalFile.replace(originalSnippet, newSnippet);
-      }
-
-      // Fallback: try trimmed matching (whitespace normalization)
-      const trimmedOriginal = originalSnippet.trim();
-      const lines = originalFile.split("\n");
-      const matchIdx = lines.findIndex((_, i) => {
-        const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
-        return block === trimmedOriginal;
-      });
-
-      if (matchIdx !== -1) {
-        const snippetLineCount = trimmedOriginal.split("\n").length;
-        const before = lines.slice(0, matchIdx).join("\n");
-        const after = lines.slice(matchIdx + snippetLineCount).join("\n");
-        return [before, newSnippet, after].filter(Boolean).join("\n");
-      }
-
-      // Last resort: append the new content with a comment
-      console.warn(`[PipelineIQ] Could not locate patch target in ${filePath} — appending change`);
-      return originalFile + "\n" + newSnippet;
+      originalFile = Buffer.from(data.content, "base64").toString("utf-8");
     } catch (error) {
       // If we can't fetch the file, fall back to using newContent as full content
       console.warn(`[PipelineIQ] Could not fetch ${filePath} for patching: ${error}`);
       return newSnippet;
     }
+
+    // Apply the patch, throwing an explicit error if patch target is not found
+    return applyPatch(originalFile, originalSnippet, newSnippet, filePath);
   }
 }

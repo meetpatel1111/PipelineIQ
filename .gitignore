@@ -213,3 +213,7 @@ docs/.vitepress/dist/
 
 # GitHub Actions
 .github/workflows/*.temp
+
+# Scratch files/scripts
+scratch/
+piq-test-temp/

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { SelfHealingEngine } from "../engine.js";
+import { FixGenerator } from "../fix-generator.js";
+import { applyPatch } from "../patch.js";
 import type { FailureEvent, CodeFix } from "../../types/index.js";
 
 describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
@@ -211,5 +213,84 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
     expect(result.attempted).toBe(true);
     expect(result.success).toBe(false);
     expect(result.reason).toContain("Cannot modify .github/workflows/ files without a Personal Access Token");
+  });
+
+  it("patchLocalFile handles CRLF vs LF line endings and indentation differences", () => {
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: true,
+        dryRun: false,
+        minConfidence: 0.8,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["Build"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: false,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      { 
+        provider: "openai", 
+        model: "gpt-4o",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+      }
+    );
+    // 1. Line endings mismatch: CRLF in original content, LF in snippet
+    const originalContentCRLF = "{\r\n  \"dependencies\": {\r\n    \"react\": \"^18.0.0\"\r\n  }\r\n}";
+    const originalSnippetLF = "  \"dependencies\": {\n    \"react\": \"^18.0.0\"\n  }";
+    const newSnippetLF = "  \"dependencies\": {\n    \"react\": \"^18.2.0\"\n  }";
+ 
+    const patchedResult = applyPatch(originalContentCRLF, originalSnippetLF, newSnippetLF);
+    expect(patchedResult).toContain("\r\n");
+    expect(patchedResult).toContain("\"react\": \"^18.2.0\"");
+    expect(patchedResult).not.toContain("^18.0.0");
+ 
+    // 2. Indentation mismatch: snippet has different indentation spacing or alignment
+    const originalContent = "class Test {\n    constructor() {\n        this.setup();\n    }\n}";
+    const snippetIndentation = "  constructor() {\n    this.setup();\n  }";
+    const newSnippet = "  constructor() {\n    this.initialize();\n  }";
+ 
+    const patchedIndentation = applyPatch(originalContent, snippetIndentation, newSnippet);
+    expect(patchedIndentation).toContain("this.initialize()");
+    expect(patchedIndentation).not.toContain("this.setup()");
+ 
+    // 3. Snippet not found throws error instead of appending to end
+    expect(() => {
+      applyPatch(originalContent, "nonexistentSnippet", "newSnippet");
+    }).toThrow("Could not find the original code snippet to modify");
+  });
+
+  it("extracts all types of file extensions correctly and ignores numeric versions/decimals", () => {
+    const generator = new FixGenerator({
+      provider: "local",
+      apiKey: "dummy",
+      model: "dummy-model",
+      minConfidence: 0.6,
+      temperature: 0.1,
+      timeout: 30000,
+      maxTokens: 1000,
+      retryAttempts: 3,
+    });
+    const logText = "Error in main.tf at line 20, also check Cargo.toml, build.gradle, app.kt, lib.rs and src/utils.ts. Version is 3.14 or 0.19.1.";
+    const paths = (generator as any).extractFilePaths(logText);
+    
+    expect(paths).toContain("main.tf");
+    expect(paths).toContain("Cargo.toml");
+    expect(paths).toContain("build.gradle");
+    expect(paths).toContain("app.kt");
+    expect(paths).toContain("lib.rs");
+    expect(paths).toContain("src/utils.ts");
+    expect(paths).not.toContain("20");
+    expect(paths).not.toContain("3.14");
+    expect(paths).not.toContain("0.19.1");
   });
 });

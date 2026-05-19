@@ -7,6 +7,7 @@ import type { GitProvider } from "./types.js";
 import { FixGenerator } from "./fix-generator.js";
 import { GitHubProvider } from "./github-provider.js";
 import { AzureDevOpsProvider } from "./azure-provider.js";
+import { applyPatch } from "./patch.js";
 
 /**
  * SelfHealingEngine — the orchestrator for autonomous remediation.
@@ -172,7 +173,7 @@ export class SelfHealingEngine {
             }
           } else if (change.action === "modify" && change.originalContent) {
             const originalContent = backups.get(change.filePath) || "";
-            const patched = this.patchLocalFile(originalContent, change.originalContent, change.newContent ?? "");
+            const patched = applyPatch(originalContent, change.originalContent, change.newContent ?? "", change.filePath);
             fs.mkdirSync(path.dirname(fullPath), { recursive: true });
             fs.writeFileSync(fullPath, patched, "utf-8");
           } else {
@@ -389,27 +390,7 @@ export class SelfHealingEngine {
            errorText.includes("cipm can only install packages");
   }
 
-  private patchLocalFile(originalContent: string, originalSnippet: string, newSnippet: string): string {
-    if (originalContent.includes(originalSnippet)) {
-      return originalContent.replace(originalSnippet, newSnippet);
-    }
 
-    const trimmedOriginal = originalSnippet.trim();
-    const lines = originalContent.split("\n");
-    const matchIdx = lines.findIndex((_, i) => {
-      const block = lines.slice(i, i + trimmedOriginal.split("\n").length).join("\n").trim();
-      return block === trimmedOriginal;
-    });
-
-    if (matchIdx !== -1) {
-      const snippetLineCount = trimmedOriginal.split("\n").length;
-      const before = lines.slice(0, matchIdx).join("\n");
-      const after = lines.slice(matchIdx + snippetLineCount).join("\n");
-      return [before, newSnippet, after].filter(Boolean).join("\n");
-    }
-
-    return originalContent + "\n" + newSnippet;
-  }
 }
 
 // ── Utility ──────────────────────────────────────────────────────────────────
