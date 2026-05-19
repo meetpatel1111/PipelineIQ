@@ -70,6 +70,13 @@ export const AIEngineConfigSchema = z.object({
   timeout: z.number().int().positive().default(30000),
   retryAttempts: z.number().int().positive().default(3),
   minConfidence: z.number().min(0).max(1).default(0.6),
+  /** Enable extended thinking / reasoning for models that support it.
+   *  Gemini 2.5+: uses thinkingConfig with thinkingBudget tokens.
+   *  Anthropic: uses extended_thinking with budget_tokens. */
+  enableThinking: z.boolean().default(false),
+  /** Token budget for thinking (Gemini: thinkingBudget, Anthropic: budget_tokens).
+   *  -1 = dynamic (model decides). Only used when enableThinking is true. */
+  thinkingBudget: z.number().int().default(8000),
 });
 
 export type AIEngineConfig = z.infer<typeof AIEngineConfigSchema>;

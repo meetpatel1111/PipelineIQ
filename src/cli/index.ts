@@ -132,6 +132,8 @@ program
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
   .option("-m, --ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
   .option("--ai-max-tokens <tokens>", "Maximum output tokens for AI response")
+  .option("--ai-thinking", "Enable extended thinking/reasoning for models that support it (Gemini 2.5+, Claude 3.7+)")
+  .option("--ai-thinking-budget <tokens>", "Token budget for thinking (default: 8000, -1 = dynamic)", parseInt)
   .option("--assignee <id>", "Jira account ID to assign the issue to (defaults to unassigned)")
   .option("--default-assignee <id>", "Alias for --assignee (defaults to unassigned)")
   .option("--display-meta <fields>", "Comma-separated list of metadata fields to display", (val) => val.split(","))
@@ -225,6 +227,8 @@ async function handleAnalyze(options: any) {
     if (options.aiModel) configData.ai.model = options.aiModel.trim();
     if (options.aiMaxTokens) configData.ai.maxLogTokens = Number.parseInt(options.aiMaxTokens, 10);
     if (options.aiEndpoint) configData.ai.endpoint = options.aiEndpoint.trim();
+    if (options.aiThinking !== undefined) configData.ai.enableThinking = options.aiThinking;
+    if (options.aiThinkingBudget !== undefined) configData.ai.thinkingBudget = options.aiThinkingBudget;
     if (options.displayMeta) configData.displayMetadata = options.displayMeta;
 
     // Notification flag overrides — build up notifications block from CLI flags

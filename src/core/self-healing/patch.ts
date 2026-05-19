@@ -1,7 +1,12 @@
 /**
  * Applies a code snippet patch to file content.
  * Handles CRLF/LF line endings and spacing/indentation mismatches.
- * Throws an explicit error if the patch target cannot be found.
+ *
+ * Matching strategies (in order):
+ *   1. Exact substring match
+ *   2. Line-by-line trimmed match (ignores leading/trailing whitespace per line)
+ *   3. Whitespace-collapsed match (normalizes all internal whitespace)
+ *   4. Throws if none of the above match (snippet was hallucinated)
  */
 export function applyPatch(
   originalContent: string,
@@ -19,16 +24,19 @@ export function applyPatch(
   const snippet = normalizeNewlines(originalSnippet);
   const replacement = normalizeNewlines(newSnippet);
 
-  // Try exact match first
+  const restoreLineEndings = (str: string) => hasCRLF ? str.replace(/\n/g, "\r\n") : str;
+
+  // ── Strategy 1: Exact substring match ─────────────────────────────────────
   if (content.includes(snippet)) {
     const patched = content.replace(snippet, replacement);
-    return hasCRLF ? patched.replace(/\n/g, "\r\n") : patched;
+    return restoreLineEndings(patched);
   }
 
-  // Try line-by-line match ignoring leading/trailing whitespaces and empty lines at start/end of snippet
+  // ── Strategy 2: Line-by-line trimmed match ────────────────────────────────
   const contentLines = content.split("\n");
   const snippetLines = snippet.split("\n");
 
+  // Strip leading/trailing empty lines from the snippet
   let startIdx = 0;
   while (startIdx < snippetLines.length && (snippetLines[startIdx] ?? "").trim() === "") {
     startIdx++;
@@ -54,9 +62,68 @@ export function applyPatch(
       const before = contentLines.slice(0, matchIdx).join("\n");
       const after = contentLines.slice(matchIdx + targetLines.length).join("\n");
       const patched = [before, replacement, after].filter((p) => p !== "").join("\n");
-      return hasCRLF ? patched.replace(/\n/g, "\r\n") : patched;
+      return restoreLineEndings(patched);
     }
   }
 
+  // ── Strategy 3: Whitespace-collapsed match ────────────────────────────────
+  // Collapse all runs of whitespace (spaces, tabs) into a single space for
+  // comparison.  This catches cases where the AI quotes slightly different
+  // indentation or intra-line spacing than the actual file content.
+  const collapseWS = (str: string) => str.replace(/[ \t]+/g, " ");
+
+  const collapsedContent = collapseWS(content);
+  const collapsedSnippet = collapseWS(snippet);
+
+  if (collapsedSnippet.length > 0 && collapsedContent.includes(collapsedSnippet)) {
+    // Walk the original content to find the byte-range that matches
+    const matchStart = collapsedContent.indexOf(collapsedSnippet);
+
+    // Map collapsed index → original index via a parallel scan
+    let origIdx = 0;
+    let collIdx = 0;
+    // Advance to matchStart in collapsed space
+    while (collIdx < matchStart && origIdx < content.length) {
+      const ch = content[origIdx]!;
+      if (/[ \t]/.test(ch)) {
+        // In collapsed form, runs of whitespace become a single space
+        origIdx++;
+        while (origIdx < content.length && /[ \t]/.test(content[origIdx]!)) {
+          origIdx++;
+        }
+        collIdx++; // the single collapsed space
+      } else {
+        origIdx++;
+        collIdx++;
+      }
+    }
+    const realStart = origIdx;
+
+    // Now advance through the collapsed snippet length to find the end
+    let snippetCollIdx = 0;
+    while (snippetCollIdx < collapsedSnippet.length && origIdx < content.length) {
+      const ch = content[origIdx]!;
+      if (/[ \t]/.test(ch)) {
+        origIdx++;
+        while (origIdx < content.length && /[ \t]/.test(content[origIdx]!)) {
+          origIdx++;
+        }
+        snippetCollIdx++;
+      } else {
+        origIdx++;
+        snippetCollIdx++;
+      }
+    }
+    const realEnd = origIdx;
+
+    const patched = content.slice(0, realStart) + replacement + content.slice(realEnd);
+    return restoreLineEndings(patched);
+  }
+
+  // ── Strategy 4: No match found ────────────────────────────────────────────
+  // All three matching strategies failed — the AI-generated originalContent
+  // snippet doesn't exist in the file (likely hallucinated).  Throw so the
+  // caller can skip this change cleanly rather than writing a raw snippet as
+  // the entire file and corrupting it.
   throw new Error(`Could not find the original code snippet to modify${fileDesc}.`);
 }

@@ -63,10 +63,11 @@ export class FixGenerator {
     rootCause: string,
     remediation: string[],
     category: string,
+    retryContext?: { previousError: string },
   ): Promise<CodeFix | null> {
     if (!this.provider) return null;
 
-    const prompt = this.buildFixPrompt(event, rootCause, remediation, category);
+    const prompt = this.buildFixPrompt(event, rootCause, remediation, category, retryContext);
 
     try {
       // Use the provider's generateInsights with a specialized prompt
@@ -171,10 +172,14 @@ export class FixGenerator {
     rootCause: string,
     remediation: string[],
     category: string,
+    retryContext?: { previousError: string },
   ): string {
     const workspaceContext = this.getWorkspaceContext(event, rootCause);
+    const retrySection = retryContext
+      ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\nGenerate a CORRECTED fix that addresses both the original failure AND avoids this new error. Pay special attention to syntax correctness — do not break method chains, leave orphaned operators, or introduce incomplete statements.\n`
+      : "";
 
-    return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.
+    return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.${retrySection}
 
 IMPORTANT RULES:
 - Generate comprehensive fixes that address the root cause entirely.

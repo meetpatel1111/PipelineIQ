@@ -85,9 +85,10 @@ export const SelfHealingConfigSchema = z.object({
   /** PR labels to apply */
   prLabels: z.array(z.string()).default(["pipelineiq", "self-healing", "auto-fix"]),
   /** Enable local verification commands (compilation/testing/regeneration) */
-  enableVerification: z.boolean().default(false),
-  /** Commands to run in sequence to verify the code fix */
-  verificationCommands: z.array(z.string()).default(["npm install", "npm run build"]),
+  enableVerification: z.boolean().default(true),
+  /** Commands to run in sequence to verify the code fix.
+   *  Empty array (default) = auto-detected from package.json scripts + failure category. */
+  verificationCommands: z.array(z.string()).default([]),
   /** Automatically regenerate auto-generated lockfiles (package-lock.json, yarn.lock, etc.) when desynchronization is detected */
   autoRegenerateLockfile: z.boolean().default(true),
 });

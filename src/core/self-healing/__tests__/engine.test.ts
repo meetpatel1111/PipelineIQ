@@ -79,6 +79,8 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
         timeout: 30000,
         maxTokens: 1000,
         retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
       }
     );
 
@@ -121,6 +123,8 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
         timeout: 30000,
         maxTokens: 1000,
         retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
       }
     );
 
@@ -176,6 +180,8 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
         timeout: 30000,
         maxTokens: 1000,
         retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
       }
     );
 
@@ -242,6 +248,8 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
         timeout: 30000,
         maxTokens: 1000,
         retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
       }
     );
     // 1. Line endings mismatch: CRLF in original content, LF in snippet
@@ -263,7 +271,7 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
     expect(patchedIndentation).toContain("this.initialize()");
     expect(patchedIndentation).not.toContain("this.setup()");
  
-    // 3. Snippet not found throws error instead of appending to end
+    // 3. Snippet not found throws — prevents corrupt file writes
     expect(() => {
       applyPatch(originalContent, "nonexistentSnippet", "newSnippet");
     }).toThrow("Could not find the original code snippet to modify");
@@ -279,6 +287,8 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
       timeout: 30000,
       maxTokens: 1000,
       retryAttempts: 3,
+      enableThinking: false,
+      thinkingBudget: 8000,
     });
     const logText = "Error in main.tf at line 20, also check Cargo.toml, build.gradle, app.kt, lib.rs and src/utils.ts. Version is 3.14 or 0.19.1.";
     const paths = (generator as any).extractFilePaths(logText);

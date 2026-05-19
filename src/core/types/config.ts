@@ -36,6 +36,8 @@ export const AIConfigSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   minConfidence: z.number().min(0).max(1).default(0.6),
   maxLogTokens: z.number().int().positive().default(8000),
+  enableThinking: z.boolean().default(false),
+  thinkingBudget: z.number().int().default(8000),
 });
 export type AIConfig = z.infer<typeof AIConfigSchema>;
 

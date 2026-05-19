@@ -4,6 +4,29 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.21.0] - 2026-05-19
+
+### Added
+- **OpenAI Responses API Support**: gpt-5.x models now use the new `openai.responses.create()` Responses API with `input`, `max_output_tokens`, and `reasoning: { effort }` parameters. Effort levels map from `thinkingBudget`: `none | minimal | low | medium | high | xhigh`.
+- **Extended Thinking / Reasoning Across All Providers**: New `enableThinking` and `thinkingBudget` config fields (and `--ai-thinking` / `--ai-thinking-budget` CLI flags) unlock native reasoning for every provider:
+  - **OpenAI o-series** (`o3`, `o3-mini`, `o4-mini`): `reasoning_effort` (`low | medium | high`) via Chat Completions.
+  - **OpenAI gpt-5.x**: `reasoning.effort` (`none → xhigh`) via Responses API.
+  - **Anthropic**: `thinking: { type: "enabled", budget_tokens }` with temperature forced to `1`.
+  - **Gemini**: `thinkingConfig: { thinkingBudget }` injected into `generationConfig`.
+  - **Local (DeepSeek-R1, QwQ, Phi-4-reasoning, etc.)**: `<think>…</think>` blocks stripped automatically; optional chain-of-thought system prompt when `enableThinking: true`.
+- **Self-Healing Workspace Detection**: Clear, actionable error when the local workspace is empty (e.g., missing `actions/checkout` in GitHub Actions workflow), pointing directly to the fix rather than surfacing an opaque patch failure.
+- **Verification Retry with AI Feedback Loop**: Self-healing now retries (up to 2 attempts) when local build verification fails. The first failure's error message is fed back to the AI so it can generate a corrected patch — eliminating broken syntax introduced by the previous fix.
+- **Auto-Detected Verification Commands**: `verificationCommands` no longer needs to be manually specified. The engine auto-detects the build toolchain from workspace files: Node.js (`package.json` scripts), Go (`go.mod`), Rust (`Cargo.toml`), Python (pip/uv/pipenv), Maven, Gradle, Ruby, PHP/Composer, .NET, and Makefile.
+
+### Changed
+- **OpenAI Fallback Model Order**: Mini/Nano models are tried first (cost-efficient) before falling back to frontier models. Updated to the current OpenAI catalog: `gpt-5.4-mini → gpt-5.4-nano → gpt-5-mini → gpt-5-nano → gpt-5.5 → gpt-5.4 → gpt-5 → gpt-4o → gpt-4o-mini → gpt-oss-120b → gpt-oss-20b`.
+- **Anthropic Fallback Models**: Updated to include `claude-sonnet-4-5`, `claude-opus-4-5`, `claude-3-7-sonnet-20250219`.
+- **Gemini Default Model**: Changed to `gemini-2.5-flash`. Corrected fallback list to only include real model IDs (`gemini-3.1-flash-lite`, `gemini-3-flash-preview`, `gemini-2.5-flash-lite`, `gemini-2.5-flash`, `gemini-2.0-flash`).
+- **Self-Healing Verification Defaults**: `enableVerification` now defaults to `true`; `verificationCommands` defaults to `[]` (auto-detected at runtime instead of hard-coded `npm` commands).
+- **Patch Engine Hardening**: Three-strategy matching (exact → line-trimmed → whitespace/CRLF-normalized). Strategy 4 throws rather than writing partial content, preventing silent file corruption.
+
+---
+
 ## [0.20.0] - 2026-05-19
 
 ### Added

@@ -113,121 +113,161 @@ export class SelfHealingEngine {
     // ── Stage 3.5: Local Verification and Lockfile Regeneration ──────────────
     if (this.config.enableVerification || (this.config.autoRegenerateLockfile && this.isLockfileDesync(event))) {
       const root = this.getWorkspaceRoot();
-      const backups = new Map<string, string | null>(); // filePath -> originalContent (null if it didn't exist)
+      let previousVerificationError: string | undefined;
 
-      try {
-        console.log("[PipelineIQ] Starting local verification/regeneration...");
-
-        // 1. If it's a lockfile desync, let's first regenerate the lockfile
-        if (this.config.autoRegenerateLockfile && this.isLockfileDesync(event)) {
-          console.log("[PipelineIQ] Lockfile desync detected — regenerating lockfile locally via npm install...");
+      for (let verifyAttempt = 1; verifyAttempt <= 2; verifyAttempt++) {
+        // On retry: regenerate the fix with the previous error as context so the
+        // AI can self-correct (e.g. syntax it broke in the first attempt).
+        if (verifyAttempt === 2 && previousVerificationError) {
+          console.log("[PipelineIQ] Verification failed — retrying fix generation with error feedback...");
           try {
-            // Backup package-lock.json if it exists
-            const lockPath = path.resolve(root, "package-lock.json");
-            if (fs.existsSync(lockPath)) {
-              backups.set("package-lock.json", fs.readFileSync(lockPath, "utf-8"));
+            const retryFix = await this.fixGenerator.generateFix(
+              event, rootCause, remediation, category,
+              { previousError: previousVerificationError },
+            );
+            if (retryFix) {
+              fix = retryFix;
             } else {
-              backups.set("package-lock.json", null);
+              break; // AI gave up — propagate the previous error
             }
-
-            // Run npm install to synchronize
-            execSync("npm install", { cwd: root, stdio: "inherit" });
-            console.log("[PipelineIQ] Successfully regenerated package-lock.json");
-
-            // Read the newly regenerated lockfile
-            if (fs.existsSync(lockPath)) {
-              const newLockContent = fs.readFileSync(lockPath, "utf-8");
-              
-              // Remove any existing package-lock.json changes from the fix
-              fix.changes = fix.changes.filter(c => c.filePath !== "package-lock.json");
-              
-              // Append the regenerated lockfile to the changes list
-              fix.changes.push({
-                filePath: "package-lock.json",
-                action: backups.get("package-lock.json") !== null ? "modify" : "create",
-                originalContent: backups.get("package-lock.json") || "",
-                newContent: newLockContent,
-                changeDescription: "Regenerated package-lock.json to resolve desynchronization with package.json",
-              });
-            }
-          } catch (lockError) {
-            console.warn(`[PipelineIQ] Lockfile regeneration failed: ${lockError}`);
-            throw new Error(`Failed to regenerate package-lock.json: ${lockError}`);
+          } catch {
+            break;
           }
         }
 
-        // 2. Backup and apply the rest of the code fixes
-        for (const change of fix.changes) {
-          if (change.filePath === "package-lock.json") continue; // Already handled above
-          const fullPath = path.resolve(root, change.filePath);
-          if (fs.existsSync(fullPath)) {
-            backups.set(change.filePath, fs.readFileSync(fullPath, "utf-8"));
-          } else {
-            backups.set(change.filePath, null);
-          }
+        const backups = new Map<string, string | null>(); // filePath -> original (null = didn't exist)
 
-          // Write new content
-          if (change.action === "delete") {
-            if (fs.existsSync(fullPath)) {
-              fs.unlinkSync(fullPath);
-            }
-          } else if (change.action === "modify" && change.originalContent) {
-            const originalContent = backups.get(change.filePath) || "";
-            const patched = applyPatch(originalContent, change.originalContent, change.newContent ?? "", change.filePath);
-            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-            fs.writeFileSync(fullPath, patched, "utf-8");
-          } else {
-            fs.mkdirSync(path.dirname(fullPath), { recursive: true });
-            fs.writeFileSync(fullPath, change.newContent ?? "", "utf-8");
-          }
-        }
+        try {
+          console.log(`[PipelineIQ] Starting local verification/regeneration${verifyAttempt > 1 ? ` (attempt ${verifyAttempt})` : ""}...`);
 
-        // 3. Run verification commands
-        if (this.config.enableVerification && this.config.verificationCommands.length > 0) {
-          console.log(`[PipelineIQ] Running verification commands: ${this.config.verificationCommands.join(" && ")}`);
-          for (const cmd of this.config.verificationCommands) {
+          // 1. If it's a lockfile desync, regenerate the lockfile first
+          if (this.config.autoRegenerateLockfile && this.isLockfileDesync(event)) {
+            console.log("[PipelineIQ] Lockfile desync detected — regenerating lockfile locally via npm install...");
             try {
-              execSync(cmd, { cwd: root, stdio: "inherit" });
-            } catch (cmdError) {
-              console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
-              throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
-            }
-          }
-          console.log("[PipelineIQ] Verification commands completed successfully.");
-        }
+              const lockPath = path.resolve(root, "package-lock.json");
+              if (fs.existsSync(lockPath)) {
+                backups.set("package-lock.json", fs.readFileSync(lockPath, "utf-8"));
+              } else {
+                backups.set("package-lock.json", null);
+              }
 
-        // 4. Restore the local files so the workspace remains clean
-        for (const [relPath, originalContent] of backups.entries()) {
-          const fullPath = path.resolve(root, relPath);
-          if (originalContent === null) {
-            if (fs.existsSync(fullPath)) {
-              fs.unlinkSync(fullPath);
-            }
-          } else {
-            fs.writeFileSync(fullPath, originalContent, "utf-8");
-          }
-        }
-        console.log("[PipelineIQ] Restored workspace files, local verification complete.");
+              execSync("npm install", { cwd: root, stdio: "inherit" });
+              console.log("[PipelineIQ] Successfully regenerated package-lock.json");
 
-      } catch (verifyError: any) {
-        // Restore local files so workspace is clean
-        for (const [relPath, originalContent] of backups.entries()) {
-          const fullPath = path.resolve(root, relPath);
-          if (originalContent === null) {
-            if (fs.existsSync(fullPath)) {
-              fs.unlinkSync(fullPath);
+              if (fs.existsSync(lockPath)) {
+                const newLockContent = fs.readFileSync(lockPath, "utf-8");
+                fix.changes = fix.changes.filter(c => c.filePath !== "package-lock.json");
+                fix.changes.push({
+                  filePath: "package-lock.json",
+                  action: backups.get("package-lock.json") !== null ? "modify" : "create",
+                  originalContent: backups.get("package-lock.json") || "",
+                  newContent: newLockContent,
+                  changeDescription: "Regenerated package-lock.json to resolve desynchronization with package.json",
+                });
+              }
+            } catch (lockError) {
+              console.warn(`[PipelineIQ] Lockfile regeneration failed: ${lockError}`);
+              throw new Error(`Failed to regenerate package-lock.json: ${lockError}`);
             }
-          } else {
-            fs.writeFileSync(fullPath, originalContent, "utf-8");
           }
+
+          // 2. Backup and apply code fixes
+          for (const change of fix.changes) {
+            if (change.filePath === "package-lock.json") continue;
+            const fullPath = path.resolve(root, change.filePath);
+            if (fs.existsSync(fullPath)) {
+              backups.set(change.filePath, fs.readFileSync(fullPath, "utf-8"));
+            } else {
+              backups.set(change.filePath, null);
+            }
+
+            if (change.action === "delete") {
+              if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+              }
+            } else if (change.action === "modify" && change.originalContent) {
+              const diskContent = backups.get(change.filePath);
+              if (diskContent === null || diskContent === undefined) {
+                throw new Error(
+                  `File "${change.filePath}" was not found in the local workspace (${root}). ` +
+                  `Add an "actions/checkout" step before "pipelineiq analyze" in your workflow ` +
+                  `so that self-healing verification can read and patch source files.`,
+                );
+              }
+              const originalContent: string = diskContent;
+              let patched: string;
+              try {
+                patched = applyPatch(originalContent, change.originalContent ?? "", change.newContent ?? "", change.filePath);
+              } catch (patchError) {
+                throw new Error(`AI-generated fix references code not found in ${change.filePath} — the snippet may be hallucinated. ${patchError}`);
+              }
+              fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+              fs.writeFileSync(fullPath, patched, "utf-8");
+            } else {
+              fs.mkdirSync(path.dirname(fullPath), { recursive: true });
+              fs.writeFileSync(fullPath, change.newContent ?? "", "utf-8");
+            }
+          }
+
+          // 3. Run verification commands (auto-detected if not explicitly configured)
+          const verificationCommands = this.resolveVerificationCommands(category, root);
+          if (this.config.enableVerification && verificationCommands.length > 0) {
+            console.log(`[PipelineIQ] Running verification commands: ${verificationCommands.join(" && ")}`);
+            for (const cmd of verificationCommands) {
+              try {
+                execSync(cmd, { cwd: root, stdio: "inherit" });
+              } catch (cmdError) {
+                console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
+                throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
+              }
+            }
+            console.log("[PipelineIQ] Verification commands completed successfully.");
+          }
+
+          // 4. Restore workspace files
+          for (const [relPath, originalContent] of backups.entries()) {
+            const fullPath = path.resolve(root, relPath);
+            if (originalContent === null) {
+              if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            } else {
+              fs.writeFileSync(fullPath, originalContent, "utf-8");
+            }
+          }
+          console.log("[PipelineIQ] Restored workspace files, local verification complete.");
+          break; // Verification passed — exit retry loop
+
+        } catch (verifyError: any) {
+          // Always restore workspace files before deciding what to do next
+          for (const [relPath, originalContent] of backups.entries()) {
+            const fullPath = path.resolve(root, relPath);
+            if (originalContent === null) {
+              if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            } else {
+              fs.writeFileSync(fullPath, originalContent, "utf-8");
+            }
+          }
+
+          const errorMsg: string = verifyError.message || String(verifyError);
+
+          // Non-retriable: missing checkout or hallucinated snippet — no point retrying
+          const isRetriable = !errorMsg.includes("was not found in the local workspace") &&
+                              !errorMsg.includes("snippet may be hallucinated");
+
+          if (!isRetriable || verifyAttempt >= 2) {
+            return {
+              attempted: true,
+              success: false,
+              fix,
+              reason: `Local verification/regeneration failed: ${errorMsg}`,
+              dryRun: this.config.dryRun,
+            };
+          }
+
+          // First attempt failed with a build error — save the error and let the
+          // loop regenerate the fix with feedback before trying again.
+          previousVerificationError = errorMsg;
+          console.warn("[PipelineIQ] Verification attempt 1 failed — will retry with error context.");
         }
-        return {
-          attempted: true,
-          success: false,
-          fix,
-          reason: `Local verification/regeneration failed: ${verifyError.message || verifyError}`,
-          dryRun: this.config.dryRun,
-        };
       }
     }
 
@@ -388,6 +428,133 @@ export class SelfHealingEngine {
            errorText.includes("package.json and package-lock.json or npm-shrinkwrap.json are in sync") ||
            errorText.includes("npm ci failed") ||
            errorText.includes("cipm can only install packages");
+  }
+
+  /**
+   * Auto-detect the verification commands to run after applying a fix.
+   *
+   * Priority:
+   *   1. If the user explicitly provided commands via config, use those.
+   *   2. Detect the language/ecosystem from files in the workspace.
+   *   3. Pick install + build/test/lint commands for that ecosystem based on
+   *      the failure category.
+   *   4. If the ecosystem is unrecognised, return [] (skip verification rather
+   *      than running a wrong command and getting a false failure).
+   */
+  private resolveVerificationCommands(category: string, root: string): string[] {
+    if (this.config.verificationCommands.length > 0) {
+      return this.config.verificationCommands;
+    }
+
+    const exists = (f: string) => fs.existsSync(path.resolve(root, f));
+    const cat = category.toLowerCase();
+
+    // ── Node.js ──────────────────────────────────────────────────────────────
+    if (exists("package.json")) {
+      const pm = exists("yarn.lock") ? "yarn"
+               : exists("pnpm-lock.yaml") ? "pnpm"
+               : "npm";
+      const install = pm === "yarn" ? "yarn install"
+                    : pm === "pnpm" ? "pnpm install"
+                    : "npm install";
+      let scripts: Record<string, string> = {};
+      try {
+        scripts = JSON.parse(fs.readFileSync(path.resolve(root, "package.json"), "utf-8")).scripts ?? {};
+      } catch { /* ignore */ }
+      const has = (s: string) => Boolean(scripts[s]);
+      const run = (s: string) => pm === "npm" ? `npm run ${s}` : `${pm} ${s}`;
+
+      const cmds = [install];
+      if (cat === "test") {
+        if (has("build")) cmds.push(run("build"));
+        if (has("test"))  cmds.push(run("test"));
+      } else if (cat === "lint") {
+        if (has("lint"))     cmds.push(run("lint"));
+        else if (has("lint:fix")) cmds.push(run("lint:fix"));
+      } else {
+        if (has("build"))   cmds.push(run("build"));
+        else if (has("compile")) cmds.push(run("compile"));
+      }
+      // If only install is left and nothing relevant in scripts, skip
+      return cmds.length > 1 ? cmds : [];
+    }
+
+    // ── Go ───────────────────────────────────────────────────────────────────
+    if (exists("go.mod")) {
+      if (cat === "test") return ["go test ./..."];
+      return ["go build ./..."];
+    }
+
+    // ── Rust ─────────────────────────────────────────────────────────────────
+    if (exists("Cargo.toml")) {
+      if (cat === "test") return ["cargo test"];
+      return ["cargo build"];
+    }
+
+    // ── Python ───────────────────────────────────────────────────────────────
+    if (exists("pyproject.toml") || exists("setup.py") || exists("setup.cfg")) {
+      const usesUv  = exists("uv.lock");
+      const usesPip = exists("requirements.txt") || exists("requirements-dev.txt");
+      const install = usesUv  ? "uv sync"
+                    : usesPip ? "pip install -r requirements.txt"
+                    : "pip install -e .";
+      if (cat === "test") return [install, "pytest"];
+      if (cat === "lint") return [install, "flake8 . || ruff check ."];
+      return [install, "python -m py_compile $(find . -name '*.py' -not -path './.git/*')"];
+    }
+    if (exists("Pipfile")) {
+      if (cat === "test") return ["pipenv install", "pipenv run pytest"];
+      return ["pipenv install", "pipenv run python -c 'import compileall; compileall.compile_dir(\".\", quiet=True)'"];
+    }
+
+    // ── Java / Maven ─────────────────────────────────────────────────────────
+    if (exists("pom.xml")) {
+      if (cat === "test") return ["mvn test -B"];
+      return ["mvn compile -B"];
+    }
+
+    // ── Java / Gradle ────────────────────────────────────────────────────────
+    if (exists("build.gradle") || exists("build.gradle.kts")) {
+      const gradlew = exists("gradlew") ? "./gradlew" : "gradle";
+      if (cat === "test") return [`${gradlew} test`];
+      return [`${gradlew} build -x test`];
+    }
+
+    // ── Ruby ─────────────────────────────────────────────────────────────────
+    if (exists("Gemfile")) {
+      if (cat === "test") return ["bundle install", "bundle exec rspec"];
+      return ["bundle install", "bundle exec rake"];
+    }
+
+    // ── PHP / Composer ───────────────────────────────────────────────────────
+    if (exists("composer.json")) {
+      if (cat === "test") return ["composer install --no-interaction", "composer run test"];
+      return ["composer install --no-interaction", "composer run build"];
+    }
+
+    // ── .NET ─────────────────────────────────────────────────────────────────
+    if (exists("global.json") || exists("Directory.Build.props")) {
+      if (cat === "test") return ["dotnet restore", "dotnet test"];
+      return ["dotnet restore", "dotnet build"];
+    }
+    // Fallback: any .sln or .csproj in root
+    try {
+      const hasDotnet = fs.readdirSync(root).some(f => f.endsWith(".sln") || f.endsWith(".csproj"));
+      if (hasDotnet) {
+        if (cat === "test") return ["dotnet restore", "dotnet test"];
+        return ["dotnet restore", "dotnet build"];
+      }
+    } catch { /* ignore */ }
+
+    // ── Makefile (generic) ───────────────────────────────────────────────────
+    if (exists("Makefile") || exists("makefile")) {
+      if (cat === "test") return ["make test"];
+      return ["make build"];
+    }
+
+    // Unrecognised ecosystem — skip verification rather than run a wrong command
+    console.warn("[PipelineIQ] Could not detect project ecosystem for verification — skipping local verification.");
+    return [];
   }
 
 

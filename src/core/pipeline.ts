@@ -229,6 +229,8 @@ export async function processFailureEvent(
           timeout: 60000,
           retryAttempts: 2,
           minConfidence: config.selfHealing.minConfidence,
+          enableThinking: config.ai.enableThinking ?? false,
+          thinkingBudget: config.ai.thinkingBudget ?? 8000,
         },
       );
 

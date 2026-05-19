@@ -196,6 +196,8 @@ export class AIEngine implements IAIEngine {
       timeout: 30000,
       retryAttempts: 3,
       minConfidence: 0.6,
+      enableThinking: false,
+      thinkingBudget: 8000,
       ...config,
     };
 

@@ -19,6 +19,8 @@ const baseConfig: AIEngineConfig = {
   timeout: 30000,
   retryAttempts: 3,
   minConfidence: 0.6,
+  enableThinking: false,
+  thinkingBudget: 8000,
 };
 
 const MockedOpenAI = vi.mocked(OpenAI);

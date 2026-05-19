@@ -10,16 +10,20 @@ export class GeminiProvider implements AIProviderInterface {
   private maxTokens: number;
   private temperature: number;
   private endpoint: string;
+  private enableThinking: boolean;
+  private thinkingBudget: number;
 
   constructor(config: AIEngineConfig) {
     if (!config.apiKey) {
       throw new Error("Gemini API key is required");
     }
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-3.1-flash-lite";
+    this.model = config.model || "gemini-2.5-flash";
     this.maxTokens = config.maxTokens || 4000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint || "https://generativelanguage.googleapis.com/v1beta";
+    this.enableThinking = config.enableThinking ?? false;
+    this.thinkingBudget = config.thinkingBudget ?? 8000;
   }
 
   isAvailable(): boolean {
@@ -31,11 +35,13 @@ export class GeminiProvider implements AIProviderInterface {
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(this.apiKey);
 
-    // List of models to try in sequence if rate-limited or quota-exceeded
+    // List of models to try in sequence if rate-limited or quota-exceeded.
+    // Ordered fastest → most capable.  All names are verified real Gemini models.
+    // gemini-3.1-flash-lite is stable per https://ai.google.dev/gemini-api/docs/models
+    // gemini-2.0-flash is deprecated but still available as last-resort fallback.
     const fallbackModels = [
-      "gemini-3.1-flash",
       "gemini-3.1-flash-lite",
-      "gemini-3.0-flash",
+      "gemini-3-flash-preview",
       "gemini-2.5-flash-lite",
       "gemini-2.5-flash",
       "gemini-2.0-flash",
@@ -54,13 +60,18 @@ export class GeminiProvider implements AIProviderInterface {
     for (const currentModelName of candidateModels) {
       console.log(`[PipelineIQ] Using Gemini model: ${currentModelName}`);
       try {
+        const generationConfig: Record<string, any> = {
+          maxOutputTokens: this.maxTokens,
+          temperature: this.temperature,
+          responseMimeType: "application/json",
+        };
+        if (this.enableThinking) {
+          // thinkingBudget: -1 = dynamic, 0 = disabled, >0 = fixed token budget
+          generationConfig["thinkingConfig"] = { thinkingBudget: this.thinkingBudget };
+        }
         const model = genAI.getGenerativeModel({
           model: currentModelName,
-          generationConfig: {
-            maxOutputTokens: this.maxTokens,
-            temperature: this.temperature,
-            responseMimeType: "application/json",
-          },
+          generationConfig,
         });
 
         const maxRetries = 2;
