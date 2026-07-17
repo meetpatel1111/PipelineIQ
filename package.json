@@ -12,7 +12,6 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "prepare": "npm run build:core && npm run build:cli",
     "build": "npm run sync-version && npm run build:core && npm run build:cli && npm run build:platforms",
     "sync-version": "node scripts/sync-version.js",
     "version": "npm run sync-version && git add task.json action.yml",
