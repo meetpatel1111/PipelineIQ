@@ -157,6 +157,8 @@ program
   .option("--self-heal-max-files <count>", "Maximum files a fix can change")
   .option("--self-heal-max-lines <count>", "Maximum lines a fix can change")
   .option("--self-heal-draft", "Create draft PR (default: true)")
+  .option("--self-heal-guardrails", "Enforce self-healing safety guardrails", true)
+  .option("--no-self-heal-guardrails", "Disable self-healing safety guardrails (allow wider fixes)")
   .option("--self-heal-reviewers <users>", "Comma-separated PR reviewers", (val) => val.split(","))
   .option("--self-heal-labels <labels>", "Comma-separated PR labels", (val) => val.split(","))
   .option("--self-heal-categories <cats>", "Comma-separated allowed failure categories", (val) => val.split(","))
@@ -263,6 +265,7 @@ async function handleAnalyze(options: any) {
       if (options.selfHealMaxFiles) configData.selfHealing.maxFilesChanged = parseInt(options.selfHealMaxFiles);
       if (options.selfHealMaxLines) configData.selfHealing.maxLinesChanged = parseInt(options.selfHealMaxLines);
       if (options.selfHealDraft !== undefined) configData.selfHealing.draftPr = options.selfHealDraft;
+      if (options.selfHealGuardrails !== undefined) configData.selfHealing.enableGuardrails = options.selfHealGuardrails;
       if (options.selfHealReviewers) configData.selfHealing.reviewers = options.selfHealReviewers;
       if (options.selfHealLabels) configData.selfHealing.prLabels = options.selfHealLabels;
       if (options.selfHealCategories) configData.selfHealing.allowedCategories = options.selfHealCategories;

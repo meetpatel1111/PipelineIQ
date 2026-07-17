@@ -262,13 +262,19 @@ All override the corresponding `pipelineiq.json` value for the current run.
 | `--ai-max-tokens <tokens>` | `4000` | Maximum tokens for the AI response |
 | `--self-heal` | `false` | Enable Autonomous Self-Healing (creates Git PRs for fixes) |
 | `--self-heal-dry-run` | `false` | Generate the AI fix but do not create a PR (useful for testing) |
-| `--self-heal-min-confidence <n>` | `0.8` | Minimum AI confidence required to create a PR |
-| `--self-heal-branch-prefix <prefix>` | `pipelineiq/fix` | Branch name prefix for the fix PR |
-| `--self-heal-max-files <n>` | `10` | Maximum number of files the AI is allowed to modify (default updated in v0.18.0) |
-| `--self-heal-max-lines <n>` | `200` | Maximum number of total lines the AI is allowed to modify (default updated in v0.18.0) |
-| `--self-heal-blocked-paths <paths>` | (various) | Comma-separated glob patterns of files the AI is never allowed to touch (e.g. `*.env`, `Dockerfile`) |
+| `--self-heal-confidence <n>` | `0.8` | Minimum AI confidence required to create a PR (guardrail — see note below) |
+| `--self-heal-max-files <n>` | `10` | Maximum number of files a fix may modify (guardrail — see note below) |
+| `--self-heal-max-lines <n>` | `200` | Maximum total lines a fix may modify (guardrail — see note below) |
+| `--self-heal-categories <cats>` | `Dependency,Build,Test,Configuration` | Comma-separated failure categories eligible for auto-fix (guardrail — see note below) |
+| `--self-heal-draft` | `true` | Create the PR as a draft for human-in-the-loop review |
+| `--self-heal-guardrails` / `--no-self-heal-guardrails` | `true` | Enforce the safety guardrails (confidence gate, file/line limits, category allow-list, blocked paths). Use `--no-self-heal-guardrails` to allow wider fixes |
 | `--self-heal-reviewers <users>` | — | Comma-separated list of GitHub/ADO usernames to add as PR reviewers |
 | `--self-heal-labels <labels>` | `pipelineiq,self-healing,auto-fix` | Comma-separated list of labels to add to the PR |
+| `--self-heal-verify` | `true` | Run local verification (build/test/lockfile regeneration) before opening the PR |
+| `--self-heal-verification-commands <cmds>` | auto-detected | Comma-separated commands to run for verification (overrides auto-detection) |
+| `--self-heal-auto-lockfile` / `--no-self-heal-auto-lockfile` | `true` | Regenerate `package-lock.json` locally when a lockfile desync is detected |
+
+> **Guardrails note:** `--self-heal-confidence`, `--self-heal-max-files`, `--self-heal-max-lines`, `--self-heal-categories`, and the blocked-path list are enforced by the safety guardrails, which are **on by default**. Disable them with `--no-self-heal-guardrails` (or `selfHealing.enableGuardrails: false` in `pipelineiq.json`) to let the AI attempt fixes on a wider range of failures. The fix branch prefix (`pipelineiq/fix`) and blocked-path globs are configured in `pipelineiq.json` (`selfHealing.branchPrefix`, `selfHealing.blockedPaths`), not via CLI flags.
 
 ---
 

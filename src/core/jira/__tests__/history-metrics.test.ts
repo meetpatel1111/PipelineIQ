@@ -29,7 +29,7 @@ describe("HistoryService.getMetrics()", () => {
     ];
 
     const service = new HistoryService(makeJira(issues), "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
 
     expect(metrics.mttrHours).toBe(2);
     expect(metrics.sampleSize).toBe(2);
@@ -37,55 +37,56 @@ describe("HistoryService.getMetrics()", () => {
 
   it("returns undefined mttrHours when no resolved issues", async () => {
     const service = new HistoryService(makeJira([]), "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
 
     expect(metrics.mttrHours).toBeUndefined();
     expect(metrics.sampleSize).toBe(0);
   });
 
-  it("returns blastRadius when multiple distinct repos are affected", async () => {
-    const now = new Date();
+  it("counts distinct repos (from the piq-fp query) as blast radius", async () => {
     const issues = [
-      {
-        fields: {
-          created: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
-          resolutiondate: now.toISOString(),
-          labels: ["piq-repo:my-org/api", "piq-repo:my-org/worker"],
-        },
-      },
+      { fields: { labels: ["piq-repo:my-org/api"] } },
+      { fields: { labels: ["piq-repo:my-org/worker"] } },
     ];
 
     const service = new HistoryService(makeJira(issues), "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
+
+    expect(metrics.blastRadius).toBe(2);
+  });
+
+  it("includes the current repo in blast radius even with no matching history", async () => {
+    // One historical repo differs from the current repo → 2 distinct repos.
+    const issues = [{ fields: { labels: ["piq-repo:my-org/api"] } }];
+
+    const service = new HistoryService(makeJira(issues), "PIQ");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/web");
 
     expect(metrics.blastRadius).toBe(2);
   });
 
   it("returns undefined blastRadius when only one repo is affected", async () => {
-    const now = new Date();
-    const issues = [
-      {
-        fields: {
-          created: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
-          resolutiondate: now.toISOString(),
-          labels: ["piq-repo:my-org/api"],
-        },
-      },
-    ];
+    const issues = [{ fields: { labels: ["piq-repo:my-org/api"] } }];
 
     const service = new HistoryService(makeJira(issues), "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
 
     expect(metrics.blastRadius).toBeUndefined();
   });
 
-  it("queries only resolved issues (JQL contains 'resolution != Unresolved')", async () => {
+  it("queries MTTR by signature (resolved only) and blast radius by fingerprint", async () => {
     const jira = makeJira([]);
     const service = new HistoryService(jira, "PIQ");
-    await service.getMetrics("abc123");
+    await service.getMetrics("sig123", "fp456", "my-org/api");
 
-    const calledJql: string = (jira.advancedSearch as any).mock.calls[0][0];
-    expect(calledJql).toContain("resolution != Unresolved");
+    const calls = (jira.advancedSearch as any).mock.calls;
+    const mttrJql: string = calls[0][0];
+    const blastJql: string = calls[1][0];
+
+    expect(mttrJql).toContain('piq-sig:sig123');
+    expect(mttrJql).toContain("resolution != Unresolved");
+    expect(blastJql).toContain('piq-fp:fp456');
+    expect(blastJql).not.toContain("resolution != Unresolved");
   });
 
   it("rounds MTTR to one decimal place correctly", async () => {
@@ -109,7 +110,7 @@ describe("HistoryService.getMetrics()", () => {
     ];
 
     const service = new HistoryService(makeJira(issues), "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
 
     expect(metrics.mttrHours).toBe(1.1);
   });
@@ -120,7 +121,7 @@ describe("HistoryService.getMetrics()", () => {
     } as unknown as EnhancedJiraClient;
 
     const service = new HistoryService(jira, "PIQ");
-    const metrics = await service.getMetrics("abc123");
+    const metrics = await service.getMetrics("abc123", "fp123", "my-org/api");
 
     expect(metrics.sampleSize).toBe(0);
     expect(metrics.mttrHours).toBeUndefined();

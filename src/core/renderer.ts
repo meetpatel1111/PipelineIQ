@@ -418,9 +418,3 @@ export function renderDescription(
 
   return out.join("\n");
 }
-
-function tailLines(input: string, n: number): string {
-  const lines = input.split("\n");
-  if (lines.length <= n) return input;
-  return lines.slice(-n).join("\n");
-}

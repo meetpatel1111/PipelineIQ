@@ -31,6 +31,10 @@ export const deterministicEnricher: Enricher = {
     // Labels: auto-generated from event context.
     const labels = new Set<string>(config.defaultLabels);
     labels.add(`repo:${event.repository.name}`);
+    // Owner-qualified repo label — consumed by HistoryService.getMetrics() blast-radius
+    // counting. Kept distinct from the `repo:` label (used by findSimilarIssues) so both
+    // conventions stay stable.
+    labels.add(`piq-repo:${event.repository.owner}/${event.repository.name}`);
     labels.add(`branch:${event.branch}`);
     labels.add(`source:${event.source}`);
     if (event.environment) labels.add(`env:${event.environment}`);

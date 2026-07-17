@@ -192,6 +192,7 @@ function readConfig(): PipelineIQConfig {
         minConfidence: Number.parseFloat(core.getInput("self-healing-confidence") || "0.8"),
         maxFilesChanged: Number.parseInt(core.getInput("self-healing-max-files") || "10", 10),
         maxLinesChanged: Number.parseInt(core.getInput("self-healing-max-lines") || "200", 10),
+        enableGuardrails: core.getInput("self-healing-guardrails") !== "false",
         draftPr: core.getInput("self-healing-draft") !== "false",
         githubToken: core.getInput("github-token"),
         platform: "github" as const,

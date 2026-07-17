@@ -148,28 +148,29 @@ npm test --coverage
 
 ### Test Structure
 
+Tests are co-located with the code they cover, inside `__tests__/` directories, and use the `*.test.ts` suffix:
+
 ```
-src/
-├── core/
-│   ├── pipeline.test.ts
-│   ├── enrichers/
-│   │   ├── deterministic.test.ts
-│   │   └── computed.test.ts
-│   └── signatures.test.ts
-├── jira/
-│   ├── client.test.ts
-│   └── adf.test.ts
-└── ...
+src/core/
+├── __tests__/renderer-metrics.test.ts
+├── ai/__tests__/local-provider.test.ts
+├── enrichers/__tests__/deterministic.test.ts
+├── jira/__tests__/errors.test.ts
+├── jira/__tests__/history-metrics.test.ts
+├── log-parser/__tests__/smart-excerpt.test.ts
+├── notifications/__tests__/{slack,teams,service}.test.ts
+├── self-healing/__tests__/engine.test.ts
+└── types/__tests__/config.test.ts
 ```
 
 ## 📚 Documentation
 
 ### API Documentation
 
-- Update API docs in `docs/api/`
-- Include examples for all public methods
+- Keep the CLI surface documented in `CLI_REFERENCE.md`
+- Keep architecture notes in `ARCHITECTURE.md` in sync with code
+- Add JSDoc to all public exports (they generate the published `.d.ts` types)
 - Document error handling and edge cases
-- Keep docs in sync with code changes
 
 ### Examples
 
@@ -278,7 +279,7 @@ src/
 
 ## 📄 License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
 
 ---
 

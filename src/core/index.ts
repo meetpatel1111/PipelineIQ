@@ -6,7 +6,7 @@ export { deterministicEnricher } from "./enrichers/deterministic.js";
 export { computedEnricher } from "./enrichers/computed.js";
 export { aiEnricher } from "./enrichers/ai.js";
 export { renderDescription } from "./renderer.js";
-export { computeDedupSignature } from "./dedup.js";
+export { computeDedupSignature, computeFailureFingerprint } from "./dedup.js";
 export { matchSignature, SIGNATURES } from "./signatures.js";
 export type { SignaturePattern, SignatureMatch } from "./signatures.js";
 export { maskSecrets } from "./secret-mask.js";
