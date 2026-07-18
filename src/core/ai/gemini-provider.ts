@@ -154,7 +154,8 @@ Please provide a JSON response with the following structure:
   "confidence": 0.85,
   "classification": "Infrastructure|Build|Deployment|Test|Dependency|Security|Authentication|Timeout|Network|CloudProvider|Unknown",
   "riskAssessment": "Brief risk assessment",
-  "timeline": "Estimated time to fix"
+  "timeline": "Estimated time to fix",
+  "failingFiles": ["src/main.ts", "package.json"]
 }
 
 Focus on actionable insights and practical solutions. Be specific and helpful.`;
@@ -182,6 +183,7 @@ Focus on actionable insights and practical solutions. Be specific and helpful.`;
           classification: parsed.classification || "Unknown",
           riskAssessment: parsed.riskAssessment,
           timeline: parsed.timeline,
+          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
         };
       } catch (error) {
         console.error("Failed to parse Gemini response JSON:", error);

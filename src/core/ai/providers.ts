@@ -109,6 +109,7 @@ Return a JSON object with the following fields:
 - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
 - confidence: 0-1 confidence score in your analysis
 - riskAssessment: Brief risk assessment for the deployment
+- failingFiles: Array of file paths (e.g. src/main.ts) that caused the failure, based on the stack trace or logs
 
 Be concise but thorough. Focus on actionable insights.`;
 
@@ -257,6 +258,7 @@ Current Category: ${request.category || "Not classified yet"}
         classification: parsed.classification,
         confidence: parsed.confidence,
         riskAssessment: parsed.riskAssessment,
+        failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
       };
     } catch {
       return {
@@ -267,6 +269,7 @@ Current Category: ${request.category || "Not classified yet"}
         classification: this.extractField(content, "classification") as any,
         confidence: 0.5,
         riskAssessment: this.extractField(content, "riskAssessment"),
+        failingFiles: this.extractArrayField(content, "failingFiles"),
       };
     }
   }
@@ -365,6 +368,7 @@ Return a JSON object with the following fields:
 - classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
 - confidence: 0-1 confidence score in your analysis
 - riskAssessment: Brief risk assessment for the deployment
+- failingFiles: Array of file paths (e.g. src/main.ts) that caused the failure, based on the stack trace or logs
 
 Be concise but thorough. Focus on actionable insights.
 
@@ -459,6 +463,7 @@ Current Category: ${request.category || "Not classified yet"}
           classification: parsed.classification,
           confidence: parsed.confidence,
           riskAssessment: parsed.riskAssessment,
+          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
         };
       }
     } catch { /* fall through */ }
@@ -471,6 +476,7 @@ Current Category: ${request.category || "Not classified yet"}
       classification: this.extractField(content, "classification") as any,
       confidence: 0.5,
       riskAssessment: this.extractField(content, "riskAssessment"),
+      failingFiles: this.extractArrayField(content, "failingFiles"),
     };
   }
 
@@ -554,7 +560,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
 
     const systemPrompt = `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment.`;
+Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`;
 
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
     console.log(`[PipelineIQ] Using Azure OpenAI deployment: ${this.deployment}`);
@@ -687,6 +693,7 @@ Current Category: ${request.category || "Not classified yet"}
         classification: parsed.classification,
         confidence: parsed.confidence,
         riskAssessment: parsed.riskAssessment,
+        failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
       };
     } catch {
       return {
@@ -697,6 +704,7 @@ Current Category: ${request.category || "Not classified yet"}
         classification: this.extractField(content, "classification") as any,
         confidence: 0.5,
         riskAssessment: this.extractField(content, "riskAssessment"),
+        failingFiles: this.extractArrayField(content, "failingFiles"),
       };
     }
   }
@@ -763,10 +771,10 @@ export class LocalAIProvider implements AIProviderInterface {
     const systemContent = this.enableThinking
       ? `You are a CI/CD failure analysis expert. Before answering, think through the problem step by step inside <think></think> tags, then provide your structured JSON response outside those tags.
 
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment.`
+Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`
       : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment.`;
+Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`;
 
     const maxRetries = 2;
     let attempt = 0;
@@ -854,6 +862,7 @@ Current Category: ${request.category ?? "Not classified yet"}`;
           classification: parsed.classification,
           confidence: parsed.confidence,
           riskAssessment: parsed.riskAssessment,
+          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
         };
       }
     } catch { /* fall through */ }

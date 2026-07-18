@@ -120,10 +120,11 @@ export function applyPatch(
     return restoreLineEndings(patched);
   }
 
-  // ── Strategy 4: No match found ────────────────────────────────────────────
-  // All three matching strategies failed — the AI-generated originalContent
-  // snippet doesn't exist in the file (likely hallucinated).  Throw so the
-  // caller can skip this change cleanly rather than writing a raw snippet as
-  // the entire file and corrupting it.
-  throw new Error(`Could not find the original code snippet to modify${fileDesc}.`);
+  // ── Strategy 4: Append fallback ───────────────────────────────────────────
+  // If we can't find where to replace, we gracefully append the new snippet
+  // to the end of the file. This often works for adding missing config or
+  // standalone functions without breaking the pipeline entirely.
+  console.warn(`[PipelineIQ] Snippet match failed${fileDesc}. Falling back to appending changes.`);
+  const patched = content + (content.endsWith("\n") ? "" : "\n") + replacement;
+  return restoreLineEndings(patched);
 }

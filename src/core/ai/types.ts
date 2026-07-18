@@ -40,6 +40,7 @@ export const AIResponseSchema = z.object({
   postmortem: z.string().optional(),
   timeline: z.string().optional(),
   riskAssessment: z.string().optional(),
+  failingFiles: z.array(z.string()).optional(),
   classification: z.enum([
     "Infrastructure",
     "Build", 

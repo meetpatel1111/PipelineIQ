@@ -45,6 +45,7 @@ export const JiraTicketSpecSchema = z.object({
   assignee: z.string().nullable().optional(),
   rca: z.string().optional(),
   remediationSteps: z.array(z.string()).optional(),
+  failingFiles: z.array(z.string()).optional(),
   customFields: z.record(z.string(), z.unknown()).default({}),
   dedupSignature: z.string(),
   externalLinks: z.array(ExternalLinkSchema).default([]),

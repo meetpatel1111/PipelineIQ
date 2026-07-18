@@ -118,7 +118,8 @@ export class AIEngine implements IAIEngine {
           { field: "remediationSteps", value: aiResponse.remediation, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "category", value: aiResponse.classification, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
           { field: "severity", value: aiResponse.severity, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
-          { field: "priority", value: this.severityToPriority(aiResponse.severity as any), provenance: "ai", confidence: aiResponse.confidence, aiUsed: true }
+          { field: "priority", value: this.severityToPriority(aiResponse.severity as any), provenance: "ai", confidence: aiResponse.confidence, aiUsed: true },
+          { field: "failingFiles", value: aiResponse.failingFiles, provenance: "ai", confidence: aiResponse.confidence, aiUsed: true }
         );
       } else {
         // AI confidence too low - generate full deterministic fallback now (On-Demand)

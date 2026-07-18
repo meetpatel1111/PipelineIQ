@@ -12,6 +12,7 @@ import { JiraClient } from "./jira/client.js";
 import { createHistoryEnricher } from "./enrichers/history.js";
 import { computedEnricher } from "./enrichers/computed.js";
 import { deterministicEnricher } from "./enrichers/deterministic.js";
+import { codeOwnerEnricher } from "./enrichers/codeowners.js";
 import type { Enricher, EnrichmentContext } from "./enrichers/types.js";
 import { renderDescription } from "./renderer.js";
 import { NotificationService } from "./notifications/index.js";
@@ -46,8 +47,9 @@ export type ProcessOptions = {
  *   1. DeterministicEnricher  — always runs, pulls fields from event payload.
  *   2. ComputedEnricher       — heuristics: signature match, dedup hash, severity.
  *   3. extraEnrichers         — optional (typically AI). Can override prior values.
- *   4. renderDescription      — builds the final markdown ticket description.
- *   5. JiraClient.findBySignature → updateIssue OR createIssue.
+ *   4. codeOwnerEnricher      — runs after AI to map failingFiles to CODEOWNERS.
+ *   5. renderDescription      — builds the final markdown ticket description.
+ *   6. JiraClient.findBySignature → updateIssue OR createIssue.
  */
 export async function processFailureEvent(
   event: FailureEvent,
@@ -69,6 +71,7 @@ export async function processFailureEvent(
     computedEnricher,
     createHistoryEnricher(jira as EnhancedJiraClient),
     ...(options.extraEnrichers ?? []),
+    codeOwnerEnricher,
   ];
 
   for (const enricher of enrichers) {
@@ -246,6 +249,7 @@ export async function processFailureEvent(
         remediation,
         category,
         created.key,
+        ctx.codeowners
       );
 
       if (selfHealingResult.success && selfHealingResult.prUrl) {

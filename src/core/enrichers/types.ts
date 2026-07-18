@@ -24,6 +24,7 @@ export type EnrichmentContext = {
     relatedKeys: string[];
   };
   metrics?: ComputedMetrics;
+  codeowners?: string[];
 };
 
 export interface Enricher {

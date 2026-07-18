@@ -44,6 +44,7 @@ export class SelfHealingEngine {
     remediation: string[],
     category: string,
     issueKey: string,
+    codeowners?: string[]
   ): Promise<SelfHealingResult> {
     // ── Gate 1: Category eligibility ──────────────────────────────────────
     if (!this.isCategoryAllowed(category)) {
@@ -114,6 +115,7 @@ export class SelfHealingEngine {
     if (this.config.enableVerification || (this.config.autoRegenerateLockfile && this.isLockfileDesync(event))) {
       const root = this.getWorkspaceRoot();
       let previousVerificationError: string | undefined;
+      let previousDiff: string | undefined;
 
       for (let verifyAttempt = 1; verifyAttempt <= 2; verifyAttempt++) {
         // On retry: regenerate the fix with the previous error as context so the
@@ -123,7 +125,7 @@ export class SelfHealingEngine {
           try {
             const retryFix = await this.fixGenerator.generateFix(
               event, rootCause, remediation, category,
-              { previousError: previousVerificationError },
+              { previousError: previousVerificationError, diff: previousDiff },
             );
             if (retryFix) {
               fix = retryFix;
@@ -237,6 +239,14 @@ export class SelfHealingEngine {
           break; // Verification passed — exit retry loop
 
         } catch (verifyError: any) {
+          // Capture the diff of the failed fix before restoring
+          let diffOutput = "";
+          try {
+            diffOutput = execSync("git diff", { cwd: root, encoding: "utf-8" });
+          } catch {
+            // Ignore if git fails
+          }
+
           // Always restore workspace files before deciding what to do next
           for (const [relPath, originalContent] of backups.entries()) {
             const fullPath = path.resolve(root, relPath);
@@ -266,6 +276,7 @@ export class SelfHealingEngine {
           // First attempt failed with a build error — save the error and let the
           // loop regenerate the fix with feedback before trying again.
           previousVerificationError = errorMsg;
+          previousDiff = diffOutput;
           console.warn("[PipelineIQ] Verification attempt 1 failed — will retry with error context.");
         }
       }
@@ -275,6 +286,8 @@ export class SelfHealingEngine {
     try {
       const provider = this.resolveProvider(event);
       const branchName = this.buildBranchName(issueKey, fix);
+      
+      const allReviewers = Array.from(new Set([...(this.config.reviewers || []), ...(codeowners || [])]));
 
       const result = await provider.createFixPR(
         fix,
@@ -285,7 +298,7 @@ export class SelfHealingEngine {
         issueKey,
         {
           draft: this.config.draftPr,
-          reviewers: this.config.reviewers,
+          reviewers: allReviewers,
           labels: this.config.prLabels,
           branchName,
         },
