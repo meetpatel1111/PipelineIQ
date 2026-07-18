@@ -199,7 +199,7 @@ export class SelfHealingEngine {
               const originalContent: string = diskContent;
               let patched: string;
               try {
-                patched = applyPatch(originalContent, change.originalContent ?? "", change.newContent ?? "", change.filePath);
+                patched = applyPatch(originalContent, change.originalContent ?? "", change.newContent ?? "", change.filePath, change.action as "modify" | "create" | "delete");
               } catch (patchError) {
                 throw new Error(`AI-generated fix references code not found in ${change.filePath} — the snippet may be hallucinated. ${patchError}`);
               }
@@ -259,9 +259,8 @@ export class SelfHealingEngine {
 
           const errorMsg: string = verifyError.message || String(verifyError);
 
-          // Non-retriable: missing checkout or hallucinated snippet — no point retrying
-          const isRetriable = !errorMsg.includes("was not found in the local workspace") &&
-                              !errorMsg.includes("snippet may be hallucinated");
+          // Non-retriable: missing checkout — no point retrying if workspace files don't exist
+          const isRetriable = !errorMsg.includes("was not found in the local workspace");
 
           if (!isRetriable || verifyAttempt >= 2) {
             return {
