@@ -103,6 +103,10 @@ inputs:
     description: Create PR as draft (recommended)
     required: false
     default: "true"
+  self-healing-guardrails:
+    description: Enforce safety guardrails (confidence gate, file/line limits, category allow-list, blocked paths). Set to false to allow wider fixes.
+    required: false
+    default: "true"
   self-healing-reviewers:
     description: Comma-separated GitHub usernames to request as PR reviewers
     required: false

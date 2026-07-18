@@ -1,6 +1,8 @@
 import type { Enricher, EnrichmentContext } from "./types.js";
+import type { FailureCategory } from "../types/index.js";
 import { HistoryService, type FailureHistory } from "../jira/history.js";
 import { EnhancedJiraClient } from "../jira/enhanced-client.js";
+import { computeFailureFingerprint } from "../dedup.js";
 
 export function createHistoryEnricher(jira: EnhancedJiraClient): Enricher {
   return {
@@ -20,9 +22,12 @@ export function createHistoryEnricher(jira: EnhancedJiraClient): Enricher {
       try {
         let history: FailureHistory | undefined;
         if (signature) {
+          const category = (ctx.fields.category as FailureCategory | undefined) ?? "Unknown";
+          const fingerprint = computeFailureFingerprint(ctx.event, category);
+          const currentRepo = `${ctx.event.repository.owner}/${ctx.event.repository.name}`;
           const [fetchedHistory, metrics] = await Promise.all([
             historyService.getHistory(signature),
-            historyService.getMetrics(signature),
+            historyService.getMetrics(signature, fingerprint, currentRepo),
           ]);
           history = fetchedHistory;
           ctx.metrics = metrics;

@@ -3,7 +3,7 @@ import type {
   Severity,
   Priority,
 } from "../types/index.js";
-import { computeDedupSignature } from "../dedup.js";
+import { computeDedupSignature, computeFailureFingerprint } from "../dedup.js";
 import { matchSignature, type SignatureMatch } from "../signatures.js";
 import { DeterministicFallbackEngine } from "../ai/fallbacks.js";
 import type { Enricher, EnrichmentContext } from "./types.js";
@@ -91,9 +91,14 @@ export const computedEnricher: Enricher = {
     const signature = computeDedupSignature(event, category);
     setField(ctx, "dedupSignature", signature, "computed");
 
-    // Append the signature label so JQL can find duplicates.
+    // Repo-independent fingerprint — lets blast-radius counting span repositories.
+    const failureFingerprint = computeFailureFingerprint(event, category);
+
+    // Append the signature + fingerprint labels so JQL can find duplicates and
+    // cross-repo occurrences.
     const labels = new Set(ctx.fields.labels ?? []);
     labels.add(`piq-sig:${signature}`);
+    labels.add(`piq-fp:${failureFingerprint}`);
     if (category !== "Unknown") labels.add(`piq-cat:${category.toLowerCase()}`);
     setField(ctx, "labels", Array.from(labels), "computed", true);
   },

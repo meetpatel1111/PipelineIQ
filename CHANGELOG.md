@@ -728,7 +728,7 @@ ai: {
 - **PRD**: Complete product requirements document
 - **CONTRIBUTING**: Development guidelines and contribution process
 - **Examples**: GitHub workflow and usage patterns
-- **License**: MIT license for open source distribution
+- **License**: Apache License 2.0 for open source distribution
 
 ## [0.1.0] - 2024-01-XX
 

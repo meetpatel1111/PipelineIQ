@@ -27,6 +27,27 @@ export function computeDedupSignature(
   return createHash("sha1").update(parts).digest("hex").slice(0, 16);
 }
 
+/**
+ * Repo-independent failure fingerprint.
+ *
+ * Unlike the dedup signature — which is scoped to a single repo + pipeline + step —
+ * this hashes only the failure *shape* (category + normalized error text). The same
+ * underlying failure (e.g. a bad shared dependency) surfacing in DIFFERENT repositories
+ * therefore collides on the same fingerprint. Emitted as a `piq-fp:` label and used by
+ * HistoryService.getMetrics() to compute blast radius (how many repos a failure touches).
+ */
+export function computeFailureFingerprint(
+  event: FailureEvent,
+  category: FailureCategory,
+): string {
+  const parts = [
+    category,
+    fingerprint(event.failure.errorMessage ?? event.failure.logs.slice(0, 2000)),
+  ].join("|");
+
+  return createHash("sha1").update(parts).digest("hex").slice(0, 16);
+}
+
 function fingerprint(text: string): string {
   return text
     .replace(/\b[0-9a-f]{8,}\b/gi, "X") // hex IDs / UUIDs

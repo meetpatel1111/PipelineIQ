@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
-  "id": "00000000-0000-0000-0000-000000000000",
+  "id": "fbe18cdd-0869-4f15-bd25-c942454934d2",
   "name": "PipelineIQ",
   "friendlyName": "PipelineIQ — CI/CD Failure Intelligence",
   "description": "Create intelligent Jira tickets from Azure DevOps pipeline failures",
@@ -745,6 +745,13 @@
       "name": "selfHealingDraft",
       "type": "boolean",
       "label": "Self-Healing Create Draft PR",
+      "defaultValue": "true",
+      "required": false
+    },
+    {
+      "name": "selfHealingGuardrails",
+      "type": "boolean",
+      "label": "Self-Healing Enforce Safety Guardrails",
       "defaultValue": "true",
       "required": false
     },

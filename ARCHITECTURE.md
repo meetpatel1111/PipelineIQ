@@ -271,10 +271,11 @@ PipelineIQ features a fully autonomous self-healing orchestrator that transforms
 
 1. **Local Workspace Context**: Instead of guessing based on logs, the engine extracts file paths from the stack trace and uses Node's `fs` to read the exact source code of the failing files directly from the runner's checked-out workspace.
 2. **AI Fix Generator**: A specialized prompt constrains the AI to output precise, snippet-level JSON patches instead of sweeping refactors.
-3. **Guardrails**:
+3. **Guardrails** (**on by default** — disable with `selfHealing.enableGuardrails: false` / `--no-self-heal-guardrails` to allow wider fixes):
    - **Confidence Gating**: Requires a minimum AI confidence (default: 0.8).
    - **Scope Limits**: Restricts fixes to a maximum of 10 files and 200 lines (broadened from 3 files and 50 lines in v0.18.0).
-   - **Path Blocking**: Hardcodes blocked paths (`.env`, `Dockerfile`, `*.key`) to prevent security risks.
+   - **Category Allow-list**: Restricts auto-fixing to configured failure categories.
+   - **Path Blocking**: Blocks sensitive paths (`.env`, `*.key`, `*secret*`, `.github/workflows/*`, …) to prevent security risks.
 4. **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files. If precise target matching fails, the engine safely appends the proposed changes to the target file as a safe fallback instead of raising a pipeline error.
 5. **Git Provider Abstraction**: Supports both GitHub (Octokit + Git Trees API) and Azure DevOps (REST API). It fetches the original file content, applies the AI's snippet patch locally, and pushes the fully mutated file in an atomic commit.
 6. **Draft Pull Requests**: Fixes are always isolated on a new branch (`pipelineiq/fix/*`) and submitted as Draft PRs for human-in-the-loop review.

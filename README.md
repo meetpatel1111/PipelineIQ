@@ -169,7 +169,7 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 - **AI Code Fixer**: Generates precise snippet-level code patches based on diagnostic context and source code.
 - **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files. If precise target matching fails, the engine safely appends the proposed changes to the target file as a safe fallback instead of raising a pipeline error.
 - **Atomic Pull Requests**: Automatically creates isolated branches and Draft PRs in GitHub or Azure DevOps.
-- **Safety Guardrails**: Strict limits on files changed (default: 10, broadened from 3 in v0.18.0), lines changed (default: 200, broadened from 50 in v0.18.0), and blocked paths (e.g., `.env`, `Dockerfile`).
+- **Safety Guardrails (on by default)**: Enforces a minimum-confidence gate, limits on files changed (default: 10) and lines changed (default: 200), an allowed-category list, and blocked paths (`.env`, `*.key`, `*secret*`, `.github/workflows/*`, …). Disable to allow wider fixes with `--no-self-heal-guardrails` (CLI), `self-healing-guardrails: false` (GitHub Action), `selfHealingGuardrails: false` (Azure DevOps), or `selfHealing.enableGuardrails: false` (config).
 - **Human-in-the-Loop**: All fixes are submitted as Draft PRs requiring human review before merging.
 - **Jira Integration**: Successfully created fix PRs are automatically cross-linked in the generated Jira incident ticket.
 
@@ -303,7 +303,7 @@ pipelineiq analyze \
   --repository-owner "${{ github.repository_owner }}" \
   --format github-actions \
   --self-heal \
-  --self-heal-min-confidence 0.8
+  --self-heal-confidence 0.8
 
 > [!IMPORTANT]
 > **GitHub Permissions for Self-Healing**
@@ -397,7 +397,7 @@ npm run clean
 
 - [Product Requirements Document](./PRD.md) - Comprehensive PRD with all features
 - [Architecture Guide](./ARCHITECTURE.md) - System design and technical patterns
-- [API Documentation](./docs/api/) - Detailed API reference
+- [CLI Reference](./CLI_REFERENCE.md) - Complete CLI flag and environment-variable reference
 - [Examples](./examples/) - Usage examples and patterns
 
 ## 🤝 Contributing

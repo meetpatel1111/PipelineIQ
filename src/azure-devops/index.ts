@@ -95,8 +95,11 @@ function readConfig(PipelineIQConfigSchema: { parse: (raw: unknown) => PipelineI
         minConfidence: Number.parseFloat(tl.getInput("selfHealingConfidence") || "0.8"),
         maxFilesChanged: Number.parseInt(tl.getInput("selfHealingMaxFiles") || "10", 10),
         maxLinesChanged: Number.parseInt(tl.getInput("selfHealingMaxLines") || "200", 10),
+        enableGuardrails: tl.getBoolInput("selfHealingGuardrails"),
         draftPr: tl.getBoolInput("selfHealingDraft"),
-        azureToken: tl.getInput("jiraToken"), // PAT for PR creation, fallback resolved by engine
+        // ADO PR creation authenticates with the build service identity. The engine
+        // resolves the token from SYSTEM_ACCESSTOKEN — do NOT pass the Jira API token
+        // here (it cannot authenticate the Azure DevOps Git API).
         platform: "azure-devops" as const,
         ...(tl.getInput("selfHealingReviewers") ? {
           reviewers: tl.getInput("selfHealingReviewers")!.split(",").map(s => s.trim()),
