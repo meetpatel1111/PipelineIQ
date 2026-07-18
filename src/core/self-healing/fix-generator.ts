@@ -176,7 +176,7 @@ export class FixGenerator {
   ): string {
     const workspaceContext = this.getWorkspaceContext(event, rootCause);
     const retrySection = retryContext
-      ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids this new error. Pay special attention to syntax correctness — do not break method chains, leave orphaned operators, or introduce incomplete statements.\nIMPORTANT: The file is in its ORIGINAL state (as shown below in LOCAL WORKSPACE CONTEXT). Your \`originalContent\` snippet MUST match this original file content exactly!\n`
+      ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nHere is the exact code patch you generated in that failed attempt (Git Diff):\n\`\`\`diff\n${retryContext.diff || "No diff available"}\n\`\`\`\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids making the same mistake. Pay special attention to syntax correctness.\n\nCRITICAL INSTRUCTION: The file has been REVERTED to its ORIGINAL state (as shown below in LOCAL WORKSPACE CONTEXT). Your \`originalContent\` snippet MUST exactly match the code in LOCAL WORKSPACE CONTEXT, NOT the code from your failed patch!\n`
       : "";
 
     return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.${retrySection}
