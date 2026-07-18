@@ -121,7 +121,53 @@ export function applyPatch(
     return restoreLineEndings(patched);
   }
 
-  // ── Strategy 4: Append fallback ───────────────────────────────────────────
+  // ── Strategy 4: Aggressive Whitespace-collapsed match ─────────────────────
+  // Collapse all whitespace (including newlines) into a single space.
+  // This handles when the AI completely hallucinates the indentation or line breaks.
+  const collapseAllWS = (str: string) => str.replace(/\s+/g, " ");
+
+  const fullyCollapsedContent = collapseAllWS(content);
+  const fullyCollapsedSnippet = collapseAllWS(snippet);
+
+  if (fullyCollapsedSnippet.length > 0 && fullyCollapsedContent.includes(fullyCollapsedSnippet)) {
+    const matchStart = fullyCollapsedContent.indexOf(fullyCollapsedSnippet);
+
+    let origIdx = 0;
+    let collIdx = 0;
+    while (collIdx < matchStart && origIdx < content.length) {
+      if (/\s/.test(content[origIdx]!)) {
+        origIdx++;
+        while (origIdx < content.length && /\s/.test(content[origIdx]!)) {
+          origIdx++;
+        }
+        collIdx++;
+      } else {
+        origIdx++;
+        collIdx++;
+      }
+    }
+    const realStart = origIdx;
+
+    let snippetCollIdx = 0;
+    while (snippetCollIdx < fullyCollapsedSnippet.length && origIdx < content.length) {
+      if (/\s/.test(content[origIdx]!)) {
+        origIdx++;
+        while (origIdx < content.length && /\s/.test(content[origIdx]!)) {
+          origIdx++;
+        }
+        snippetCollIdx++;
+      } else {
+        origIdx++;
+        snippetCollIdx++;
+      }
+    }
+    const realEnd = origIdx;
+
+    const patched = content.slice(0, realStart) + replacement + content.slice(realEnd);
+    return restoreLineEndings(patched);
+  }
+
+  // ── Strategy 5: Append fallback ───────────────────────────────────────────
   // If we can't find where to replace and the action is modify, we must fail.
   // Appending broken code to the end of a file causes syntax errors.
   if (action === "create" || originalSnippet.trim() === "") {
