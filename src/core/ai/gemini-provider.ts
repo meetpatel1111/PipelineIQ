@@ -18,7 +18,7 @@ export class GeminiProvider implements AIProviderInterface {
       throw new Error("Gemini API key is required");
     }
     this.apiKey = config.apiKey;
-    this.model = config.model || "gemini-2.5-flash";
+    this.model = config.model || "gemini-3.1-flash-lite";
     this.maxTokens = config.maxTokens || 4000;
     this.temperature = config.temperature || 0.1;
     this.endpoint = config.endpoint || "https://generativelanguage.googleapis.com/v1beta";

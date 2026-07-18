@@ -130,7 +130,7 @@ program
   .option("--ai-mode <mode>", "AI mode (disabled | assist | full)")
   .option("--ai-api-key <key>", "AI API key")
   .option("--ai-provider <provider>", "AI provider (openai | anthropic | azure-openai | gemini)")
-  .option("-m, --ai-model <model>", "AI model to use (e.g. gpt-4, gemini-2.5-flash)")
+  .option("-m, --ai-model <model>", "AI model to use (e.g. gpt-4, gemini-3.1-flash-lite)")
   .option("--ai-max-tokens <tokens>", "Maximum output tokens for AI response")
   .option("--ai-thinking", "Enable extended thinking/reasoning for models that support it (Gemini 2.5+, Claude 3.7+)")
   .option("--ai-thinking-budget <tokens>", "Token budget for thinking (default: 8000, -1 = dynamic)", parseInt)
