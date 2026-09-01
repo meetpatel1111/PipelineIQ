@@ -69,14 +69,11 @@ export class GeminiProvider implements AIProviderInterface {
           // thinkingBudget: -1 = dynamic, 0 = disabled, >0 = fixed token budget
           generationConfig["thinkingConfig"] = { thinkingBudget: this.thinkingBudget };
         }
-        const modelParams: Record<string, any> = {
+        const model = genAI.getGenerativeModel({
           model: currentModelName,
           generationConfig,
-        };
-        if (request.systemPrompt) {
-          modelParams["systemInstruction"] = request.systemPrompt;
-        }
-        const model = genAI.getGenerativeModel(modelParams);
+          ...(request.systemPrompt ? { systemInstruction: request.systemPrompt } : {}),
+        });
 
         const maxRetries = 2;
         let attempt = 0;

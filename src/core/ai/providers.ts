@@ -778,7 +778,7 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
 
         const completion = await client.chat.completions.create({
           model: this.model,
-          messages,
+          messages: messages as any,
           max_tokens: this.maxTokens,
           temperature: this.temperature,
         });
