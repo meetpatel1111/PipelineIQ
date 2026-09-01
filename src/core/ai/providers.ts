@@ -127,18 +127,16 @@ Be concise but thorough. Focus on actionable insights.`;
         try {
           let content: string | null = null;
 
+          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : systemPrompt);
+          const messages = effectiveSystem
+            ? [{ role: "system", content: effectiveSystem }, { role: "user", content: prompt }]
+            : [{ role: "user", content: prompt }];
+
           if (isResponsesApi) {
             // ── gpt-5.x: Responses API ──────────────────────────────────────
-            const inputItems: any[] = request.isRawPrompt
-              ? [{ role: "user", content: prompt }]
-              : [
-                  { role: "system", content: systemPrompt },
-                  { role: "user", content: prompt },
-                ];
-
             const responsesParams: Record<string, any> = {
               model: currentModelName,
-              input: inputItems,
+              input: messages,
               max_output_tokens: this.maxTokens,
             };
 
@@ -164,9 +162,7 @@ Be concise but thorough. Focus on actionable insights.`;
             // ── o-series: Chat Completions with reasoning_effort ────────────
             const params: Record<string, any> = {
               model: currentModelName,
-              messages: request.isRawPrompt
-                ? [{ role: "user", content: prompt }]
-                : [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
+              messages,
               max_completion_tokens: this.maxTokens,
             };
             if (this.enableThinking) {
@@ -179,9 +175,7 @@ Be concise but thorough. Focus on actionable insights.`;
             // ── Standard Chat Completions ───────────────────────────────────
             const params: Record<string, any> = {
               model: currentModelName,
-              messages: request.isRawPrompt
-                ? [{ role: "user", content: prompt }]
-                : [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
+              messages,
               max_tokens: this.maxTokens,
               temperature: this.temperature,
             };
@@ -349,16 +343,7 @@ export class AnthropicProvider implements AIProviderInterface {
 
       while (attempt <= maxRetries) {
         try {
-          const params: Record<string, any> = {
-            model: currentModelName,
-            // When thinking is enabled, max_tokens must exceed budget_tokens
-            max_tokens: this.enableThinking
-              ? Math.max(this.maxTokens, this.thinkingBudget + 1000)
-              : this.maxTokens,
-            messages: [
-              {
-                role: "user",
-                content: request.isRawPrompt ? prompt : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
+          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
 
 Return a JSON object with the following fields:
 - summary: Brief human-readable failure description (max 255 characters)
@@ -370,12 +355,20 @@ Return a JSON object with the following fields:
 - riskAssessment: Brief risk assessment for the deployment
 - failingFiles: Array of file paths (e.g. src/main.ts) that caused the failure, based on the stack trace or logs
 
-Be concise but thorough. Focus on actionable insights.
+Be concise but thorough. Focus on actionable insights.`);
 
-${prompt}`,
-              },
-            ],
+          const params: Record<string, any> = {
+            model: currentModelName,
+            // When thinking is enabled, max_tokens must exceed budget_tokens
+            max_tokens: this.enableThinking
+              ? Math.max(this.maxTokens, this.thinkingBudget + 1000)
+              : this.maxTokens,
+            messages: [{ role: "user", content: prompt }],
           };
+
+          if (effectiveSystem) {
+            params["system"] = effectiveSystem;
+          }
 
           if (this.enableThinking) {
             // Extended thinking: temperature must be 1 (Anthropic requirement)
@@ -573,16 +566,16 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
     while (attempt <= maxRetries) {
       try {
         let content: string | null = null;
+        const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : systemPrompt);
+        const messages = effectiveSystem
+          ? [{ role: "system", content: effectiveSystem }, { role: "user", content: prompt }]
+          : [{ role: "user", content: prompt }];
 
         if (isResponsesApi) {
           // ── gpt-5.x: Responses API ────────────────────────────────────────
-          const inputItems: any[] = request.isRawPrompt
-            ? [{ role: "user", content: prompt }]
-            : [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }];
-
           const responsesParams: Record<string, any> = {
             model: this.deployment,
-            input: inputItems,
+            input: messages,
             max_output_tokens: this.maxTokens,
           };
 
@@ -606,9 +599,7 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
           // ── o-series: Chat Completions with reasoning_effort ──────────────
           const params: Record<string, any> = {
             model: this.deployment,
-            messages: request.isRawPrompt
-              ? [{ role: "user", content: prompt }]
-              : [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
+            messages,
             max_completion_tokens: this.maxTokens,
           };
           if (this.enableThinking) {
@@ -621,9 +612,7 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
           // ── Standard Chat Completions ─────────────────────────────────────
           const params: Record<string, any> = {
             model: this.deployment,
-            messages: request.isRawPrompt
-              ? [{ role: "user", content: prompt }]
-              : [{ role: "system", content: systemPrompt }, { role: "user", content: prompt }],
+            messages,
             max_tokens: this.maxTokens,
             temperature: this.temperature,
           };
@@ -782,14 +771,14 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
 
     while (attempt <= maxRetries) {
       try {
+        const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : systemContent);
+        const messages = effectiveSystem
+          ? [{ role: "system", content: effectiveSystem }, { role: "user", content: prompt }]
+          : [{ role: "user", content: prompt }];
+
         const completion = await client.chat.completions.create({
           model: this.model,
-          messages: request.isRawPrompt ? [
-            { role: "user", content: prompt },
-          ] : [
-            { role: "system", content: systemContent },
-            { role: "user", content: prompt },
-          ],
+          messages,
           max_tokens: this.maxTokens,
           temperature: this.temperature,
         });
