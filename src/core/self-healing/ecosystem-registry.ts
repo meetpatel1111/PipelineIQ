@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { FailureEvent } from "../types/failure.js";
-import type { CodeFix } from "../types/self-healing.js";
+import type { FailureEvent } from "../types/index.js";
+import type { CodeFix } from "../types/index.js";
 
 export interface EcosystemDescriptor {
   id: string;
