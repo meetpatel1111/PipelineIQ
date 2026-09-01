@@ -363,9 +363,15 @@ export class SelfHealingEngine {
     if (!this.config.enableGuardrails) return true;
     if (this.config.allowedCategories.includes("*")) return true;
     
-    return this.config.allowedCategories.some(
-      (allowed) => allowed.toLowerCase() === category.toLowerCase(),
-    );
+    const catLower = category.toLowerCase();
+    return this.config.allowedCategories.some((allowed) => {
+      const aLower = allowed.toLowerCase();
+      if (aLower === catLower || aLower === "*") return true;
+      if (aLower === "build" && (catLower.includes("build") || catLower.includes("syntax") || catLower.includes("compile") || catLower.includes("type"))) return true;
+      if (aLower === "test" && (catLower.includes("test") || catLower.includes("assert") || catLower.includes("spec"))) return true;
+      if (aLower === "lint" && (catLower.includes("lint") || catLower.includes("format") || catLower.includes("style"))) return true;
+      return catLower.includes(aLower);
+    });
   }
 
   // ── Provider Resolution ──────────────────────────────────────────────────
