@@ -106,11 +106,11 @@ export class FixGenerator {
   }
 
   private extractFilePaths(text: string): string[] {
-    // Regex 1: Matches relative or absolute paths with extensions (e.g. src/auth.ts, lib/core.py, contracts/Auth.sol, terraform/main.tf, etc.)
-    const regexExt = /(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.[a-zA-Z0-9_-]+\b/g;
-    const matchesExt = text.match(regexExt) || [];
+    // Regex 1: Matches paths with file extensions (e.g. src/dataManager.ts, python/calc.py, contracts/Auth.sol, etc.)
+    const regexExt = /(?:[a-zA-Z0-9_.-]+[\\/])*[a-zA-Z0-9_.-]+\.[a-zA-Z0-9_-]+\b/g;
+    const matchesExt = (text.match(regexExt) || []).map(p => p.replace(/^[\\/]+/, "").replace(/[\\/]+$/, "").replace(/\\/g, "/"));
 
-    // Regex 2: Matches common standalone files without extensions (e.g. Dockerfile, Makefile, Jenkinsfile, Gemfile, etc.)
+    // Regex 2: Matches common standalone files without extensions
     const standaloneNames = ["Dockerfile", "Containerfile", "Makefile", "makefile", "Jenkinsfile", "Gemfile", "Procfile", "Rakefile", "Vagrantfile", "Brewfile", "Fastfile", "Tiltfile"];
     const standaloneMatches: string[] = [];
     for (const name of standaloneNames) {
@@ -119,36 +119,69 @@ export class FixGenerator {
       }
     }
     
-    // Deduplicate and filter out obvious false positives / directories
-    const paths = [...new Set([...matchesExt, ...standaloneMatches])].filter(
-      p => !p.includes("node_modules") && !p.includes(".git/") && !p.endsWith("/") && !/^\d+\.\d+/.test(p)
+    // Deduplicate and filter out obvious false positives
+    const candidates = [...new Set([...matchesExt, ...standaloneMatches])].filter(
+      p => !p.includes("node_modules") && !p.includes(".git/") && !/^\d+\.\d+/.test(p) && p.length > 2
     );
 
-    // Universal manifest discovery: check for standard manifests in workspace root across all 300+ stacks
     const root = this.getWorkspaceRoot();
+    const verifiedPaths: string[] = [];
+
+    // Helper: find file in workspace if only relative or filename was captured
+    const findInWorkspace = (filename: string, dir: string = root, depth: number = 0): string | null => {
+      if (depth > 4) return null;
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
+          const full = path.join(dir, entry.name);
+          if (entry.isFile() && (entry.name === filename || full.endsWith(path.normalize(filename)))) {
+            return path.relative(root, full).replace(/\\/g, "/");
+          }
+          if (entry.isDirectory()) {
+            const found = findInWorkspace(filename, full, depth + 1);
+            if (found) return found;
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+      return null;
+    };
+
+    for (const p of candidates) {
+      const fullPath = path.resolve(root, p);
+      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+        verifiedPaths.push(p);
+      } else {
+        // Try resolving by base filename in workspace
+        const basename = path.basename(p);
+        const resolvedRel = findInWorkspace(basename);
+        if (resolvedRel && !verifiedPaths.includes(resolvedRel)) {
+          verifiedPaths.push(resolvedRel);
+        }
+      }
+    }
+
+    // Universal manifest discovery: append standard project manifests if present
     const commonManifests = [
       "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt",
-      "Pipfile", "setup.py", "setup.cfg", "pom.xml", "build.gradle", "build.gradle.kts",
-      "settings.gradle", "settings.gradle.kts", "build.sbt", "mix.exs", "pubspec.yaml",
-      "Package.swift", "CMakeLists.txt", "meson.build", "Makefile", "makefile",
-      "project.clj", "deps.edn", "rebar.config", "composer.json", "Gemfile",
-      "shard.yml", "dub.json", "build.zig", "stack.yaml", "flake.nix", "default.nix",
-      "dbt_project.yml", "foundry.toml", "Anchor.toml", "dune-project", "gleam.toml",
-      "Pulumi.yaml", "Chart.yaml", "helmfile.yaml", "turbo.json", "nx.json",
-      "deno.json", "deno.jsonc", "environment.yml", "Dockerfile"
+      "Pipfile", "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt",
+      "mix.exs", "pubspec.yaml", "Package.swift", "CMakeLists.txt", "composer.json",
+      "Gemfile", "build.zig", "dbt_project.yml", "foundry.toml", "Anchor.toml"
     ];
 
     for (const manifest of commonManifests) {
       try {
-        if (!paths.includes(manifest) && fs.existsSync(path.resolve(root, manifest))) {
-          paths.push(manifest);
+        if (!verifiedPaths.includes(manifest) && fs.existsSync(path.resolve(root, manifest))) {
+          verifiedPaths.push(manifest);
         }
       } catch {
         // Ignore file access errors
       }
     }
 
-    return paths;
+    return verifiedPaths;
   }
 
   /**
@@ -163,17 +196,13 @@ export class FixGenerator {
     const root = this.getWorkspaceRoot();
     const fileContents: string[] = [];
 
-    // Limit to max 12 files to preserve token budget
-    for (const p of paths.slice(0, 12)) {
+    // Load up to 15 verified workspace files
+    for (const p of paths.slice(0, 15)) {
       try {
         const fullPath = path.resolve(root, p);
-        
-        // Security: Ensure path is within workspace
-        if (!fullPath.startsWith(path.resolve(root))) continue;
-        
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
           const content = fs.readFileSync(fullPath, "utf-8");
-          // Truncate huge files to prevent blowing up the context window
+          // Truncate large files to prevent blowing up the context window
           const truncated = content.split('\n').slice(0, 1000).join('\n');
           
           fileContents.push(`================================================================================\nFILE: ${p}\n================================================================================\n${truncated}`);
