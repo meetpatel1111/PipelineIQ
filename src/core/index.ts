@@ -25,6 +25,6 @@ export type { NotificationPayload, NotificationResult, NotificationsConfig } fro
 export type { ComputedMetrics } from "./types/operational-metrics.js";
 
 // Self-Healing
-export { SelfHealingEngine, FixGenerator } from "./self-healing/index.js";
+export { SelfHealingEngine, FixGenerator, applyPatch } from "./self-healing/index.js";
 export type { GitProvider, PRCreationResult } from "./self-healing/index.js";
 
