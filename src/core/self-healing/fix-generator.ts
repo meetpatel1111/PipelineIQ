@@ -176,7 +176,7 @@ export class FixGenerator {
           // Truncate huge files to prevent blowing up the context window
           const truncated = content.split('\n').slice(0, 1000).join('\n');
           
-          fileContents.push(`--- FILE: ${p} ---\n${truncated}`);
+          fileContents.push(`================================================================================\nFILE: ${p}\n================================================================================\n${truncated}`);
         }
       } catch (e) {
         // Silently ignore read errors
@@ -185,7 +185,7 @@ export class FixGenerator {
 
     if (fileContents.length === 0) return "";
 
-    return `\nLOCAL WORKSPACE CONTEXT (Source Code for failing files):\n${fileContents.join("\n\n")}\n`;
+    return fileContents.join("\n\n");
   }
 
   /**
@@ -201,7 +201,7 @@ export class FixGenerator {
   ): string {
     const workspaceContext = this.getWorkspaceContext(event, rootCause);
     const retrySection = retryContext
-      ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nHere is the exact code patch you generated in that failed attempt (Git Diff):\n\`\`\`diff\n${retryContext.diff || "No diff available"}\n\`\`\`\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids making the same mistake. Pay special attention to syntax correctness.\n\nCRITICAL INSTRUCTION: The file has been REVERTED to its ORIGINAL state (as shown below in LOCAL WORKSPACE CONTEXT). Your \`originalContent\` snippet MUST exactly match the code in LOCAL WORKSPACE CONTEXT, NOT the code from your failed patch!\n`
+      ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nHere is the exact code patch you generated in that failed attempt (Git Diff):\n\`\`\`diff\n${retryContext.diff || "No diff available"}\n\`\`\`\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids making the same mistake. Pay special attention to syntax correctness.\n\nCRITICAL INSTRUCTION: The file has been REVERTED to its ORIGINAL state (as shown below in SOURCE CODE FILES). Your \`originalContent\` snippet MUST exactly match the code in SOURCE CODE FILES, NOT the code from your failed patch!\n`
       : "";
 
     const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
@@ -215,6 +215,8 @@ Your task is to generate a PRECISE, WORKING code fix for this pipeline failure.$
 IMPORTANT RULES:
 - Generate surgical or comprehensive fixes that address the root cause completely.
 - Fix the application source code (e.g., src/*, lib/*, tests/*, contracts/*, python/*, rust/*, golang/*) or dependency manifests (package.json, pyproject.toml, Cargo.toml, go.mod).
+- The actual source code of the failing files is provided below under "SOURCE CODE FILES (Loaded from Local Workspace)". Use the exact code from that section for your \`originalContent\` and \`newContent\` patches.
+- If multiple files contain errors or need adjustments, return a separate change item in the \`changes\` array for each file (e.g. changes for src/dataManager.ts, src/mathUtils.ts, and src/index.ts).
 - NEVER modify CI/CD workflow files (.github/workflows/*, azure-pipelines.yml, Jenkinsfile, .gitlab-ci.yml) when application code, compiler errors, or test failures occur. CI workflow files are strictly protected by security guardrails.
 - NEVER modify files containing secrets, credentials, tokens, or environment keys (*.env, *.key, *.pem).
 - NEVER attempt to manually construct or hand-edit binary or complex auto-generated lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, poetry.lock, Gemfile.lock, etc.). Edit only the package specification file (e.g., package.json, Cargo.toml, pyproject.toml, Gemfile). The Self-Healing Engine automatically executes the appropriate package manager to safely regenerate and synchronize the lockfile.
@@ -239,7 +241,10 @@ ERROR MESSAGE:
 ${cleanError}
 
 RELEVANT LOGS:
-${cleanLogs}${cleanWorkspace}
+${cleanLogs}
+
+SOURCE CODE FILES (Loaded from Local Workspace):
+${cleanWorkspace || "(No workspace files found)"}
 
 Generate a JSON response with this EXACT structure:
 {
