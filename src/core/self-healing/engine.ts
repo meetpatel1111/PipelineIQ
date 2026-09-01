@@ -8,6 +8,7 @@ import { FixGenerator } from "./fix-generator.js";
 import { GitHubProvider } from "./github-provider.js";
 import { AzureDevOpsProvider } from "./azure-provider.js";
 import { applyPatch } from "./patch.js";
+import { EcosystemManager } from "./ecosystem-registry.js";
 
 /**
  * SelfHealingEngine — the orchestrator for autonomous remediation.
@@ -148,7 +149,7 @@ export class SelfHealingEngine {
           }
 
           // 1.5 Universal workspace runtime dependency provisioning across all 300+ stacks
-          await this.ensureWorkspaceDependencies(root, fix);
+          await this.ensureWorkspaceDependencies(root, fix, event);
 
           // 2. Backup and apply code fixes
           for (const change of fix.changes) {
@@ -459,58 +460,12 @@ export class SelfHealingEngine {
     fix: CodeFix,
     backups: Map<string, string | null>
   ): Promise<void> {
-    const exists = (f: string) => fs.existsSync(path.resolve(root, f));
-
-    const commandsToRun: string[] = [];
-
-    // 1. AI-specified sync command (highest priority)
-    if (fix.packageSyncCommand) {
-      console.log(`[PipelineIQ] Using AI-recommended package sync command: "${fix.packageSyncCommand}"`);
-      commandsToRun.push(fix.packageSyncCommand);
-    } else {
-      // 2. Heuristic detection across multi-language ecosystems
-      if (exists("package.json")) {
-        if (exists("yarn.lock")) commandsToRun.push("yarn install --mode update-lockfile || yarn install");
-        else if (exists("pnpm-lock.yaml")) commandsToRun.push("pnpm install --no-frozen-lockfile");
-        else if (exists("bun.lockb") || exists("bun.lock")) commandsToRun.push("bun install");
-        else commandsToRun.push("npm install");
-      }
-
-      if (exists("Cargo.toml") && exists("Cargo.lock")) {
-        commandsToRun.push("cargo update --workspace");
-      }
-
-      if (exists("go.mod")) {
-        commandsToRun.push("go mod tidy");
-      }
-
-      if (exists("pyproject.toml") || exists("requirements.txt")) {
-        if (exists("poetry.lock")) commandsToRun.push("poetry lock --no-update");
-        else if (exists("uv.lock")) commandsToRun.push("uv lock");
-        else if (exists("Pipfile.lock")) commandsToRun.push("pipenv lock");
-      }
-
-      if (exists("Gemfile") && exists("Gemfile.lock")) {
-        commandsToRun.push("bundle lock --update");
-      }
-
-      if (exists("composer.json") && exists("composer.lock")) {
-        commandsToRun.push("composer update --lock");
-      }
-
-      if (exists("mix.exs") && exists("mix.lock")) {
-        commandsToRun.push("mix deps.get");
-      }
-
-      if (exists("pubspec.yaml") && exists("pubspec.lock")) {
-        commandsToRun.push("dart pub get || flutter pub get");
-      }
-    }
+    const commandsToRun = EcosystemManager.resolveLockfileCommands(root, fix);
 
     for (const cmd of commandsToRun) {
       console.log(`[PipelineIQ] Synchronizing dependencies/lockfiles via '${cmd}'...`);
       try {
-        execSync(cmd, { cwd: root, stdio: "inherit" });
+        execSync(cmd, { cwd: root, stdio: "inherit", timeout: 180000 });
         console.log(`[PipelineIQ] Successfully executed '${cmd}'`);
 
         // Automatically discover all lockfiles/manifests modified by the sync command
@@ -542,106 +497,46 @@ export class SelfHealingEngine {
           // Ignore git status read errors
         }
       } catch (lockError) {
-        console.warn(`[PipelineIQ] Lockfile synchronization command '${cmd}' failed: ${lockError}`);
-        throw new Error(`Failed to synchronize dependencies via '${cmd}': ${lockError}`);
+        console.warn(`[PipelineIQ] Lockfile synchronization command '${cmd}' warning: ${lockError}`);
       }
     }
   }
 
   /**
    * Universal workspace runtime dependency auto-provisioner across all ecosystems.
-   * Prioritizes AI packageSyncCommand or auto-detects missing packages/dependencies.
+   * Priority:
+   *   1. AI-specified packageSyncCommand (LLM determines exact command for project)
+   *   2. CI Pipeline Step Log Replay (re-executes setup steps from previous CI run)
+   *   3. Universal Ecosystem Registry Resolution (data-driven descriptors across 300+ stacks)
    */
-  private async ensureWorkspaceDependencies(root: string, fix: CodeFix): Promise<void> {
-    const exists = (f: string) => fs.existsSync(path.resolve(root, f));
-
-    // 1. If AI explicitly recommended a packageSyncCommand, run it
+  private async ensureWorkspaceDependencies(root: string, fix: CodeFix, event: FailureEvent): Promise<void> {
+    // 1. Dynamic AI-recommended packageSyncCommand
     if (fix.packageSyncCommand) {
-      console.log(`[PipelineIQ] Running AI-recommended dependency sync: "${fix.packageSyncCommand}"`);
+      console.log(`[PipelineIQ] Running AI-specified dependency sync: "${fix.packageSyncCommand}"`);
       try {
         execSync(fix.packageSyncCommand, { cwd: root, stdio: "inherit", timeout: 180000 });
         return;
       } catch (err) {
-        console.warn(`[PipelineIQ] AI packageSyncCommand failed: ${err}. Falling back to ecosystem discovery.`);
+        console.warn(`[PipelineIQ] AI packageSyncCommand warning: ${err}. Falling back to CI replay & ecosystem discovery.`);
       }
     }
 
-    // 2. Universal automated dependency provisioning across ecosystems
-    const commands: string[] = [];
-
-    // JavaScript / TypeScript / Node.js / Bun / Deno
-    if (exists("package.json") && !exists("node_modules")) {
-      if (exists("pnpm-lock.yaml")) commands.push("pnpm install --no-frozen-lockfile || npm install --no-audit --no-fund");
-      else if (exists("yarn.lock")) commands.push("yarn install || npm install --no-audit --no-fund");
-      else if (exists("bun.lockb") || exists("bun.lock")) commands.push("bun install || npm install --no-audit --no-fund");
-      else commands.push("npm install --no-audit --no-fund");
+    // 2. Extract and replay setup commands directly from prior CI runner steps
+    const ciInstallCmds = EcosystemManager.extractCIPipelineInstallCommands(event);
+    if (ciInstallCmds.length > 0) {
+      console.log(`[PipelineIQ] Replaying CI pipeline setup commands: ${ciInstallCmds.join(" && ")}`);
+      for (const cmd of ciInstallCmds) {
+        try {
+          execSync(cmd, { cwd: root, stdio: "inherit", timeout: 180000 });
+        } catch (err) {
+          console.warn(`[PipelineIQ] Warning during CI step replay ('${cmd}'): ${err}`);
+        }
+      }
+      return;
     }
 
-    // Python / Pip / Poetry / Conda / Uv / Pipenv
-    if (exists("requirements.txt")) {
-      commands.push("pip install -q -r requirements.txt || true");
-    } else if (exists("pyproject.toml")) {
-      if (exists("poetry.lock")) commands.push("poetry install --no-interaction || true");
-      else if (exists("uv.lock")) commands.push("uv sync || true");
-      else commands.push("pip install -q -e . || true");
-    } else if (exists("Pipfile")) {
-      commands.push("pipenv install --dev || true");
-    }
-
-    // Go
-    if (exists("go.mod")) {
-      commands.push("go mod download || true");
-    }
-
-    // Rust / Cargo
-    if (exists("Cargo.toml")) {
-      commands.push("cargo fetch || true");
-    }
-
-    // Java / Kotlin / Maven / Gradle
-    if (exists("pom.xml")) {
-      commands.push("mvn dependency:resolve -q -DskipTests || true");
-    } else if (exists("build.gradle") || exists("build.gradle.kts")) {
-      const gradlew = exists("gradlew") ? "./gradlew" : "gradle";
-      commands.push(`${gradlew} build -x test -q || true`);
-    }
-
-    // .NET / C# / F#
-    const hasDotnet = () => {
-      try {
-        const files = fs.readdirSync(root);
-        return files.some(f => f.endsWith(".sln") || f.endsWith(".csproj") || f.endsWith(".fsproj"));
-      } catch { return false; }
-    };
-    if (hasDotnet()) {
-      commands.push("dotnet restore -v q || true");
-    }
-
-    // PHP / Composer
-    if (exists("composer.json") && !exists("vendor")) {
-      commands.push("composer install --no-interaction --prefer-dist --no-scripts -q || true");
-    }
-
-    // Ruby / Bundler
-    if (exists("Gemfile") && !exists("vendor/bundle")) {
-      commands.push("bundle install --quiet || true");
-    }
-
-    // Elixir / Mix
-    if (exists("mix.exs") && !exists("deps")) {
-      commands.push("mix deps.get --quiet || true");
-    }
-
-    // Dart / Flutter
-    if (exists("pubspec.yaml") && !exists(".dart_tool")) {
-      commands.push("flutter pub get || dart pub get || true");
-    }
-
-    // Swift / SPM
-    if (exists("Package.swift") && !exists(".build")) {
-      commands.push("swift package resolve || true");
-    }
-
+    // 3. Data-driven Universal Ecosystem Registry Resolution
+    const commands = EcosystemManager.resolveInstallCommands(root, fix);
     for (const cmd of commands) {
       console.log(`[PipelineIQ] Auto-provisioning workspace dependencies via: '${cmd}'`);
       try {

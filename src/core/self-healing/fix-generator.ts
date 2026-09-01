@@ -125,7 +125,40 @@ export class FixGenerator {
     );
 
     const root = this.getWorkspaceRoot();
-    const verifiedPaths: string[] = [];
+    const resultPaths: string[] = [...candidates];
+
+    // Universal manifest discovery: append standard project manifests if present on disk
+    const commonManifests = [
+      "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt",
+      "Pipfile", "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt",
+      "mix.exs", "pubspec.yaml", "Package.swift", "CMakeLists.txt", "composer.json",
+      "Gemfile", "build.zig", "dbt_project.yml", "foundry.toml", "Anchor.toml"
+    ];
+
+    for (const manifest of commonManifests) {
+      try {
+        if (!resultPaths.includes(manifest) && fs.existsSync(path.resolve(root, manifest))) {
+          resultPaths.push(manifest);
+        }
+      } catch {
+        // Ignore file access errors
+      }
+    }
+
+    return resultPaths;
+  }
+
+  /**
+   * Read files from the local workspace to give the AI context.
+   */
+  private getWorkspaceContext(event: FailureEvent, rootCause: string): string {
+    const textToScan = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}\n${rootCause}`;
+    const paths = this.extractFilePaths(textToScan);
+    
+    if (paths.length === 0) return "";
+
+    const root = this.getWorkspaceRoot();
+    const fileContents: string[] = [];
 
     // Helper: find file in workspace if only relative or filename was captured
     const findInWorkspace = (filename: string, dir: string = root, depth: number = 0): string | null => {
@@ -149,63 +182,27 @@ export class FixGenerator {
       return null;
     };
 
-    for (const p of candidates) {
-      const fullPath = path.resolve(root, p);
-      if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-        verifiedPaths.push(p);
-      } else {
-        // Try resolving by base filename in workspace
-        const basename = path.basename(p);
-        const resolvedRel = findInWorkspace(basename);
-        if (resolvedRel && !verifiedPaths.includes(resolvedRel)) {
-          verifiedPaths.push(resolvedRel);
-        }
-      }
-    }
-
-    // Universal manifest discovery: append standard project manifests if present
-    const commonManifests = [
-      "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt",
-      "Pipfile", "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt",
-      "mix.exs", "pubspec.yaml", "Package.swift", "CMakeLists.txt", "composer.json",
-      "Gemfile", "build.zig", "dbt_project.yml", "foundry.toml", "Anchor.toml"
-    ];
-
-    for (const manifest of commonManifests) {
-      try {
-        if (!verifiedPaths.includes(manifest) && fs.existsSync(path.resolve(root, manifest))) {
-          verifiedPaths.push(manifest);
-        }
-      } catch {
-        // Ignore file access errors
-      }
-    }
-
-    return verifiedPaths;
-  }
-
-  /**
-   * Read files from the local workspace to give the AI context.
-   */
-  private getWorkspaceContext(event: FailureEvent, rootCause: string): string {
-    const textToScan = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}\n${rootCause}`;
-    const paths = this.extractFilePaths(textToScan);
-    
-    if (paths.length === 0) return "";
-
-    const root = this.getWorkspaceRoot();
-    const fileContents: string[] = [];
-
     // Load up to 15 verified workspace files
     for (const p of paths.slice(0, 15)) {
       try {
-        const fullPath = path.resolve(root, p);
+        let fullPath = path.resolve(root, p);
+        let finalRelPath = p;
+
+        if (!fs.existsSync(fullPath) || !fs.statSync(fullPath).isFile()) {
+          const basename = path.basename(p);
+          const resolvedRel = findInWorkspace(basename);
+          if (resolvedRel) {
+            fullPath = path.resolve(root, resolvedRel);
+            finalRelPath = resolvedRel;
+          }
+        }
+
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
           const content = fs.readFileSync(fullPath, "utf-8");
           // Truncate large files to prevent blowing up the context window
           const truncated = content.split('\n').slice(0, 1000).join('\n');
           
-          fileContents.push(`================================================================================\nFILE: ${p}\n================================================================================\n${truncated}`);
+          fileContents.push(`================================================================================\nFILE: ${finalRelPath}\n================================================================================\n${truncated}`);
         }
       } catch (e) {
         // Silently ignore read errors
