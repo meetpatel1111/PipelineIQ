@@ -1,6 +1,7 @@
 import type { Enricher, EnrichmentContext } from "./types.js";
 import { setField } from "./types.js";
 import { AIEngine } from "../ai/ai-engine.js";
+import { maskSecrets } from "../secret-mask.js";
 
 /**
  * AIEnricher — uses the AIEngine to provide high-fidelity diagnostics.
@@ -29,8 +30,21 @@ export const aiEnricher: Enricher = {
     }
 
     try {
+      // Security: Sanitize secrets from logs and error messages before uploading to AI providers
+      const sanitizedEvent = config.maskSecrets !== false
+        ? {
+            ...event,
+            failure: {
+              ...event.failure,
+              logs: maskSecrets(event.failure.logs || ""),
+              errorMessage: event.failure.errorMessage ? maskSecrets(event.failure.errorMessage) : undefined,
+              stackTrace: event.failure.stackTrace ? maskSecrets(event.failure.stackTrace) : undefined,
+            },
+          }
+        : event;
+
       // Cast to any to bypass the minor type discrepancies between the unified config and engine-specific config
-      const results = await aiEngine.enrich(event, config.ai as any, ctx.history);
+      const results = await aiEngine.enrich(sanitizedEvent, config.ai as any, ctx.history);
       
       for (const result of results) {
         if (result.aiUsed && result.value) {

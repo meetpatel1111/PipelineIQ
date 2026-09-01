@@ -29,8 +29,8 @@ describe("codeOwnerEnricher", () => {
   });
 
   it("should assign reviewers and assignee based on CODEOWNERS rules", async () => {
-    vi.mocked(fs.existsSync).mockImplementation((path: string) => {
-      return path.includes("CODEOWNERS");
+    vi.mocked(fs.existsSync).mockImplementation((path: any) => {
+      return String(path).includes("CODEOWNERS");
     });
     vi.mocked(fs.readFileSync).mockImplementation(() => {
       return `

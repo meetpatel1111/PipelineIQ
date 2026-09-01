@@ -5,6 +5,7 @@ import type { CodeFix, FileChange } from "../types/self-healing.js";
 import type { AIEngineConfig, AIProviderInterface } from "../ai/types.js";
 import { OpenAIProvider, AnthropicProvider, AzureOpenAIProvider, LocalAIProvider } from "../ai/providers.js";
 import { GeminiProvider } from "../ai/gemini-provider.js";
+import { maskSecrets } from "../secret-mask.js";
 
 /**
  * AI-powered code fix generator.
@@ -179,6 +180,10 @@ export class FixGenerator {
       ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nHere is the exact code patch you generated in that failed attempt (Git Diff):\n\`\`\`diff\n${retryContext.diff || "No diff available"}\n\`\`\`\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids making the same mistake. Pay special attention to syntax correctness.\n\nCRITICAL INSTRUCTION: The file has been REVERTED to its ORIGINAL state (as shown below in LOCAL WORKSPACE CONTEXT). Your \`originalContent\` snippet MUST exactly match the code in LOCAL WORKSPACE CONTEXT, NOT the code from your failed patch!\n`
       : "";
 
+    const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
+    const cleanLogs = maskSecrets((event.failure.logs ?? "").split("\n").slice(-100).join("\n"));
+    const cleanWorkspace = maskSecrets(workspaceContext);
+
     return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.${retrySection}
 
 IMPORTANT RULES:
@@ -204,10 +209,10 @@ REMEDIATION STEPS:
 ${remediation.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 
 ERROR MESSAGE:
-${event.failure.errorMessage ?? "No error message"}
+${cleanError}
 
 RELEVANT LOGS (last 100 lines):
-${(event.failure.logs ?? "").split("\n").slice(-100).join("\n")}${workspaceContext}
+${cleanLogs}${cleanWorkspace}
 
 Generate a JSON response with this EXACT structure:
 {

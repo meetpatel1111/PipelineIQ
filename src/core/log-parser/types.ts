@@ -5,7 +5,7 @@ export const LogEntrySchema = z.object({
   level: z.enum(["debug", "info", "warn", "error", "fatal"]).optional(),
   message: z.string(),
   source: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type LogEntry = z.infer<typeof LogEntrySchema>;

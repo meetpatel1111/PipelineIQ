@@ -52,8 +52,10 @@ function parseGitHubSteps(lines: string[]): StepInfo[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
-    const groupMatch = line.match(/^##\[group\](.+)/);
-    const endGroup = line.startsWith("##[endgroup]");
+    // Strip optional timestamp prefix: "2026-01-01T00:00:00.123Z ##[group]..."
+    const clean = line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.Z+\-]+\s+/, "");
+    const groupMatch = clean.match(/^##\[group\](.+)/);
+    const endGroup = clean.startsWith("##[endgroup]");
 
     if (groupMatch) {
       current = { name: groupMatch[1]!.trim(), startLine: i + 1 };

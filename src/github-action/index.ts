@@ -197,13 +197,13 @@ function readConfig(): PipelineIQConfig {
         githubToken: core.getInput("github-token"),
         platform: "github" as const,
         ...(core.getInput("self-healing-reviewers") ? {
-          reviewers: core.getInput("self-healing-reviewers").split(",").map(s => s.trim()),
+          reviewers: core.getInput("self-healing-reviewers").split(",").map((s: string) => s.trim()),
         } : {}),
         ...(core.getInput("self-healing-labels") ? {
-          prLabels: core.getInput("self-healing-labels").split(",").map(s => s.trim()),
+          prLabels: core.getInput("self-healing-labels").split(",").map((s: string) => s.trim()),
         } : {}),
         ...(core.getInput("self-healing-categories") ? {
-          allowedCategories: core.getInput("self-healing-categories").split(",").map(s => s.trim()),
+          allowedCategories: core.getInput("self-healing-categories").split(",").map((s: string) => s.trim()),
         } : {}),
       },
     } : {}),

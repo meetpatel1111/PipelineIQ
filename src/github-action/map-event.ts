@@ -104,7 +104,7 @@ export async function mapGithubContext(
     run_id: ctx.runId,
   });
 
-  let failedJob = jobsData.jobs.find((j) => {
+  let failedJob = jobsData.jobs.find((j: any) => {
     const isTarget = ctx.job ? (j.name === ctx.job || j.id.toString() === ctx.job) : true;
     const isFailed = j.conclusion === "failure" || j.conclusion === "cancelled" || j.conclusion === "timed_out";
     return isTarget && isFailed;
@@ -112,13 +112,13 @@ export async function mapGithubContext(
   
   if (!failedJob) {
     // Fallback: just find ANY failed job if specific one not found
-    const anyFailed = jobsData.jobs.find(j => j.conclusion === "failure" || j.conclusion === "cancelled");
+    const anyFailed = jobsData.jobs.find((j: any) => j.conclusion === "failure" || j.conclusion === "cancelled");
     if (anyFailed) {
       failedJob = anyFailed;
     }
   }
 
-  const failedStep = failedJob?.steps?.find((s) => s.conclusion === "failure" || s.conclusion === "cancelled");
+  const failedStep = failedJob?.steps?.find((s: any) => s.conclusion === "failure" || s.conclusion === "cancelled");
 
   // Fetch the failed job's logs (truncated to last 200 lines for the event).
   let logs = "";

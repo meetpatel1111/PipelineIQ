@@ -512,11 +512,11 @@ export class SelfHealingEngine {
                     : "pip install -e .";
       if (cat === "test") return [install, "pytest"];
       if (cat === "lint") return [install, "flake8 . || ruff check ."];
-      return [install, "python -m py_compile $(find . -name '*.py' -not -path './.git/*')"];
+      return [install, "python -m compileall -q ."];
     }
     if (exists("Pipfile")) {
       if (cat === "test") return ["pipenv install", "pipenv run pytest"];
-      return ["pipenv install", "pipenv run python -c 'import compileall; compileall.compile_dir(\".\", quiet=True)'"];
+      return ["pipenv install", "pipenv run python -m compileall -q ."];
     }
 
     // ── Java / Maven ─────────────────────────────────────────────────────────

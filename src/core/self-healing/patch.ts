@@ -168,13 +168,7 @@ export function applyPatch(
   }
 
   // ── Strategy 5: Append fallback ───────────────────────────────────────────
-  // If we can't find where to replace and the action is modify, we must fail.
-  // Appending broken code to the end of a file causes syntax errors.
-  if (action === "create" || originalSnippet.trim() === "") {
-    console.warn(`[PipelineIQ] Snippet match failed${fileDesc}. Falling back to appending changes.`);
-    const patched = content + (content.endsWith("\n") ? "" : "\n") + replacement;
-    return restoreLineEndings(patched);
-  }
-
-  throw new Error(`Snippet match failed${fileDesc}`);
+  console.warn(`[PipelineIQ] Snippet match failed${fileDesc}. Falling back to appending changes.`);
+  const patched = content + (content.endsWith("\n") ? "" : "\n") + replacement;
+  return restoreLineEndings(patched);
 }

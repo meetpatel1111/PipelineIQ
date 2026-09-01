@@ -96,19 +96,46 @@ export function markdownToAdf(md: string): AdfDoc {
 
 function inlineMd(text: string): AdfNode[] {
   const nodes: AdfNode[] = [];
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  // Matches [link](url), **bold**, `code`, or *italic*
+  const tokenRegex = /(\[([^\]]+)\]\(([^)]+)\))|(\*\*([^*]+)\*\*)|(`([^`]+)`)|(\*([^*]+)\*)/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
-  while ((match = linkRegex.exec(text)) !== null) {
+  while ((match = tokenRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
       nodes.push({ type: "text", text: text.slice(lastIndex, match.index) });
     }
-    nodes.push({
-      type: "text",
-      text: match[1]!,
-      marks: [{ type: "link", attrs: { href: match[2]! } }],
-    });
+
+    if (match[1]) {
+      // Link [text](href)
+      nodes.push({
+        type: "text",
+        text: match[2]!,
+        marks: [{ type: "link", attrs: { href: match[3]! } }],
+      });
+    } else if (match[4]) {
+      // Bold **text**
+      nodes.push({
+        type: "text",
+        text: match[5]!,
+        marks: [{ type: "strong" }],
+      });
+    } else if (match[6]) {
+      // Inline Code `text`
+      nodes.push({
+        type: "text",
+        text: match[7]!,
+        marks: [{ type: "code" }],
+      });
+    } else if (match[8]) {
+      // Italic *text*
+      nodes.push({
+        type: "text",
+        text: match[9]!,
+        marks: [{ type: "em" }],
+      });
+    }
+
     lastIndex = match.index + match[0].length;
   }
 
@@ -128,7 +155,7 @@ function buildAdfTable(rows: string[][]): AdfNode {
       type: "tableRow",
       content: header.map((cell) => ({
         type: "tableHeader",
-        content: [{ type: "paragraph", content: [{ type: "text", text: cell }] }],
+        content: [{ type: "paragraph", content: inlineMd(cell) }],
       })),
     });
   }

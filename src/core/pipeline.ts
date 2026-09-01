@@ -113,6 +113,9 @@ export async function processFailureEvent(
   }
 
   // Dedup path
+  let closedDuplicateKey: string | undefined;
+  let closedDuplicateStatus: string | undefined;
+
   if (config.dedup.enabled) {
     const existing = await jira.findBySignature(
       config.jiraProject,
@@ -127,7 +130,9 @@ export async function processFailureEvent(
           { existingKey: existing.key, signature: spec.dedupSignature },
           "closed duplicate found — creating new ticket as per strategy",
         );
-        // We continue to creation block, but we'll link it later
+        closedDuplicateKey = existing.key;
+        closedDuplicateStatus = existing.status;
+        // Continue to creation block, and link the newly created ticket to this closed ticket
       } else if (isClosed && config.dedup.onClosedHit === "skip") {
         logger.info(
           { existingKey: existing.key, signature: spec.dedupSignature },
@@ -186,25 +191,16 @@ export async function processFailureEvent(
   const created = await jira.createIssue(spec);
   logger.info({ key: created.key, signature: spec.dedupSignature }, "created Jira issue");
 
-  // If this was a "create-new" dedup hit, link to the old one
-  if (config.dedup.enabled) {
-    // Re-check for existing issue (or pass it down)
-    const existing = await jira.findBySignature(
-      config.jiraProject,
-      spec.dedupSignature as string,
-      config.dedup.windowHours,
-    );
-    // Find the one that ISN'T the one we just created
-    if (existing && existing.key !== created.key && config.dedup.closedStatuses.includes(existing.status) && config.dedup.onClosedHit === "create-new") {
-       try {
-         await (jira as EnhancedJiraClient).linkIssues(created.key, existing.key, "Relates");
-         await jira.addComment(
-           created.key,
-           `ℹ️ This failure was previously tracked in ${existing.key} (Status: ${existing.status}). A new ticket has been opened to track the fresh effort.`
-         );
-       } catch (e) {
-         logger.warn({ err: e }, "failed to link new issue to previous one");
-       }
+  // If this was a "create-new" dedup hit, link to the old closed issue
+  if (closedDuplicateKey) {
+    try {
+      await (jira as EnhancedJiraClient).linkIssues(created.key, closedDuplicateKey, "Relates");
+      await jira.addComment(
+        created.key,
+        `ℹ️ This failure was previously tracked in ${closedDuplicateKey} (Status: ${closedDuplicateStatus ?? "Closed"}). A new ticket has been opened to track the fresh effort.`
+      );
+    } catch (e) {
+      logger.warn({ err: e, closedDuplicateKey }, "failed to link new issue to previous one");
     }
   }
 

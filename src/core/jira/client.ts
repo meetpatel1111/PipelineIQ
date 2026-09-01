@@ -76,7 +76,7 @@ class JiraCloudClient implements JiraClient {
       noCheckAtlassianToken: true,
       ...(auth.strictGDPR !== undefined ? { strictGDPR: auth.strictGDPR } : {}),
       middlewares: {
-        onError: (error) => {
+        onError: (error: any) => {
           // Wrap in a more descriptive error or log it
           const msg = error.message || (error.response ? `${error.response.status} ${error.response.statusText}` : JSON.stringify(error));
           console.error(`[PipelineIQ Jira Cloud Error] ${msg}`);
@@ -451,7 +451,7 @@ class JiraServerClient implements JiraClient {
       const res = await this.client.addNewIssue({
         fields: {
           project: { key: spec.projectKey },
-          summary: spec.summary as string,
+          summary: (spec.summary as string).length > 255 ? (spec.summary as string).substring(0, 252) + "..." : (spec.summary as string),
           // Jira Server uses Wiki Markup, not ADF
           description: spec.description as string,
           issuetype: { name: spec.issueType },

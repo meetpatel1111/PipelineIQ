@@ -7,8 +7,8 @@ import { type Enricher, type EnrichmentContext, setField } from "./types.js";
  * Supports basic *, **, and directory prefix matches.
  */
 function isMatch(pattern: string, filePath: string): boolean {
-  const normalizedFile = filePath.startsWith("/") ? filePath.substring(1) : filePath;
-  let p = pattern.startsWith("/") ? pattern.substring(1) : pattern;
+  const normalizedFile = filePath.replace(/\\/g, "/").replace(/^\//, "");
+  let p = pattern.replace(/\\/g, "/").replace(/^\//, "");
 
   // If pattern has no slash (except trailing), it matches anywhere. 
   // In CODEOWNERS: `*.js` matches any .js file. `docs/` matches any docs folder.
