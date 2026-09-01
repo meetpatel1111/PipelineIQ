@@ -303,4 +303,225 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
     expect(paths).not.toContain("3.14");
     expect(paths).not.toContain("0.19.1");
   });
+
+  it("supports wildcard '*' category to allow fixes across all failure types", async () => {
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: true,
+        dryRun: false,
+        minConfidence: 0.8,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["*"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: false,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "openai",
+        model: "gpt-4o",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      }
+    );
+
+    expect((engine as any).isCategoryAllowed("DatabaseMigration")).toBe(true);
+    expect((engine as any).isCategoryAllowed("SecurityVulnerability")).toBe(true);
+    expect((engine as any).isCategoryAllowed("SyntaxError")).toBe(true);
+  });
+
+  it("prioritizes AI-suggested verificationCommand when present", () => {
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: true,
+        dryRun: false,
+        minConfidence: 0.8,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["*"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: true,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "openai",
+        model: "gpt-4o",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      }
+    );
+
+    const fixWithCmd: CodeFix = {
+      ...dummyFix,
+      verificationCommand: "pnpm nx test core-api",
+    };
+
+    const cmds = (engine as any).resolveVerificationCommands("Test", process.cwd(), fixWithCmd);
+    expect(cmds).toEqual(["pnpm nx test core-api"]);
+  });
+
+  it("extracts failed step execution command from CI runner logs", () => {
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: true,
+        dryRun: false,
+        minConfidence: 0.8,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["*"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: true,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "openai",
+        model: "gpt-4o",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      }
+    );
+
+    const eventWithLog: FailureEvent = {
+      ...dummyEvent,
+      failure: {
+        logs: "##[group]Run mix test --cover\nCompiling 12 files (.ex)\n......\n1) test calculates mttr (HistoryTest)\n** (RuntimeError) expected true",
+        logsTruncated: false,
+      },
+    };
+
+    const extracted = (engine as any).extractFailedStepCommand(eventWithLog);
+    expect(extracted).toBe("mix test --cover");
+
+    const resolved = (engine as any).resolveVerificationCommands("Test", process.cwd(), dummyFix, eventWithLog);
+    expect(resolved).toEqual(["mix test --cover"]);
+  });
+
+  it("identifies lockfile desync across multiple package managers and ecosystems", () => {
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: true,
+        dryRun: false,
+        minConfidence: 0.8,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["*"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: true,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "openai",
+        model: "gpt-4o",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      }
+    );
+
+    const pnpmDesync: FailureEvent = {
+      ...dummyEvent,
+      failure: { errorMessage: "ERR_PNPM_LOCKFILE_OUTDATED: Cannot install with \"frozen-lockfile\" because pnpm-lock.yaml is not up-to-date", logs: "", logsTruncated: false },
+    };
+    expect((engine as any).isLockfileDesync(pnpmDesync)).toBe(true);
+
+    const cargoDesync: FailureEvent = {
+      ...dummyEvent,
+      failure: { errorMessage: "error: the lock file /app/Cargo.lock needs to be updated but --locked was passed to prevent this", logs: "", logsTruncated: false },
+    };
+    expect((engine as any).isLockfileDesync(cargoDesync)).toBe(true);
+
+    const poetryDesync: FailureEvent = {
+      ...dummyEvent,
+      failure: { errorMessage: "poetry.lock was not found or is out of date", logs: "", logsTruncated: false },
+    };
+    expect((engine as any).isLockfileDesync(poetryDesync)).toBe(true);
+
+    expect((engine as any).isLockfileName("pnpm-lock.yaml")).toBe(true);
+    expect((engine as any).isLockfileName("Cargo.lock")).toBe(true);
+    expect((engine as any).isLockfileName("poetry.lock")).toBe(true);
+    expect((engine as any).isLockfileName("src/auth.ts")).toBe(false);
+  });
+
+  it("parses AI verificationCommand and packageSyncCommand from fix response", () => {
+    const generator = new FixGenerator({
+      provider: "local",
+      apiKey: "dummy",
+      model: "dummy-model",
+      minConfidence: 0.6,
+      temperature: 0.1,
+      timeout: 30000,
+      maxTokens: 1000,
+      retryAttempts: 3,
+      enableThinking: false,
+      thinkingBudget: 8000,
+    });
+
+    const aiRaw = JSON.stringify({
+      canFix: true,
+      title: "Update Foundry dependencies and contracts",
+      description: "Upgrades OpenZeppelin contracts and regenerates bindings",
+      confidence: 0.95,
+      riskLevel: "low",
+      verificationCommand: "forge test --match-contract AuthTest",
+      packageSyncCommand: "forge build",
+      changes: [
+        {
+          filePath: "contracts/Auth.sol",
+          action: "modify",
+          originalContent: "import '@openzeppelin/contracts/access/Ownable.sol';",
+          newContent: "import '@openzeppelin/contracts-v5/access/Ownable.sol';",
+          changeDescription: "Update import path",
+        },
+      ],
+    });
+
+    const parsed = (generator as any).parseFix(aiRaw, "SmartContract");
+    expect(parsed).not.toBeNull();
+    expect(parsed.verificationCommand).toBe("forge test --match-contract AuthTest");
+    expect(parsed.packageSyncCommand).toBe("forge build");
+    expect(parsed.changes[0].filePath).toBe("contracts/Auth.sol");
+  });
 });

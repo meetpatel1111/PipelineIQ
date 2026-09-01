@@ -33,6 +33,10 @@ export const CodeFixSchema = z.object({
   riskLevel: z.enum(["low", "medium", "high"]),
   /** Estimated time saved by this fix (in minutes) */
   estimatedTimeSavedMinutes: z.number().optional(),
+  /** Optional shell command recommended by the AI to verify this specific fix */
+  verificationCommand: z.string().optional(),
+  /** Optional shell command recommended by the AI to sync/regenerate lockfiles or dependencies (e.g. 'npm install', 'uv sync', 'forge build', 'bundle install') */
+  packageSyncCommand: z.string().optional(),
 });
 export type CodeFix = z.infer<typeof CodeFixSchema>;
 
@@ -53,12 +57,9 @@ export const SelfHealingConfigSchema = z.object({
   maxFilesChanged: z.number().int().positive().default(10),
   /** Maximum total lines changed across all files */
   maxLinesChanged: z.number().int().positive().default(200),
-  /** Failure categories eligible for self-healing */
+  /** Failure categories eligible for self-healing (use ["*"] to allow all categories) */
   allowedCategories: z.array(z.string()).default([
-    "Dependency",
-    "Build",
-    "Test",
-    "Configuration",
+    "*",
   ]),
   /** Glob patterns for files that must never be auto-fixed */
   blockedPaths: z.array(z.string()).default([

@@ -107,21 +107,32 @@ export class FixGenerator {
 
   private extractFilePaths(text: string): string[] {
     // Regex matches relative or absolute-looking paths with any file extension
-    // e.g., src/utils/auth.ts, lib/core.py, package.json, main.tf, Cargo.toml, build.gradle
+    // e.g., src/utils/auth.ts, lib/core.py, package.json, main.tf, Cargo.toml, build.gradle, mix.exs, pubspec.yaml
     const regex = /(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.[a-zA-Z][a-zA-Z0-9_-]*\b/g;
     const matches = text.match(regex) || [];
     
     // Deduplicate and filter out obvious false positives
-    const paths = [...new Set(matches)].filter(p => !p.includes("node_modules"));
+    const paths = [...new Set(matches)].filter(p => !p.includes("node_modules") && !p.includes(".git/"));
 
-    // Proactively add package.json if it exists at the root of the workspace
+    // Universal manifest discovery: check for standard manifests in workspace root
     const root = this.getWorkspaceRoot();
-    try {
-      if (!paths.includes("package.json") && fs.existsSync(path.resolve(root, "package.json"))) {
-        paths.push("package.json");
+    const commonManifests = [
+      "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt",
+      "Pipfile", "setup.py", "setup.cfg", "pom.xml", "build.gradle", "build.gradle.kts",
+      "build.sbt", "mix.exs", "pubspec.yaml", "Package.swift", "CMakeLists.txt",
+      "meson.build", "Makefile", "makefile", "project.clj", "rebar.config",
+      "composer.json", "Gemfile", "shard.yml", "dub.json", "build.zig",
+      "stack.yaml", "flake.nix", "default.nix", "dbt_project.yml"
+    ];
+
+    for (const manifest of commonManifests) {
+      try {
+        if (!paths.includes(manifest) && fs.existsSync(path.resolve(root, manifest))) {
+          paths.push(manifest);
+        }
+      } catch {
+        // Ignore file access errors
       }
-    } catch {
-      // Ignore errors
     }
 
     return paths;
@@ -139,8 +150,8 @@ export class FixGenerator {
     const root = this.getWorkspaceRoot();
     const fileContents: string[] = [];
 
-    // Limit to max 10 files to preserve token budget
-    for (const p of paths.slice(0, 10)) {
+    // Limit to max 12 files to preserve token budget
+    for (const p of paths.slice(0, 12)) {
       try {
         const fullPath = path.resolve(root, p);
         
@@ -166,7 +177,7 @@ export class FixGenerator {
 
   /**
    * Build the specialized prompt for code fix generation.
-   * This is the core of the self-healing intelligence.
+   * Universal across all languages, frameworks, and build systems.
    */
   private buildFixPrompt(
     event: FailureEvent,
@@ -181,17 +192,19 @@ export class FixGenerator {
       : "";
 
     const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
-    const cleanLogs = maskSecrets((event.failure.logs ?? "").split("\n").slice(-100).join("\n"));
+    const cleanLogs = maskSecrets((event.failure.logs ?? "").split("\n").slice(-120).join("\n"));
     const cleanWorkspace = maskSecrets(workspaceContext);
 
-    return `You are a CI/CD Self-Healing Engine. Your task is to generate a PRECISE code fix for a pipeline failure.${retrySection}
+    return `You are a Universal CI/CD Self-Healing Engine. You have mastery over all programming languages (TypeScript/JS, Python, Rust, Go, Java, Kotlin, C/C++, C#, Swift, Ruby, PHP, Elixir, Dart, Scala, Zig, Haskell, Clojure, etc.), frameworks, build tools, database migrations, and CI workflows.
+
+Your task is to generate a PRECISE, WORKING code fix for this pipeline failure.${retrySection}
 
 IMPORTANT RULES:
-- Generate comprehensive fixes that address the root cause entirely.
-- You may modify as many files and lines as necessary to ensure the pipeline succeeds.
-- NEVER modify files containing secrets, credentials, or environment variables.
-- NEVER attempt to manually generate or edit auto-generated lockfiles (e.g., package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, Gemfile.lock). If you need to add, update, or remove dependencies, edit only the package specification file (e.g., package.json, Cargo.toml, Gemfile). The Self-Healing Engine will automatically execute the necessary package installation commands (like npm install) locally to safely regenerate and synchronize the lockfile. Therefore, you do not need to include any lockfile files in your 'changes' list.
-- Output ONLY valid JSON — no markdown fences, no explanation outside JSON.
+- Generate surgical or comprehensive fixes that address the root cause completely.
+- You can fix ANY programming language, manifest, script, or configuration file.
+- NEVER modify files containing secrets, credentials, tokens, or environment keys (*.env, *.key, *.pem).
+- NEVER attempt to manually construct or hand-edit binary or complex auto-generated lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, poetry.lock, Gemfile.lock, etc.). Edit only the package specification file (e.g., package.json, Cargo.toml, pyproject.toml, Gemfile). The Self-Healing Engine automatically executes the appropriate package manager to safely regenerate and synchronize the lockfile.
+- Output ONLY valid JSON — no markdown fences, no text outside the JSON object.
 - If you cannot generate a confident fix, return: {"canFix": false, "reason": "explanation"}
 
 FAILURE CONTEXT:
@@ -211,7 +224,7 @@ ${remediation.map((s, i) => `${i + 1}. ${s}`).join("\n")}
 ERROR MESSAGE:
 ${cleanError}
 
-RELEVANT LOGS (last 100 lines):
+RELEVANT LOGS:
 ${cleanLogs}${cleanWorkspace}
 
 Generate a JSON response with this EXACT structure:
@@ -222,9 +235,11 @@ Generate a JSON response with this EXACT structure:
   "confidence": 0.85,
   "riskLevel": "low",
   "estimatedTimeSavedMinutes": 15,
+  "verificationCommand": "optional command to verify (e.g. 'pytest tests/', 'cargo test', 'forge test', 'mix test', 'flutter test', 'npm test')",
+  "packageSyncCommand": "optional command to sync/regenerate dependencies or lockfiles (e.g. 'uv sync', 'pnpm install', 'forge build', 'bundle install', 'mix deps.get')",
   "changes": [
     {
-      "filePath": "relative/path/to/file.ts",
+      "filePath": "path/to/file.ext",
       "action": "modify",
       "originalContent": "...exact snippet from the file to replace...",
       "newContent": "...new snippet to insert...",
@@ -276,6 +291,8 @@ Generate a JSON response with this EXACT structure:
         category,
         riskLevel: parsed.riskLevel ?? "medium",
         estimatedTimeSavedMinutes: parsed.estimatedTimeSavedMinutes,
+        verificationCommand: typeof parsed.verificationCommand === "string" && parsed.verificationCommand.trim() ? parsed.verificationCommand.trim() : undefined,
+        packageSyncCommand: typeof parsed.packageSyncCommand === "string" && parsed.packageSyncCommand.trim() ? parsed.packageSyncCommand.trim() : undefined,
       };
     } catch (error) {
       console.warn(`[PipelineIQ] Failed to parse AI fix response: ${error}`);

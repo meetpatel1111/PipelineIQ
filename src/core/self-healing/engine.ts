@@ -142,40 +142,14 @@ export class SelfHealingEngine {
         try {
           console.log(`[PipelineIQ] Starting local verification/regeneration${verifyAttempt > 1 ? ` (attempt ${verifyAttempt})` : ""}...`);
 
-          // 1. If it's a lockfile desync, regenerate the lockfile first
+          // 1. Universal lockfile regeneration if desync is detected
           if (this.config.autoRegenerateLockfile && this.isLockfileDesync(event)) {
-            console.log("[PipelineIQ] Lockfile desync detected — regenerating lockfile locally via npm install...");
-            try {
-              const lockPath = path.resolve(root, "package-lock.json");
-              if (fs.existsSync(lockPath)) {
-                backups.set("package-lock.json", fs.readFileSync(lockPath, "utf-8"));
-              } else {
-                backups.set("package-lock.json", null);
-              }
-
-              execSync("npm install", { cwd: root, stdio: "inherit" });
-              console.log("[PipelineIQ] Successfully regenerated package-lock.json");
-
-              if (fs.existsSync(lockPath)) {
-                const newLockContent = fs.readFileSync(lockPath, "utf-8");
-                fix.changes = fix.changes.filter(c => c.filePath !== "package-lock.json");
-                fix.changes.push({
-                  filePath: "package-lock.json",
-                  action: backups.get("package-lock.json") !== null ? "modify" : "create",
-                  originalContent: backups.get("package-lock.json") || "",
-                  newContent: newLockContent,
-                  changeDescription: "Regenerated package-lock.json to resolve desynchronization with package.json",
-                });
-              }
-            } catch (lockError) {
-              console.warn(`[PipelineIQ] Lockfile regeneration failed: ${lockError}`);
-              throw new Error(`Failed to regenerate package-lock.json: ${lockError}`);
-            }
+            await this.regenerateLockfiles(root, fix, backups);
           }
 
           // 2. Backup and apply code fixes
           for (const change of fix.changes) {
-            if (change.filePath === "package-lock.json") continue;
+            if (this.isLockfileName(change.filePath)) continue;
             const fullPath = path.resolve(root, change.filePath);
             if (fs.existsSync(fullPath)) {
               backups.set(change.filePath, fs.readFileSync(fullPath, "utf-8"));
@@ -211,8 +185,8 @@ export class SelfHealingEngine {
             }
           }
 
-          // 3. Run verification commands (auto-detected if not explicitly configured)
-          const verificationCommands = this.resolveVerificationCommands(category, root);
+          // 3. Run verification commands (auto-detected across 25+ ecosystems, AI suggestion, or CI logs)
+          const verificationCommands = this.resolveVerificationCommands(category, root, fix, event);
           if (this.config.enableVerification && verificationCommands.length > 0) {
             console.log(`[PipelineIQ] Running verification commands: ${verificationCommands.join(" && ")}`);
             for (const cmd of verificationCommands) {
@@ -384,6 +358,7 @@ export class SelfHealingEngine {
 
   private isCategoryAllowed(category: string): boolean {
     if (!this.config.enableGuardrails) return true;
+    if (this.config.allowedCategories.includes("*")) return true;
     
     return this.config.allowedCategories.some(
       (allowed) => allowed.toLowerCase() === category.toLowerCase(),
@@ -434,12 +409,152 @@ export class SelfHealingEngine {
     );
   }
 
+  private isLockfileName(filePath: string): boolean {
+    const name = path.basename(filePath).toLowerCase();
+    return [
+      "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock",
+      "cargo.lock", "poetry.lock", "pipfile.lock", "gemfile.lock", "composer.lock",
+      "go.sum", "pubspec.lock", "mix.lock", "package.resolved", "flake.lock"
+    ].includes(name);
+  }
+
   private isLockfileDesync(event: FailureEvent): boolean {
-    const errorText = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}`;
-    return errorText.includes("package-lock.json is out of sync") ||
-           errorText.includes("package.json and package-lock.json or npm-shrinkwrap.json are in sync") ||
-           errorText.includes("npm ci failed") ||
-           errorText.includes("cipm can only install packages");
+    const errorText = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}`.toLowerCase();
+    return (
+      errorText.includes("package-lock.json is out of sync") ||
+      errorText.includes("package.json and package-lock.json") ||
+      errorText.includes("npm ci failed") ||
+      errorText.includes("cipm can only install packages") ||
+      errorText.includes("frozen-lockfile") ||
+      errorText.includes("yarn.lock was not found") ||
+      errorText.includes("pnpm-lock.yaml is not up-to-date") ||
+      errorText.includes("poetry.lock was not found or is out of date") ||
+      errorText.includes("lockfile is not in sync with manifest") ||
+      errorText.includes("cargo.lock needs to be updated") ||
+      errorText.includes("gemfile.lock is not up to date") ||
+      errorText.includes("composer.lock is not up to date")
+    );
+  }
+
+  /**
+   * Universal multi-lockfile & dependency synchronizer.
+   * Runs the AI-specified packageSyncCommand or auto-detects from project manifests,
+   * then automatically captures any regenerated lockfiles/artifacts via git status.
+   */
+  private async regenerateLockfiles(
+    root: string,
+    fix: CodeFix,
+    backups: Map<string, string | null>
+  ): Promise<void> {
+    const exists = (f: string) => fs.existsSync(path.resolve(root, f));
+
+    const commandsToRun: string[] = [];
+
+    // 1. AI-specified sync command (highest priority)
+    if (fix.packageSyncCommand) {
+      console.log(`[PipelineIQ] Using AI-recommended package sync command: "${fix.packageSyncCommand}"`);
+      commandsToRun.push(fix.packageSyncCommand);
+    } else {
+      // 2. Heuristic detection across multi-language ecosystems
+      if (exists("package.json")) {
+        if (exists("yarn.lock")) commandsToRun.push("yarn install --mode update-lockfile || yarn install");
+        else if (exists("pnpm-lock.yaml")) commandsToRun.push("pnpm install --no-frozen-lockfile");
+        else if (exists("bun.lockb") || exists("bun.lock")) commandsToRun.push("bun install");
+        else commandsToRun.push("npm install");
+      }
+
+      if (exists("Cargo.toml") && exists("Cargo.lock")) {
+        commandsToRun.push("cargo update --workspace");
+      }
+
+      if (exists("go.mod")) {
+        commandsToRun.push("go mod tidy");
+      }
+
+      if (exists("pyproject.toml") || exists("requirements.txt")) {
+        if (exists("poetry.lock")) commandsToRun.push("poetry lock --no-update");
+        else if (exists("uv.lock")) commandsToRun.push("uv lock");
+        else if (exists("Pipfile.lock")) commandsToRun.push("pipenv lock");
+      }
+
+      if (exists("Gemfile") && exists("Gemfile.lock")) {
+        commandsToRun.push("bundle lock --update");
+      }
+
+      if (exists("composer.json") && exists("composer.lock")) {
+        commandsToRun.push("composer update --lock");
+      }
+
+      if (exists("mix.exs") && exists("mix.lock")) {
+        commandsToRun.push("mix deps.get");
+      }
+
+      if (exists("pubspec.yaml") && exists("pubspec.lock")) {
+        commandsToRun.push("dart pub get || flutter pub get");
+      }
+    }
+
+    for (const cmd of commandsToRun) {
+      console.log(`[PipelineIQ] Synchronizing dependencies/lockfiles via '${cmd}'...`);
+      try {
+        execSync(cmd, { cwd: root, stdio: "inherit" });
+        console.log(`[PipelineIQ] Successfully executed '${cmd}'`);
+
+        // Automatically discover all lockfiles/manifests modified by the sync command
+        try {
+          const statusOutput = execSync("git status --porcelain", { cwd: root, encoding: "utf-8" });
+          const statusLines = statusOutput.split("\n").filter(Boolean);
+
+          for (const line of statusLines) {
+            const filePath = line.slice(3).trim();
+            if (this.isLockfileName(filePath)) {
+              const fullPath = path.resolve(root, filePath);
+              if (fs.existsSync(fullPath)) {
+                if (!backups.has(filePath)) {
+                  backups.set(filePath, backups.get(filePath) ?? null);
+                }
+                const newLockContent = fs.readFileSync(fullPath, "utf-8");
+                fix.changes = fix.changes.filter(c => c.filePath !== filePath);
+                fix.changes.push({
+                  filePath,
+                  action: "modify",
+                  originalContent: backups.get(filePath) || "",
+                  newContent: newLockContent,
+                  changeDescription: `Synchronized ${filePath} to match updated project manifests`,
+                });
+              }
+            }
+          }
+        } catch {
+          // Ignore git status read errors
+        }
+      } catch (lockError) {
+        console.warn(`[PipelineIQ] Lockfile synchronization command '${cmd}' failed: ${lockError}`);
+        throw new Error(`Failed to synchronize dependencies via '${cmd}': ${lockError}`);
+      }
+    }
+  }
+
+  /**
+   * Extract the failed step command directly from runner logs (e.g. GitHub Actions step run command).
+   */
+  private extractFailedStepCommand(event: FailureEvent): string | null {
+    const logs = event.failure.logs ?? "";
+    if (!logs) return null;
+
+    const lines = logs.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const ghGroupMatch = trimmed.match(/^(?:##\[group\])?Run\s+(.+)$/i);
+      if (ghGroupMatch && ghGroupMatch[1]) {
+        const cmd = ghGroupMatch[1].trim();
+        // Ignore internal actions / composite action paths
+        if (!cmd.startsWith("actions/") && !cmd.startsWith("docker://") && cmd.length < 200) {
+          return cmd;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -447,27 +562,46 @@ export class SelfHealingEngine {
    *
    * Priority:
    *   1. If the user explicitly provided commands via config, use those.
-   *   2. Detect the language/ecosystem from files in the workspace.
-   *   3. Pick install + build/test/lint commands for that ecosystem based on
-   *      the failure category.
-   *   4. If the ecosystem is unrecognised, return [] (skip verification rather
-   *      than running a wrong command and getting a false failure).
+   *   2. If the AI fix suggested a verification command, use that.
+   *   3. If the CI runner log contains the failed step execution command, run that exact command.
+   *   4. Detect the language/ecosystem from workspace files across 25+ ecosystems.
+   *   5. If unrecognised, skip verification rather than fail with false errors.
    */
-  private resolveVerificationCommands(category: string, root: string): string[] {
+  private resolveVerificationCommands(
+    category: string,
+    root: string,
+    fix?: CodeFix,
+    event?: FailureEvent
+  ): string[] {
     if (this.config.verificationCommands.length > 0) {
       return this.config.verificationCommands;
+    }
+
+    if (fix?.verificationCommand) {
+      console.log(`[PipelineIQ] Using AI-recommended verification command: "${fix.verificationCommand}"`);
+      return [fix.verificationCommand];
+    }
+
+    if (event) {
+      const failedCmd = this.extractFailedStepCommand(event);
+      if (failedCmd) {
+        console.log(`[PipelineIQ] Extracted failed step verification command from CI logs: "${failedCmd}"`);
+        return [failedCmd];
+      }
     }
 
     const exists = (f: string) => fs.existsSync(path.resolve(root, f));
     const cat = category.toLowerCase();
 
-    // ── Node.js ──────────────────────────────────────────────────────────────
+    // ── Node.js / TypeScript / JavaScript ────────────────────────────────────
     if (exists("package.json")) {
       const pm = exists("yarn.lock") ? "yarn"
                : exists("pnpm-lock.yaml") ? "pnpm"
+               : exists("bun.lockb") || exists("bun.lock") ? "bun"
                : "npm";
       const install = pm === "yarn" ? "yarn install"
                     : pm === "pnpm" ? "pnpm install"
+                    : pm === "bun" ? "bun install"
                     : "npm install";
       let scripts: Record<string, string> = {};
       try {
@@ -487,8 +621,14 @@ export class SelfHealingEngine {
         if (has("build"))   cmds.push(run("build"));
         else if (has("compile")) cmds.push(run("compile"));
       }
-      // If only install is left and nothing relevant in scripts, skip
       return cmds.length > 1 ? cmds : [];
+    }
+
+    // ── Rust ─────────────────────────────────────────────────────────────────
+    if (exists("Cargo.toml")) {
+      if (cat === "test") return ["cargo test"];
+      if (cat === "lint") return ["cargo clippy"];
+      return ["cargo check"];
     }
 
     // ── Go ───────────────────────────────────────────────────────────────────
@@ -497,16 +637,18 @@ export class SelfHealingEngine {
       return ["go build ./..."];
     }
 
-    // ── Rust ─────────────────────────────────────────────────────────────────
-    if (exists("Cargo.toml")) {
-      if (cat === "test") return ["cargo test"];
-      return ["cargo build"];
-    }
-
     // ── Python ───────────────────────────────────────────────────────────────
-    if (exists("pyproject.toml") || exists("setup.py") || exists("setup.cfg")) {
+    if (exists("pyproject.toml") || exists("setup.py") || exists("setup.cfg") || exists("requirements.txt")) {
       const usesUv  = exists("uv.lock");
+      const usesPoetry = exists("poetry.lock");
       const usesPip = exists("requirements.txt") || exists("requirements-dev.txt");
+
+      if (usesPoetry) {
+        if (cat === "test") return ["poetry run pytest"];
+        if (cat === "lint") return ["poetry run flake8 . || poetry run ruff check ."];
+        return ["poetry check"];
+      }
+
       const install = usesUv  ? "uv sync"
                     : usesPip ? "pip install -r requirements.txt"
                     : "pip install -e .";
@@ -519,17 +661,79 @@ export class SelfHealingEngine {
       return ["pipenv install", "pipenv run python -m compileall -q ."];
     }
 
+    // ── Java / Kotlin / Gradle ───────────────────────────────────────────────
+    if (exists("build.gradle") || exists("build.gradle.kts")) {
+      const gradlew = exists("gradlew") ? "./gradlew" : "gradle";
+      if (cat === "test") return [`${gradlew} test`];
+      return [`${gradlew} build -x test`];
+    }
+
     // ── Java / Maven ─────────────────────────────────────────────────────────
     if (exists("pom.xml")) {
       if (cat === "test") return ["mvn test -B"];
       return ["mvn compile -B"];
     }
 
-    // ── Java / Gradle ────────────────────────────────────────────────────────
-    if (exists("build.gradle") || exists("build.gradle.kts")) {
-      const gradlew = exists("gradlew") ? "./gradlew" : "gradle";
-      if (cat === "test") return [`${gradlew} test`];
-      return [`${gradlew} build -x test`];
+    // ── Scala / SBT ──────────────────────────────────────────────────────────
+    if (exists("build.sbt")) {
+      if (cat === "test") return ["sbt test"];
+      return ["sbt compile"];
+    }
+
+    // ── C / C++ (CMake & Meson) ──────────────────────────────────────────────
+    if (exists("CMakeLists.txt")) {
+      if (cat === "test") return ["cmake -B build && cmake --build build && ctest --test-dir build"];
+      return ["cmake -B build && cmake --build build"];
+    }
+    if (exists("meson.build")) {
+      if (cat === "test") return ["meson setup build && ninja -C build && meson test -C build"];
+      return ["meson setup build && ninja -C build"];
+    }
+
+    // ── Swift / SwiftPM ──────────────────────────────────────────────────────
+    if (exists("Package.swift")) {
+      if (cat === "test") return ["swift test"];
+      return ["swift build"];
+    }
+
+    // ── .NET / C# / F# ───────────────────────────────────────────────────────
+    if (exists("global.json") || exists("Directory.Build.props")) {
+      if (cat === "test") return ["dotnet restore", "dotnet test"];
+      return ["dotnet restore", "dotnet build"];
+    }
+    try {
+      const hasDotnet = fs.readdirSync(root).some(f => f.endsWith(".sln") || f.endsWith(".csproj") || f.endsWith(".fsproj"));
+      if (hasDotnet) {
+        if (cat === "test") return ["dotnet restore", "dotnet test"];
+        return ["dotnet restore", "dotnet build"];
+      }
+    } catch { /* ignore */ }
+
+    // ── Elixir / Erlang ──────────────────────────────────────────────────────
+    if (exists("mix.exs")) {
+      if (cat === "test") return ["mix test"];
+      return ["mix compile"];
+    }
+    if (exists("rebar.config")) {
+      if (cat === "test") return ["rebar3 eunit"];
+      return ["rebar3 compile"];
+    }
+
+    // ── Dart / Flutter ───────────────────────────────────────────────────────
+    if (exists("pubspec.yaml")) {
+      let isFlutter = false;
+      try {
+        isFlutter = fs.readFileSync(path.resolve(root, "pubspec.yaml"), "utf-8").includes("flutter:");
+      } catch { /* ignore */ }
+      const tool = isFlutter ? "flutter" : "dart";
+      if (cat === "test") return [`${tool} test`];
+      return [`${tool} analyze`];
+    }
+
+    // ── Zig ──────────────────────────────────────────────────────────────────
+    if (exists("build.zig")) {
+      if (cat === "test") return ["zig build test"];
+      return ["zig build"];
     }
 
     // ── Ruby ─────────────────────────────────────────────────────────────────
@@ -544,27 +748,48 @@ export class SelfHealingEngine {
       return ["composer install --no-interaction", "composer run build"];
     }
 
-    // ── .NET ─────────────────────────────────────────────────────────────────
-    if (exists("global.json") || exists("Directory.Build.props")) {
-      if (cat === "test") return ["dotnet restore", "dotnet test"];
-      return ["dotnet restore", "dotnet build"];
+    // ── Haskell ──────────────────────────────────────────────────────────────
+    if (exists("stack.yaml")) {
+      if (cat === "test") return ["stack test"];
+      return ["stack build"];
     }
-    // Fallback: any .sln or .csproj in root
     try {
-      const hasDotnet = fs.readdirSync(root).some(f => f.endsWith(".sln") || f.endsWith(".csproj"));
-      if (hasDotnet) {
-        if (cat === "test") return ["dotnet restore", "dotnet test"];
-        return ["dotnet restore", "dotnet build"];
+      if (fs.readdirSync(root).some(f => f.endsWith(".cabal"))) {
+        if (cat === "test") return ["cabal test"];
+        return ["cabal build"];
       }
     } catch { /* ignore */ }
 
-    // ── Makefile (generic) ───────────────────────────────────────────────────
+    // ── Clojure ──────────────────────────────────────────────────────────────
+    if (exists("project.clj")) {
+      if (cat === "test") return ["lein test"];
+      return ["lein check"];
+    }
+    if (exists("deps.edn")) {
+      if (cat === "test") return ["clojure -X:test"];
+      return ["clojure -M -e nil"];
+    }
+
+    // ── Terraform / OpenTofu ─────────────────────────────────────────────────
+    try {
+      if (fs.readdirSync(root).some(f => f.endsWith(".tf"))) {
+        return ["terraform validate || tofu validate"];
+      }
+    } catch { /* ignore */ }
+
+    // ── Bazel ────────────────────────────────────────────────────────────────
+    if (exists("WORKSPACE") || exists("MODULE.bazel")) {
+      if (cat === "test") return ["bazel test //..."];
+      return ["bazel build //..."];
+    }
+
+    // ── Makefile (generic fallback) ──────────────────────────────────────────
     if (exists("Makefile") || exists("makefile")) {
       if (cat === "test") return ["make test"];
       return ["make build"];
     }
 
-    // Unrecognised ecosystem — skip verification rather than run a wrong command
+    // Unrecognised ecosystem — skip verification rather than run an incorrect command
     console.warn("[PipelineIQ] Could not detect project ecosystem for verification — skipping local verification.");
     return [];
   }
