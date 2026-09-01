@@ -15,7 +15,6 @@
     "isolatedModules": true,
     "declaration": true,
     "sourceMap": true,
-    "forceConsistentCasingInFileNames": true,
-    "ignoreDeprecations": "6.0"
+    "forceConsistentCasingInFileNames": true
   }
 }
