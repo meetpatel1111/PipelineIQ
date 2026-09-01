@@ -118,11 +118,13 @@ export class SelfHealingEngine {
       let previousVerificationError: string | undefined;
       let previousDiff: string | undefined;
 
-      for (let verifyAttempt = 1; verifyAttempt <= 2; verifyAttempt++) {
+      const maxRetries = Math.max(1, this.config.maxVerificationRetries ?? 3);
+
+      for (let verifyAttempt = 1; verifyAttempt <= maxRetries; verifyAttempt++) {
         // On retry: regenerate the fix with the previous error as context so the
-        // AI can self-correct (e.g. syntax it broke in the first attempt).
-        if (verifyAttempt === 2 && previousVerificationError) {
-          console.log("[PipelineIQ] Verification failed — retrying fix generation with error feedback...");
+        // AI can self-correct (e.g. syntax, imports, tests it broke in the previous attempt).
+        if (verifyAttempt > 1 && previousVerificationError) {
+          console.log(`[PipelineIQ] Verification attempt ${verifyAttempt - 1} failed — running Agentic Self-Correction cycle ${verifyAttempt}/${maxRetries} with compiler & test feedback...`);
           try {
             const retryFix = await this.fixGenerator.generateFix(
               event, rootCause, remediation, category,
