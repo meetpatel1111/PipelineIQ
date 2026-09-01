@@ -34,6 +34,8 @@ program
 program
   .command("analyze")
   .description("Analyze failure logs and create Jira tickets")
+  .argument("[extraArgs...]", "Optional extra trailing arguments")
+  .allowExcessArguments(true)
   .option("-l, --logs <path>", "Path to log file or directory")
   .option("-f, --format <format>", "Log format (github-actions, azure-devops, terraform, kubernetes, docker, junit, generic)", "generic")
   .option("-s, --source <source>", "Failure source (github, azure-devops)", "github")
@@ -166,7 +168,21 @@ program
   .option("--self-heal-verification-commands <commands>", "Comma-separated verification commands", (val) => val.split(","))
   .option("--self-heal-auto-lockfile", "Enable automatic package-lock.json regeneration (default: true)", true)
   .option("--no-self-heal-auto-lockfile", "Disable automatic package-lock.json regeneration")
-  .action(async (options) => {
+  .action(async (...args: any[]) => {
+    let options: any = {};
+    let extra: string[] = [];
+
+    if (args.length >= 2 && Array.isArray(args[0])) {
+      extra = args[0];
+      options = args[1] || {};
+    } else if (args.length >= 1 && typeof args[0] === "object" && !Array.isArray(args[0])) {
+      options = args[0];
+    }
+
+    if (extra.length > 0 && options.pipeline) {
+      options.pipeline = [options.pipeline, ...extra].join(" ");
+    }
+
     await handleAnalyze(options);
   });
 
