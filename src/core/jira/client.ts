@@ -1,8 +1,5 @@
-import {
-  Version3Client,
-  createClient,
-  ClientType,
-} from "jira.js";
+import { createCloudClient, type CloudClient } from "jira.js";
+import { createClient, type Client } from "jira.js/core";
 import JiraApi from "jira-client";
 import type { JiraAuth, JiraTicketSpec } from "../types/index.js";
 import { markdownToAdf } from "./adf.js";
@@ -54,45 +51,42 @@ export interface JiraClient {
  * Jira Cloud implementation using jira.js
  */
 class JiraCloudClient implements JiraClient {
-  private client: Version3Client;
+  private cloudClient: CloudClient;
+  private coreClient: Client;
 
   constructor(auth: JiraAuth) {
-    const authentication: any = {};
+    let authConfig: any = undefined;
 
     if (auth.accessToken) {
-      authentication.oauth2 = {
-        accessToken: auth.accessToken,
+      authConfig = {
+        type: "bearer" as const,
+        token: auth.accessToken,
       };
     } else if (auth.email && auth.apiToken) {
-      authentication.basic = {
+      authConfig = {
+        type: "basic" as const,
         email: auth.email,
         apiToken: auth.apiToken,
       };
     }
 
-    this.client = createClient(ClientType.Version3, {
-      host: auth.baseUrl.replace(/\/+$/, ""),
-      authentication,
-      noCheckAtlassianToken: true,
-      ...(auth.strictGDPR !== undefined ? { strictGDPR: auth.strictGDPR } : {}),
-      middlewares: {
-        onError: (error: any) => {
-          // Wrap in a more descriptive error or log it
-          const msg = error.message || (error.response ? `${error.response.status} ${error.response.statusText}` : JSON.stringify(error));
-          console.error(`[PipelineIQ Jira Cloud Error] ${msg}`);
-        },
-      },
+    const host = auth.baseUrl.replace(/\/+$/, "");
+    this.coreClient = createClient({
+      host,
+      auth: authConfig,
+      onSchemaMismatch: "warn",
     });
+    this.cloudClient = createCloudClient(this.coreClient);
   }
 
   async request<T>(method: string, url: string, data?: any, params?: any): Promise<T> {
     try {
-      return await this.client.sendRequest<T>({
+      return await this.coreClient.sendRequest<T>({
         method: method as any,
         url,
-        data,
-        params,
-      }, undefined as never);
+        body: data,
+        searchParams: params,
+      });
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -100,7 +94,7 @@ class JiraCloudClient implements JiraClient {
 
   async createIssue(spec: JiraTicketSpec): Promise<CreateIssueResult> {
     try {
-      const res = await this.client.issues.createIssue({
+      const res = await this.cloudClient.issues.createIssue({
         fields: {
           project: { key: spec.projectKey },
           summary: (spec.summary as string).length > 255 ? (spec.summary as string).substring(0, 252) + "..." : (spec.summary as string),
@@ -133,7 +127,7 @@ class JiraCloudClient implements JiraClient {
 
   async updateIssue(issueKey: string, spec: JiraTicketSpec): Promise<void> {
     try {
-      await this.client.issues.editIssue({
+      await this.cloudClient.issues.editIssue({
         issueIdOrKey: issueKey,
         fields: {
           summary: spec.summary,
@@ -149,9 +143,9 @@ class JiraCloudClient implements JiraClient {
 
   async addComment(issueKey: string, body: string): Promise<void> {
     try {
-      await this.client.issueComments.addComment({
+      await this.cloudClient.issueComments.addComment({
         issueIdOrKey: issueKey,
-        comment: markdownToAdf(body) as any,
+        body: markdownToAdf(body) as any,
       });
     } catch (error: any) {
       throw JiraApiError.from(error);
@@ -164,18 +158,15 @@ class JiraCloudClient implements JiraClient {
 
     try {
       // Atlassian deprecated /rest/api/3/search in favor of /rest/api/3/search/jql
-      const result = await this.client.sendRequest<any>(
-        {
-          method: "GET",
-          url: "/rest/api/3/search/jql",
-          params: {
-            jql,
-            maxResults: 1,
-            fields: "summary,status",
-          },
+      const result = await this.coreClient.sendRequest<any>({
+        method: "GET",
+        url: "/rest/api/3/search/jql",
+        searchParams: {
+          jql,
+          maxResults: 1,
+          fields: "summary,status",
         },
-        undefined as never
-      );
+      });
 
       const issue = result.issues?.[0];
       if (!issue) return null;
@@ -193,11 +184,11 @@ class JiraCloudClient implements JiraClient {
 
   async attachFile(issueKey: string, filename: string, content: string | Buffer): Promise<void> {
     try {
-      await this.client.issueAttachments.addAttachment({
+      await this.cloudClient.issueAttachments.addAttachment({
         issueIdOrKey: issueKey,
-        attachment: {
-          file: content,
-          filename: filename,
+        attachments: {
+          filename,
+          content,
         },
       });
     } catch (error: any) {
@@ -207,7 +198,7 @@ class JiraCloudClient implements JiraClient {
 
   async createRemoteLink(issueKey: string, title: string, url: string, globalId?: string): Promise<void> {
     try {
-      await this.client.issueRemoteLinks.createOrUpdateRemoteIssueLink({
+      await this.cloudClient.issueRemoteLinks.createOrUpdateRemoteIssueLink({
         issueIdOrKey: issueKey,
         object: {
           title,
@@ -222,11 +213,11 @@ class JiraCloudClient implements JiraClient {
 
   async requestFull<T>(method: string, url: string, data?: any, params?: any): Promise<any> {
     try {
-      return await this.client.sendRequestFullResponse<T>({
+      return await this.coreClient.sendRequest<T>({
         method: method as any,
         url,
-        data,
-        params,
+        body: data,
+        searchParams: params,
       });
     } catch (error: any) {
       throw JiraApiError.from(error);
@@ -252,7 +243,7 @@ class JiraCloudClient implements JiraClient {
 
   async checkConnection(): Promise<boolean> {
     try {
-      await this.client.myself.getCurrentUser();
+      await this.cloudClient.myself.getCurrentUser();
       return true;
     } catch {
       return false;
@@ -261,7 +252,7 @@ class JiraCloudClient implements JiraClient {
 
   async getServerInfo(): Promise<any> {
     try {
-      return await this.client.serverInfo.getServerInfo();
+      return await this.cloudClient.serverInfo.getServerInfo();
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -269,7 +260,7 @@ class JiraCloudClient implements JiraClient {
 
   async doTransition(issueKey: string, transitionId: string): Promise<void> {
     try {
-      await this.client.issues.doTransition({
+      await this.cloudClient.issues.doTransition({
         issueIdOrKey: issueKey,
         transition: { id: transitionId },
       });
@@ -280,8 +271,8 @@ class JiraCloudClient implements JiraClient {
 
   async getTransitions(issueKey: string): Promise<any[]> {
     try {
-      const res = await this.client.issues.getTransitions({ issueIdOrKey: issueKey });
-      return res.transitions || [];
+      const res = await this.cloudClient.issues.getTransitions({ issueIdOrKey: issueKey });
+      return (res as any).transitions || [];
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -289,9 +280,9 @@ class JiraCloudClient implements JiraClient {
 
   async assignIssue(issueKey: string, assigneeId: string | null): Promise<void> {
     try {
-      await this.client.issues.assignIssue({
+      await this.cloudClient.issues.assignIssue({
         issueIdOrKey: issueKey,
-        accountId: assigneeId,
+        accountId: assigneeId ?? undefined,
       });
     } catch (error: any) {
       throw JiraApiError.from(error);
@@ -300,7 +291,7 @@ class JiraCloudClient implements JiraClient {
 
   async getIssue(issueKey: string): Promise<any> {
     try {
-      return await this.client.issues.getIssue({
+      return await this.cloudClient.issues.getIssue({
         issueIdOrKey: issueKey,
       });
     } catch (error: any) {
@@ -310,7 +301,7 @@ class JiraCloudClient implements JiraClient {
 
   async deleteIssue(issueKey: string): Promise<void> {
     try {
-      await this.client.issues.deleteIssue({
+      await this.cloudClient.issues.deleteIssue({
         issueIdOrKey: issueKey,
       });
     } catch (error: any) {
@@ -321,13 +312,12 @@ class JiraCloudClient implements JiraClient {
   async bulkFetchIssues(issueKeys: string[]): Promise<any[]> {
     if (issueKeys.length === 0) return [];
     try {
-      // Use search with JQL instead of bulkFetchIssues which may not be available
       const jql = `key in (${issueKeys.map((k) => `"${k}"`).join(",")})`;
-      const res = await this.client.issueSearch.searchForIssuesUsingJql({
+      const res = await this.cloudClient.issueSearch.searchAndReconsileIssuesUsingJql({
         jql,
         maxResults: issueKeys.length,
       });
-      return res.issues || [];
+      return (res as any).issues || [];
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -336,7 +326,7 @@ class JiraCloudClient implements JiraClient {
   async bulkCreateIssues(specs: JiraTicketSpec[]): Promise<CreateIssueResult[]> {
     if (specs.length === 0) return [];
     try {
-      const res = await this.client.issues.createIssues({
+      const res = await this.cloudClient.issues.createIssues({
         issueUpdates: specs.map((spec) => ({
           fields: {
             project: { key: spec.projectKey },
@@ -354,7 +344,7 @@ class JiraCloudClient implements JiraClient {
         })),
       });
 
-      const results = (res.issues || []) as CreateIssueResult[];
+      const results = ((res as any).issues || []) as CreateIssueResult[];
 
       // Assign separately for each created issue
       for (let i = 0; i < results.length; i++) {
@@ -377,11 +367,13 @@ class JiraCloudClient implements JiraClient {
 
   async getCreateIssueMeta(projectKeys?: string[], issueTypeNames?: string[]): Promise<any> {
     try {
-      return await this.client.issues.getCreateIssueMeta({
-        projectKeys: projectKeys || [],
-        issuetypeNames: issueTypeNames || [],
-        expand: "projects.issuetypes.fields",
-      });
+      const projectKey = projectKeys?.[0];
+      if (projectKey) {
+        return await this.cloudClient.issues.getCreateIssueMetaIssueTypes({
+          projectIdOrKey: projectKey,
+        });
+      }
+      return {};
     } catch (error: any) {
       throw JiraApiError.from(error);
     }
@@ -389,7 +381,7 @@ class JiraCloudClient implements JiraClient {
 
   async getEditIssueMeta(issueKey: string): Promise<any> {
     try {
-      return await this.client.issues.getEditIssueMeta({
+      return await this.cloudClient.issues.getEditIssueMeta({
         issueIdOrKey: issueKey,
       });
     } catch (error: any) {

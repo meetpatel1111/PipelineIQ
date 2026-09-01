@@ -26,15 +26,17 @@ const baseConfig: AIEngineConfig = {
 const MockedOpenAI = vi.mocked(OpenAI);
 
 function mockCreate(response: unknown) {
-  MockedOpenAI.mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: vi.fn().mockResolvedValue({
-          choices: [{ message: { content: typeof response === "string" ? response : JSON.stringify(response) } }],
-        }),
+  MockedOpenAI.mockImplementation(function (this: any) {
+    return {
+      chat: {
+        completions: {
+          create: vi.fn().mockResolvedValue({
+            choices: [{ message: { content: typeof response === "string" ? response : JSON.stringify(response) } }],
+          }),
+        },
       },
-    },
-  }) as any);
+    };
+  } as any);
 }
 
 beforeEach(() => {
@@ -92,13 +94,15 @@ describe("LocalAIProvider.generateInsights()", () => {
   });
 
   it("throws a descriptive error when the HTTP call fails", async () => {
-    MockedOpenAI.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: vi.fn().mockRejectedValue(new Error("Connection refused")),
+    MockedOpenAI.mockImplementation(function (this: any) {
+      return {
+        chat: {
+          completions: {
+            create: vi.fn().mockRejectedValue(new Error("Connection refused")),
+          },
         },
-      },
-    }) as any);
+      };
+    } as any);
 
     const provider = new LocalAIProvider(baseConfig);
     await expect(provider.generateInsights(request)).rejects.toThrow(/local ai error/i);

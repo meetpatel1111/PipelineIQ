@@ -13,6 +13,7 @@ describe("codeOwnerEnricher", () => {
   let mockContext: EnrichmentContext;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     mockContext = {
       event: {} as FailureEvent,
       config: {} as any,
