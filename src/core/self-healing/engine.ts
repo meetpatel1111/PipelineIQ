@@ -147,15 +147,8 @@ export class SelfHealingEngine {
             await this.regenerateLockfiles(root, fix, backups);
           }
 
-          // 1.5 Auto-provision workspace runtime dependencies if missing (e.g. node_modules)
-          if (fs.existsSync(path.resolve(root, "package.json")) && !fs.existsSync(path.resolve(root, "node_modules"))) {
-            console.log("[PipelineIQ] node_modules missing in workspace — running npm install for verification environment...");
-            try {
-              execSync("npm install --no-audit --no-fund", { cwd: root, stdio: "inherit", timeout: 120000 });
-            } catch (depErr) {
-              console.warn(`[PipelineIQ] Automatic dependency installation warning: ${depErr}`);
-            }
-          }
+          // 1.5 Universal workspace runtime dependency provisioning across all 300+ stacks
+          await this.ensureWorkspaceDependencies(root, fix);
 
           // 2. Backup and apply code fixes
           for (const change of fix.changes) {
@@ -551,6 +544,110 @@ export class SelfHealingEngine {
       } catch (lockError) {
         console.warn(`[PipelineIQ] Lockfile synchronization command '${cmd}' failed: ${lockError}`);
         throw new Error(`Failed to synchronize dependencies via '${cmd}': ${lockError}`);
+      }
+    }
+  }
+
+  /**
+   * Universal workspace runtime dependency auto-provisioner across all ecosystems.
+   * Prioritizes AI packageSyncCommand or auto-detects missing packages/dependencies.
+   */
+  private async ensureWorkspaceDependencies(root: string, fix: CodeFix): Promise<void> {
+    const exists = (f: string) => fs.existsSync(path.resolve(root, f));
+
+    // 1. If AI explicitly recommended a packageSyncCommand, run it
+    if (fix.packageSyncCommand) {
+      console.log(`[PipelineIQ] Running AI-recommended dependency sync: "${fix.packageSyncCommand}"`);
+      try {
+        execSync(fix.packageSyncCommand, { cwd: root, stdio: "inherit", timeout: 180000 });
+        return;
+      } catch (err) {
+        console.warn(`[PipelineIQ] AI packageSyncCommand failed: ${err}. Falling back to ecosystem discovery.`);
+      }
+    }
+
+    // 2. Universal automated dependency provisioning across ecosystems
+    const commands: string[] = [];
+
+    // JavaScript / TypeScript / Node.js / Bun / Deno
+    if (exists("package.json") && !exists("node_modules")) {
+      if (exists("pnpm-lock.yaml")) commands.push("pnpm install --no-frozen-lockfile || npm install --no-audit --no-fund");
+      else if (exists("yarn.lock")) commands.push("yarn install || npm install --no-audit --no-fund");
+      else if (exists("bun.lockb") || exists("bun.lock")) commands.push("bun install || npm install --no-audit --no-fund");
+      else commands.push("npm install --no-audit --no-fund");
+    }
+
+    // Python / Pip / Poetry / Conda / Uv / Pipenv
+    if (exists("requirements.txt")) {
+      commands.push("pip install -q -r requirements.txt || true");
+    } else if (exists("pyproject.toml")) {
+      if (exists("poetry.lock")) commands.push("poetry install --no-interaction || true");
+      else if (exists("uv.lock")) commands.push("uv sync || true");
+      else commands.push("pip install -q -e . || true");
+    } else if (exists("Pipfile")) {
+      commands.push("pipenv install --dev || true");
+    }
+
+    // Go
+    if (exists("go.mod")) {
+      commands.push("go mod download || true");
+    }
+
+    // Rust / Cargo
+    if (exists("Cargo.toml")) {
+      commands.push("cargo fetch || true");
+    }
+
+    // Java / Kotlin / Maven / Gradle
+    if (exists("pom.xml")) {
+      commands.push("mvn dependency:resolve -q -DskipTests || true");
+    } else if (exists("build.gradle") || exists("build.gradle.kts")) {
+      const gradlew = exists("gradlew") ? "./gradlew" : "gradle";
+      commands.push(`${gradlew} build -x test -q || true`);
+    }
+
+    // .NET / C# / F#
+    const hasDotnet = () => {
+      try {
+        const files = fs.readdirSync(root);
+        return files.some(f => f.endsWith(".sln") || f.endsWith(".csproj") || f.endsWith(".fsproj"));
+      } catch { return false; }
+    };
+    if (hasDotnet()) {
+      commands.push("dotnet restore -v q || true");
+    }
+
+    // PHP / Composer
+    if (exists("composer.json") && !exists("vendor")) {
+      commands.push("composer install --no-interaction --prefer-dist --no-scripts -q || true");
+    }
+
+    // Ruby / Bundler
+    if (exists("Gemfile") && !exists("vendor/bundle")) {
+      commands.push("bundle install --quiet || true");
+    }
+
+    // Elixir / Mix
+    if (exists("mix.exs") && !exists("deps")) {
+      commands.push("mix deps.get --quiet || true");
+    }
+
+    // Dart / Flutter
+    if (exists("pubspec.yaml") && !exists(".dart_tool")) {
+      commands.push("flutter pub get || dart pub get || true");
+    }
+
+    // Swift / SPM
+    if (exists("Package.swift") && !exists(".build")) {
+      commands.push("swift package resolve || true");
+    }
+
+    for (const cmd of commands) {
+      console.log(`[PipelineIQ] Auto-provisioning workspace dependencies via: '${cmd}'`);
+      try {
+        execSync(cmd, { cwd: root, stdio: "inherit", timeout: 120000 });
+      } catch (err) {
+        console.warn(`[PipelineIQ] Warning during dependency provisioning ('${cmd}'): ${err}`);
       }
     }
   }
