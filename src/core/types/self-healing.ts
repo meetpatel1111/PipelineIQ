@@ -101,7 +101,7 @@ export const SelfHealingConfigSchema = z.object({
   /** Automatically regenerate auto-generated lockfiles (package-lock.json, yarn.lock, etc.) when desynchronization is detected */
   autoRegenerateLockfile: z.boolean().default(true),
   /** Maximum number of verification feedback retry cycles for agent self-correction (default: 3) */
-  maxVerificationRetries: z.number().default(3),
+  maxVerificationRetries: z.number().default(3).optional(),
 });
 export type SelfHealingConfig = z.infer<typeof SelfHealingConfigSchema>;
 
