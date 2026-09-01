@@ -17,15 +17,22 @@ export function applyPatch(
 ): string {
   const fileDesc = filePath ? ` in ${filePath}` : "";
 
+  // Preserve UTF-8 BOM if present
+  const hasBOM = originalContent.startsWith("\uFEFF");
+  const rawContent = hasBOM ? originalContent.slice(1) : originalContent;
+
   // Normalize line endings to LF (\n)
   const normalizeNewlines = (str: string) => str.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const hasCRLF = originalContent.includes("\r\n");
+  const hasCRLF = rawContent.includes("\r\n");
 
-  const content = normalizeNewlines(originalContent);
+  const content = normalizeNewlines(rawContent);
   const snippet = normalizeNewlines(originalSnippet);
   const replacement = normalizeNewlines(newSnippet);
 
-  const restoreLineEndings = (str: string) => hasCRLF ? str.replace(/\n/g, "\r\n") : str;
+  const restoreLineEndings = (str: string) => {
+    const formatted = hasCRLF ? str.replace(/\n/g, "\r\n") : str;
+    return (hasBOM ? "\uFEFF" : "") + formatted;
+  };
 
   // ── Strategy 1: Exact substring match ─────────────────────────────────────
   if (content.includes(snippet)) {

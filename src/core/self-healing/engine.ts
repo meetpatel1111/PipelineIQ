@@ -191,7 +191,8 @@ export class SelfHealingEngine {
             console.log(`[PipelineIQ] Running verification commands: ${verificationCommands.join(" && ")}`);
             for (const cmd of verificationCommands) {
               try {
-                execSync(cmd, { cwd: root, stdio: "inherit" });
+                // 5-minute timeout per command to protect against hung tests/builds
+                execSync(cmd, { cwd: root, stdio: "inherit", timeout: 300000 });
               } catch (cmdError) {
                 console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
                 throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
@@ -216,7 +217,7 @@ export class SelfHealingEngine {
           // Capture the diff of the failed fix before restoring
           let diffOutput = "";
           try {
-            diffOutput = execSync("git diff", { cwd: root, encoding: "utf-8" });
+            diffOutput = execSync("git diff", { cwd: root, encoding: "utf-8", timeout: 30000 });
           } catch {
             // Ignore if git fails
           }
@@ -231,7 +232,9 @@ export class SelfHealingEngine {
             }
           }
 
-          const errorMsg: string = verifyError.message || String(verifyError);
+          // Strip terminal ANSI escape codes so LLM gets clean compiler diagnostics
+          const rawErrorMsg: string = verifyError.message || String(verifyError);
+          const errorMsg = rawErrorMsg.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, "");
 
           // Non-retriable: missing checkout — no point retrying if workspace files don't exist
           const isRetriable = !errorMsg.includes("was not found in the local workspace");
@@ -249,7 +252,7 @@ export class SelfHealingEngine {
           // First attempt failed with a build error — save the error and let the
           // loop regenerate the fix with feedback before trying again.
           previousVerificationError = errorMsg;
-          previousDiff = diffOutput;
+          previousDiff = diffOutput.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, "");
           console.warn("[PipelineIQ] Verification attempt 1 failed — will retry with error context.");
         }
       }
@@ -413,8 +416,9 @@ export class SelfHealingEngine {
     const name = path.basename(filePath).toLowerCase();
     return [
       "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock",
-      "cargo.lock", "poetry.lock", "pipfile.lock", "gemfile.lock", "composer.lock",
-      "go.sum", "pubspec.lock", "mix.lock", "package.resolved", "flake.lock"
+      "cargo.lock", "poetry.lock", "pipfile.lock", "pdm.lock", "uv.lock",
+      "gemfile.lock", "composer.lock", "go.sum", "pubspec.lock", "mix.lock",
+      "package.resolved", "flake.lock", "conda-lock.yml", "podfile.lock", "berksfile.lock"
     ].includes(name);
   }
 

@@ -26,4 +26,16 @@ describe("applyPatch", () => {
 
     expect(patched).toBe(`const x = 1;\nconst y = 2;`);
   });
+
+  it("should preserve UTF-8 Byte Order Mark (BOM) when patching Windows/Visual Studio files", () => {
+    const originalWithBOM = `\uFEFFusing System;\n\nnamespace App {\n    public class Program {\n        public static void Main() {\n            Console.WriteLine("Hello");\n        }\n    }\n}`;
+    const originalSnippet = `Console.WriteLine("Hello");`;
+    const newSnippet = `Console.WriteLine("Hello World");`;
+
+    const patched = applyPatch(originalWithBOM, originalSnippet, newSnippet, "Program.cs");
+
+    expect(patched.startsWith("\uFEFF")).toBe(true);
+    expect(patched).toContain(`Console.WriteLine("Hello World");`);
+    expect(patched).not.toContain(`Console.WriteLine("Hello");`);
+  });
 });

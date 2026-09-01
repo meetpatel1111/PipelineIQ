@@ -106,23 +106,36 @@ export class FixGenerator {
   }
 
   private extractFilePaths(text: string): string[] {
-    // Regex matches relative or absolute-looking paths with any file extension
-    // e.g., src/utils/auth.ts, lib/core.py, package.json, main.tf, Cargo.toml, build.gradle, mix.exs, pubspec.yaml
-    const regex = /(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.[a-zA-Z][a-zA-Z0-9_-]*\b/g;
-    const matches = text.match(regex) || [];
-    
-    // Deduplicate and filter out obvious false positives
-    const paths = [...new Set(matches)].filter(p => !p.includes("node_modules") && !p.includes(".git/"));
+    // Regex 1: Matches relative or absolute paths with extensions (e.g. src/auth.ts, lib/core.py, contracts/Auth.sol, terraform/main.tf, etc.)
+    const regexExt = /(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+\.[a-zA-Z0-9_-]+\b/g;
+    const matchesExt = text.match(regexExt) || [];
 
-    // Universal manifest discovery: check for standard manifests in workspace root
+    // Regex 2: Matches common standalone files without extensions (e.g. Dockerfile, Makefile, Jenkinsfile, Gemfile, etc.)
+    const standaloneNames = ["Dockerfile", "Containerfile", "Makefile", "makefile", "Jenkinsfile", "Gemfile", "Procfile", "Rakefile", "Vagrantfile", "Brewfile", "Fastfile", "Tiltfile"];
+    const standaloneMatches: string[] = [];
+    for (const name of standaloneNames) {
+      if (text.includes(name)) {
+        standaloneMatches.push(name);
+      }
+    }
+    
+    // Deduplicate and filter out obvious false positives / directories
+    const paths = [...new Set([...matchesExt, ...standaloneMatches])].filter(
+      p => !p.includes("node_modules") && !p.includes(".git/") && !p.endsWith("/") && !/^\d+\.\d+/.test(p)
+    );
+
+    // Universal manifest discovery: check for standard manifests in workspace root across all 300+ stacks
     const root = this.getWorkspaceRoot();
     const commonManifests = [
       "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "requirements.txt",
       "Pipfile", "setup.py", "setup.cfg", "pom.xml", "build.gradle", "build.gradle.kts",
-      "build.sbt", "mix.exs", "pubspec.yaml", "Package.swift", "CMakeLists.txt",
-      "meson.build", "Makefile", "makefile", "project.clj", "rebar.config",
-      "composer.json", "Gemfile", "shard.yml", "dub.json", "build.zig",
-      "stack.yaml", "flake.nix", "default.nix", "dbt_project.yml"
+      "settings.gradle", "settings.gradle.kts", "build.sbt", "mix.exs", "pubspec.yaml",
+      "Package.swift", "CMakeLists.txt", "meson.build", "Makefile", "makefile",
+      "project.clj", "deps.edn", "rebar.config", "composer.json", "Gemfile",
+      "shard.yml", "dub.json", "build.zig", "stack.yaml", "flake.nix", "default.nix",
+      "dbt_project.yml", "foundry.toml", "Anchor.toml", "dune-project", "gleam.toml",
+      "Pulumi.yaml", "Chart.yaml", "helmfile.yaml", "turbo.json", "nx.json",
+      "deno.json", "deno.jsonc", "environment.yml", "Dockerfile"
     ];
 
     for (const manifest of commonManifests) {
