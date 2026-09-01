@@ -214,7 +214,8 @@ Your task is to generate a PRECISE, WORKING code fix for this pipeline failure.$
 
 IMPORTANT RULES:
 - Generate surgical or comprehensive fixes that address the root cause completely.
-- You can fix ANY programming language, manifest, script, or configuration file.
+- Fix the application source code (e.g., src/*, lib/*, tests/*, contracts/*, python/*, rust/*, golang/*) or dependency manifests (package.json, pyproject.toml, Cargo.toml, go.mod).
+- NEVER modify CI/CD workflow files (.github/workflows/*, azure-pipelines.yml, Jenkinsfile, .gitlab-ci.yml) when application code, compiler errors, or test failures occur. CI workflow files are strictly protected by security guardrails.
 - NEVER modify files containing secrets, credentials, tokens, or environment keys (*.env, *.key, *.pem).
 - NEVER attempt to manually construct or hand-edit binary or complex auto-generated lockfiles (package-lock.json, yarn.lock, pnpm-lock.yaml, Cargo.lock, poetry.lock, Gemfile.lock, etc.). Edit only the package specification file (e.g., package.json, Cargo.toml, pyproject.toml, Gemfile). The Self-Healing Engine automatically executes the appropriate package manager to safely regenerate and synchronize the lockfile.
 - Output ONLY valid JSON — no markdown fences, no text outside the JSON object.
