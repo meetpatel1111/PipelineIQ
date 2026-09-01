@@ -147,6 +147,16 @@ export class SelfHealingEngine {
             await this.regenerateLockfiles(root, fix, backups);
           }
 
+          // 1.5 Auto-provision workspace runtime dependencies if missing (e.g. node_modules)
+          if (fs.existsSync(path.resolve(root, "package.json")) && !fs.existsSync(path.resolve(root, "node_modules"))) {
+            console.log("[PipelineIQ] node_modules missing in workspace — running npm install for verification environment...");
+            try {
+              execSync("npm install --no-audit --no-fund", { cwd: root, stdio: "inherit", timeout: 120000 });
+            } catch (depErr) {
+              console.warn(`[PipelineIQ] Automatic dependency installation warning: ${depErr}`);
+            }
+          }
+
           // 2. Backup and apply code fixes
           for (const change of fix.changes) {
             if (this.isLockfileName(change.filePath)) continue;
