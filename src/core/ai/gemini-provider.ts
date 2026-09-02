@@ -1,9 +1,10 @@
-import type { AIProviderInterface, AIRequest, AIResponse, AIEngineConfig } from "./types.js";
+import type { AIRequest, AIResponse, AIEngineConfig } from "./types.js";
+import { BaseAIProvider } from "./base-provider.js";
 
 /**
  * Google Gemini provider implementation
  */
-export class GeminiProvider implements AIProviderInterface {
+export class GeminiProvider extends BaseAIProvider {
   name = "gemini";
   private apiKey: string;
   private model: string;
@@ -14,6 +15,7 @@ export class GeminiProvider implements AIProviderInterface {
   private thinkingBudget: number;
 
   constructor(config: AIEngineConfig) {
+    super();
     if (!config.apiKey) {
       throw new Error("Gemini API key is required");
     }
@@ -82,19 +84,26 @@ export class GeminiProvider implements AIProviderInterface {
           try {
             const result = await model.generateContent(prompt);
             const text = result.response.text();
+            let usageTokens: { input?: number; output?: number } | undefined;
+            if (result.response.usageMetadata) {
+              usageTokens = {
+                input: result.response.usageMetadata.promptTokenCount,
+                output: result.response.usageMetadata.candidatesTokenCount,
+              };
+            }
 
             if (request.isRawPrompt) {
               return { rootCause: text };
             }
 
-            return this.parseResponse(text);
+            return this.parseResponse(text, { ...usageTokens, model: currentModelName });
           } catch (error: any) {
             attempt++;
             lastError = error;
             const errorMessage = error.message || "";
             
             const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("Quota");
-            const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("Service Unavailable");
+            const isRetryable = this.isRetryableError(errorMessage) || errorMessage.includes("Service Unavailable");
 
             // If it is a quota/429 error, and we have another candidate model, fall back immediately
             if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
@@ -122,75 +131,5 @@ export class GeminiProvider implements AIProviderInterface {
 
     console.error("Gemini API error after trying all candidate models:", lastError);
     throw new Error(`Gemini API error: ${lastError?.message || "Unknown error"}`);
-  }
-
-  private buildPrompt(request: AIRequest): string {
-    return `You are an expert DevOps and software engineering analyst. Analyze the following CI/CD failure and provide insights.
-
-**Failure Context:**
-- Pipeline: ${request.pipelineName}
-- Repository: ${request.repositoryName}
-- Branch: ${request.branch}
-- Environment: ${request.environment || 'Unknown'}
-- Error: ${request.errorMessage || 'No error message'}
-- Exit Code: ${request.exitCode || 'Unknown'}
-- Failed Command: ${request.failedCommand || 'Unknown'}
-
-**Logs:**
-\`\`\`
-${request.logs}
-\`\`\`
-
-${request.stackTrace ? `\n**Stack Trace:**\n\`\`\`${request.stackTrace}\`\`\`` : ''}
-
-${request.historicalContext ? `\n**Historical Context:**\n${request.historicalContext}` : ''}
-
-Please provide a JSON response with the following structure:
-{
-  "summary": "Brief summary of what went wrong (max 255 characters)",
-  "rootCause": "Detailed explanation of the root cause",
-  "remediation": ["Step 1: Fix this", "Step 2: Do that", "Step 3: Verify"],
-  "severity": "Critical|High|Medium|Low",
-  "tags": ["tag1", "tag2", "tag3"],
-  "confidence": 0.85,
-  "classification": "Infrastructure|Build|Deployment|Test|Dependency|Security|Authentication|Timeout|Network|CloudProvider|Unknown",
-  "riskAssessment": "Brief risk assessment",
-  "timeline": "Estimated time to fix",
-  "failingFiles": ["src/main.ts", "package.json"]
-}
-
-Focus on actionable insights and practical solutions. Be specific and helpful.`;
-  }
-
-  private parseResponse(text: string): AIResponse {
-    // With responseMimeType:"application/json" set, text should be raw JSON.
-    // Fall back to regex extraction in case an older SDK version ignores the mime type.
-    const jsonStr = text.trim().startsWith("{") ? text : (() => {
-      const m = text.match(/\{[\s\S]*\}/);
-      return m ? m[0] : null;
-    })();
-
-    if (jsonStr) {
-      try {
-        const parsed = JSON.parse(jsonStr);
-        return {
-          summary: parsed.summary || "Analysis completed",
-          rootCause: parsed.rootCause || "Unable to determine root cause",
-          remediation: parsed.remediation || ["Review logs for more details"],
-          severity: parsed.severity || "Medium",
-          assignee: null,
-          tags: parsed.tags || [],
-          confidence: parsed.confidence ?? 0.8,
-          classification: parsed.classification || "Unknown",
-          riskAssessment: parsed.riskAssessment,
-          timeline: parsed.timeline,
-          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
-        };
-      } catch (error) {
-        console.error("Failed to parse Gemini response JSON:", error);
-      }
-    }
-
-    throw new Error(`Gemini returned unparseable response: ${text.slice(0, 200)}`);
   }
 }

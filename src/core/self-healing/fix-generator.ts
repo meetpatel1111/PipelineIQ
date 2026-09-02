@@ -27,7 +27,8 @@ export class FixGenerator {
   }
 
   private initializeProvider(config: AIEngineConfig): AIProviderInterface | null {
-    if (!config.provider || !config.apiKey) return null;
+    if (!config.provider) return null;
+    if (config.provider !== "local" && !config.apiKey) return null;
 
     try {
       switch (config.provider) {

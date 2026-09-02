@@ -55,6 +55,12 @@ export const AIResponseSchema = z.object({
     "CloudProvider",
     "Unknown"
   ]).optional(),
+  tokensUsed: z.object({
+    input: z.number().int().nonnegative().optional(),
+    output: z.number().int().nonnegative().optional(),
+    total: z.number().int().nonnegative().optional(),
+  }).optional(),
+  estimatedCostUsd: z.number().nonnegative().optional(),
 });
 
 export type AIResponse = z.infer<typeof AIResponseSchema>;

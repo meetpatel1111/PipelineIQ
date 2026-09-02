@@ -1,16 +1,12 @@
-import type { AIProviderInterface, AIRequest, AIResponse, AIEngineConfig } from "./types.js";
+import type { AIRequest, AIResponse, AIEngineConfig } from "./types.js";
+import { BaseAIProvider, stripThinkingTags } from "./base-provider.js";
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
-
-/** Strip <think>…</think> blocks emitted by local reasoning models (DeepSeek-R1, QwQ, etc.) */
-function stripThinkingTags(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-}
+export { BaseAIProvider, stripThinkingTags };
 
 /**
  * OpenAI provider implementation
  */
-export class OpenAIProvider implements AIProviderInterface {
+export class OpenAIProvider extends BaseAIProvider {
   name = "openai";
   private apiKey: string;
   private model: string;
@@ -22,6 +18,7 @@ export class OpenAIProvider implements AIProviderInterface {
   private thinkingBudget: number;
 
   constructor(config: AIEngineConfig) {
+    super();
     if (!config.apiKey) {
       throw new Error("OpenAI API key is required");
     }
@@ -49,20 +46,12 @@ export class OpenAIProvider implements AIProviderInterface {
     return /^gpt-5/.test(model.toLowerCase());
   }
 
-  /**
-   * Map thinkingBudget → reasoning effort for o-series Chat Completions.
-   * Accepts "low" | "medium" | "high".
-   */
   private reasoningEffort(): "low" | "medium" | "high" {
     if (this.thinkingBudget < 0 || this.thinkingBudget >= 16000) return "high";
     if (this.thinkingBudget >= 8000) return "medium";
     return "low";
   }
 
-  /**
-   * Map thinkingBudget → reasoning effort for gpt-5.x Responses API.
-   * Accepts "none" | "minimal" | "low" | "medium" | "high" | "xhigh".
-   */
   private responsesApiReasoningEffort(): "none" | "minimal" | "low" | "medium" | "high" | "xhigh" {
     if (this.thinkingBudget < 0 || this.thinkingBudget >= 32000) return "xhigh";
     if (this.thinkingBudget >= 16000) return "high";
@@ -77,19 +66,15 @@ export class OpenAIProvider implements AIProviderInterface {
     const openai = new OpenAI({ apiKey: this.apiKey });
 
     const fallbackModels = [
-      // Mini / Nano first (cost-efficient)
       "gpt-5.4-mini",
       "gpt-5.4-nano",
       "gpt-5-mini",
       "gpt-5-nano",
-      // Frontier (no Pro)
       "gpt-5.5",
       "gpt-5.4",
       "gpt-5",
-      // Legacy stable
       "gpt-4o",
       "gpt-4o-mini",
-      // Open-weight (last resort)
       "gpt-oss-120b",
       "gpt-oss-20b",
     ];
@@ -99,20 +84,7 @@ export class OpenAIProvider implements AIProviderInterface {
       if (m !== this.model) candidateModels.push(m);
     }
 
-    const systemPrompt = `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-
-Return a JSON object with the following fields:
-- summary: Brief human-readable failure description (max 255 characters)
-- rootCause: Most likely cause of the failure
-- remediation: Array of specific remediation steps
-- severity: Critical/High/Medium/Low based on impact
-- classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
-- confidence: 0-1 confidence score in your analysis
-- riskAssessment: Brief risk assessment for the deployment
-- failingFiles: Array of file paths (e.g. src/main.ts) that caused the failure, based on the stack trace or logs
-
-Be concise but thorough. Focus on actionable insights.`;
-
+    const defaultSystem = this.getDefaultSystemPrompt();
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
     let lastError: any = null;
 
@@ -126,14 +98,14 @@ Be concise but thorough. Focus on actionable insights.`;
       while (attempt <= maxRetries) {
         try {
           let content: string | null = null;
+          let usageTokens: { input?: number; output?: number } | undefined;
 
-          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : systemPrompt);
+          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : defaultSystem);
           const messages = effectiveSystem
             ? [{ role: "system", content: effectiveSystem }, { role: "user", content: prompt }]
             : [{ role: "user", content: prompt }];
 
           if (isResponsesApi) {
-            // ── gpt-5.x: Responses API ──────────────────────────────────────
             const responsesParams: Record<string, any> = {
               model: currentModelName,
               input: messages,
@@ -148,7 +120,6 @@ Be concise but thorough. Focus on actionable insights.`;
 
             const response = await (openai as any).responses.create(responsesParams);
 
-            // Extract text from output array
             const textItem = (response.output as any[]).find(
               (item: any) => item.type === "message" || item.type === "output_text"
             );
@@ -158,8 +129,14 @@ Be concise but thorough. Focus on actionable insights.`;
             } else if (textItem?.type === "output_text") {
               content = textItem.text ?? null;
             }
+
+            if (response.usage) {
+              usageTokens = {
+                input: response.usage.input_tokens,
+                output: response.usage.output_tokens,
+              };
+            }
           } else if (isReasoning) {
-            // ── o-series: Chat Completions with reasoning_effort ────────────
             const params: Record<string, any> = {
               model: currentModelName,
               messages,
@@ -171,8 +148,13 @@ Be concise but thorough. Focus on actionable insights.`;
             }
             const completion = await openai.chat.completions.create(params as any);
             content = completion.choices[0]?.message?.content ?? null;
+            if (completion.usage) {
+              usageTokens = {
+                input: completion.usage.prompt_tokens,
+                output: completion.usage.completion_tokens,
+              };
+            }
           } else {
-            // ── Standard Chat Completions ───────────────────────────────────
             const params: Record<string, any> = {
               model: currentModelName,
               messages,
@@ -181,18 +163,24 @@ Be concise but thorough. Focus on actionable insights.`;
             };
             const completion = await openai.chat.completions.create(params as any);
             content = completion.choices[0]?.message?.content ?? null;
+            if (completion.usage) {
+              usageTokens = {
+                input: completion.usage.prompt_tokens,
+                output: completion.usage.completion_tokens,
+              };
+            }
           }
 
           if (!content) throw new Error("No response from OpenAI");
           if (request.isRawPrompt) return { rootCause: content };
-          return this.parseResponse(content);
+          return this.parseResponse(content, { ...usageTokens, model: currentModelName });
         } catch (error: any) {
           attempt++;
           lastError = error;
           const errorMessage = error.message || "";
 
           const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("rate_limit");
-          const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("500");
+          const isRetryable = this.isRetryableError(errorMessage);
 
           if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
             console.warn(`[PipelineIQ] OpenAI model ${currentModelName} hit quota/rate limit. Falling back...`);
@@ -213,78 +201,12 @@ Be concise but thorough. Focus on actionable insights.`;
 
     throw new Error(`OpenAI API error: ${lastError?.message || "Unknown error"}`);
   }
-
-  private buildPrompt(request: AIRequest): string {
-    return `
-Pipeline Failure Analysis Request:
-
-Pipeline: ${request.pipelineName}
-Repository: ${request.repositoryName}
-Branch: ${request.branch}
-Environment: ${request.environment || "Not specified"}
-Exit Code: ${request.exitCode || "Not specified"}
-Failed Command: ${request.failedCommand || "Not specified"}
-
-Error Message:
-${request.errorMessage || "No error message provided"}
-
-Stack Trace:
-${request.stackTrace || "No stack trace provided"}
-
-Logs:
-${request.logs}
-
-Historical Context:
-${request.historicalContext || "No historical context available"}
-
-Current Category: ${request.category || "Not classified yet"}
-`;
-  }
-
-  private parseResponse(content: string): AIResponse {
-    try {
-      const parsed = JSON.parse(content);
-      return {
-        summary: parsed.summary,
-        rootCause: parsed.rootCause,
-        remediation: Array.isArray(parsed.remediation) ? parsed.remediation : [parsed.remediation],
-        severity: parsed.severity,
-        classification: parsed.classification,
-        confidence: parsed.confidence,
-        riskAssessment: parsed.riskAssessment,
-        failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
-      };
-    } catch {
-      return {
-        summary: this.extractField(content, "summary"),
-        rootCause: this.extractField(content, "rootCause"),
-        remediation: this.extractArrayField(content, "remediation"),
-        severity: this.extractField(content, "severity") as any,
-        classification: this.extractField(content, "classification") as any,
-        confidence: 0.5,
-        riskAssessment: this.extractField(content, "riskAssessment"),
-        failingFiles: this.extractArrayField(content, "failingFiles"),
-      };
-    }
-  }
-
-  private extractField(content: string, fieldName: string): string | undefined {
-    const regex = new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i");
-    return content.match(regex)?.[1]?.trim();
-  }
-
-  private extractArrayField(content: string, fieldName: string): string[] {
-    const match = content.match(new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i"));
-    if (!match) return [];
-    const value = match[1]?.trim() ?? "";
-    try { return JSON.parse(value); } catch { return value.split(/[,;]/).map(s => s.trim()).filter(Boolean); }
-  }
 }
 
 /**
  * Anthropic provider implementation
  */
-export class AnthropicProvider implements AIProviderInterface {
+export class AnthropicProvider extends BaseAIProvider {
   name = "anthropic";
   private apiKey: string;
   private model: string;
@@ -296,6 +218,7 @@ export class AnthropicProvider implements AIProviderInterface {
   private thinkingBudget: number;
 
   constructor(config: AIEngineConfig) {
+    super();
     if (!config.apiKey) {
       throw new Error("Anthropic API key is required");
     }
@@ -317,7 +240,6 @@ export class AnthropicProvider implements AIProviderInterface {
     const { Anthropic } = await import("@anthropic-ai/sdk");
     const anthropic = new Anthropic({ apiKey: this.apiKey });
 
-    // Models that support extended thinking (Claude 3.7+ and Claude 4+)
     const fallbackModels = [
       "claude-sonnet-4-5",
       "claude-opus-4-5",
@@ -333,6 +255,7 @@ export class AnthropicProvider implements AIProviderInterface {
       if (m !== this.model) candidateModels.push(m);
     }
 
+    const defaultSystem = this.getDefaultSystemPrompt();
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
     let lastError: any = null;
 
@@ -343,23 +266,10 @@ export class AnthropicProvider implements AIProviderInterface {
 
       while (attempt <= maxRetries) {
         try {
-          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-
-Return a JSON object with the following fields:
-- summary: Brief human-readable failure description (max 255 characters)
-- rootCause: Most likely cause of the failure
-- remediation: Array of specific remediation steps
-- severity: Critical/High/Medium/Low based on impact
-- classification: Infrastructure/Build/Deployment/Test/Dependency/Security/Authentication/Timeout/Network/CloudProvider/Unknown
-- confidence: 0-1 confidence score in your analysis
-- riskAssessment: Brief risk assessment for the deployment
-- failingFiles: Array of file paths (e.g. src/main.ts) that caused the failure, based on the stack trace or logs
-
-Be concise but thorough. Focus on actionable insights.`);
+          const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : defaultSystem);
 
           const params: Record<string, any> = {
             model: currentModelName,
-            // When thinking is enabled, max_tokens must exceed budget_tokens
             max_tokens: this.enableThinking
               ? Math.max(this.maxTokens, this.thinkingBudget + 1000)
               : this.maxTokens,
@@ -371,7 +281,6 @@ Be concise but thorough. Focus on actionable insights.`);
           }
 
           if (this.enableThinking) {
-            // Extended thinking: temperature must be 1 (Anthropic requirement)
             params["thinking"] = { type: "enabled", budget_tokens: this.thinkingBudget };
             params["temperature"] = 1;
             console.log(`[PipelineIQ] Anthropic extended thinking enabled (budget: ${this.thinkingBudget} tokens)`);
@@ -381,20 +290,23 @@ Be concise but thorough. Focus on actionable insights.`);
 
           const message = await anthropic.messages.create(params as any);
 
-          // Response may contain thinking blocks followed by text blocks — extract text
           const textBlock = message.content.find((b: any) => b.type === "text");
           const content = textBlock?.type === "text" ? (textBlock as any).text : "";
           if (!content) throw new Error("No response from Anthropic");
 
+          const usage = message.usage
+            ? { input: message.usage.input_tokens, output: message.usage.output_tokens }
+            : undefined;
+
           if (request.isRawPrompt) return { rootCause: content };
-          return this.parseResponse(content);
+          return this.parseResponse(content, { ...usage, model: currentModelName });
         } catch (error: any) {
           attempt++;
           lastError = error;
           const errorMessage = error.message || "";
 
           const isQuotaOrRateLimit = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("rate_limit") || errorMessage.includes("limit_exceeded");
-          const isRetryable = isQuotaOrRateLimit || errorMessage.includes("503") || errorMessage.includes("500");
+          const isRetryable = this.isRetryableError(errorMessage);
 
           if (isQuotaOrRateLimit && currentModelName !== candidateModels[candidateModels.length - 1]) {
             console.warn(`[PipelineIQ] Anthropic model ${currentModelName} hit quota/rate limit. Falling back...`);
@@ -415,80 +327,12 @@ Be concise but thorough. Focus on actionable insights.`);
 
     throw new Error(`Anthropic API error: ${lastError?.message || "Unknown error"}`);
   }
-
-  private buildPrompt(request: AIRequest): string {
-    return `
-Pipeline Failure Analysis Request:
-
-Pipeline: ${request.pipelineName}
-Repository: ${request.repositoryName}
-Branch: ${request.branch}
-Environment: ${request.environment || "Not specified"}
-Exit Code: ${request.exitCode || "Not specified"}
-Failed Command: ${request.failedCommand || "Not specified"}
-
-Error Message:
-${request.errorMessage || "No error message provided"}
-
-Stack Trace:
-${request.stackTrace || "No stack trace provided"}
-
-Logs:
-${request.logs}
-
-Historical Context:
-${request.historicalContext || "No historical context available"}
-
-Current Category: ${request.category || "Not classified yet"}
-`;
-  }
-
-  private parseResponse(content: string): AIResponse {
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          summary: parsed.summary,
-          rootCause: parsed.rootCause,
-          remediation: Array.isArray(parsed.remediation) ? parsed.remediation : [parsed.remediation],
-          severity: parsed.severity,
-          classification: parsed.classification,
-          confidence: parsed.confidence,
-          riskAssessment: parsed.riskAssessment,
-          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
-        };
-      }
-    } catch { /* fall through */ }
-
-    return {
-      summary: this.extractField(content, "summary"),
-      rootCause: this.extractField(content, "rootCause"),
-      remediation: this.extractArrayField(content, "remediation"),
-      severity: this.extractField(content, "severity") as any,
-      classification: this.extractField(content, "classification") as any,
-      confidence: 0.5,
-      riskAssessment: this.extractField(content, "riskAssessment"),
-      failingFiles: this.extractArrayField(content, "failingFiles"),
-    };
-  }
-
-  private extractField(content: string, fieldName: string): string | undefined {
-    return content.match(new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i"))?.[1]?.trim();
-  }
-
-  private extractArrayField(content: string, fieldName: string): string[] {
-    const match = content.match(new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i"));
-    if (!match) return [];
-    const value = match[1]?.trim() ?? "";
-    try { return JSON.parse(value); } catch { return value.split(/[,;]/).map(s => s.trim()).filter(Boolean); }
-  }
 }
 
 /**
  * Azure OpenAI provider implementation
  */
-export class AzureOpenAIProvider implements AIProviderInterface {
+export class AzureOpenAIProvider extends BaseAIProvider {
   name = "azure-openai";
   private apiKey: string;
   private endpoint: string;
@@ -501,6 +345,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
   private thinkingBudget: number;
 
   constructor(config: AIEngineConfig) {
+    super();
     if (!config.apiKey) {
       throw new Error("Azure OpenAI API key is required");
     }
@@ -551,10 +396,7 @@ export class AzureOpenAIProvider implements AIProviderInterface {
       defaultHeaders: { "api-key": this.apiKey },
     });
 
-    const systemPrompt = `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`;
-
+    const defaultSystem = this.getDefaultSystemPrompt();
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
     console.log(`[PipelineIQ] Using Azure OpenAI deployment: ${this.deployment}`);
     const isReasoning = this.isReasoningModel(this.deployment);
@@ -566,13 +408,14 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
     while (attempt <= maxRetries) {
       try {
         let content: string | null = null;
-        const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : systemPrompt);
+        let usageTokens: { input?: number; output?: number } | undefined;
+
+        const effectiveSystem = request.systemPrompt || (request.isRawPrompt ? undefined : defaultSystem);
         const messages = effectiveSystem
           ? [{ role: "system", content: effectiveSystem }, { role: "user", content: prompt }]
           : [{ role: "user", content: prompt }];
 
         if (isResponsesApi) {
-          // ── gpt-5.x: Responses API ────────────────────────────────────────
           const responsesParams: Record<string, any> = {
             model: this.deployment,
             input: messages,
@@ -595,8 +438,14 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
           } else if (textItem?.type === "output_text") {
             content = textItem.text ?? null;
           }
+
+          if (response.usage) {
+            usageTokens = {
+              input: response.usage.input_tokens,
+              output: response.usage.output_tokens,
+            };
+          }
         } else if (isReasoning) {
-          // ── o-series: Chat Completions with reasoning_effort ──────────────
           const params: Record<string, any> = {
             model: this.deployment,
             messages,
@@ -608,8 +457,13 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
           }
           const completion = await openai.chat.completions.create(params as any);
           content = completion.choices[0]?.message?.content ?? null;
+          if (completion.usage) {
+            usageTokens = {
+              input: completion.usage.prompt_tokens,
+              output: completion.usage.completion_tokens,
+            };
+          }
         } else {
-          // ── Standard Chat Completions ─────────────────────────────────────
           const params: Record<string, any> = {
             model: this.deployment,
             messages,
@@ -618,17 +472,23 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
           };
           const completion = await openai.chat.completions.create(params as any);
           content = completion.choices[0]?.message?.content ?? null;
+          if (completion.usage) {
+            usageTokens = {
+              input: completion.usage.prompt_tokens,
+              output: completion.usage.completion_tokens,
+            };
+          }
         }
 
         if (!content) throw new Error("No response from Azure OpenAI");
         if (request.isRawPrompt) return { rootCause: content };
-        return this.parseResponse(content);
+        return this.parseResponse(content, { ...usageTokens, model: this.model });
       } catch (error: any) {
         attempt++;
         lastError = error;
         const errorMessage = error.message || "";
 
-        const isRetryable = errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("rate_limit") || errorMessage.includes("503") || errorMessage.includes("500");
+        const isRetryable = this.isRetryableError(errorMessage);
 
         if (isRetryable && attempt <= maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
@@ -643,83 +503,13 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
 
     throw new Error(`Azure OpenAI API error: ${lastError?.message || "Unknown error"}`);
   }
-
-  private buildPrompt(request: AIRequest): string {
-    return `
-Pipeline Failure Analysis Request:
-
-Pipeline: ${request.pipelineName}
-Repository: ${request.repositoryName}
-Branch: ${request.branch}
-Environment: ${request.environment || "Not specified"}
-Exit Code: ${request.exitCode || "Not specified"}
-Failed Command: ${request.failedCommand || "Not specified"}
-
-Error Message:
-${request.errorMessage || "No error message provided"}
-
-Stack Trace:
-${request.stackTrace || "No stack trace provided"}
-
-Logs:
-${request.logs}
-
-Historical Context:
-${request.historicalContext || "No historical context available"}
-
-Current Category: ${request.category || "Not classified yet"}
-`;
-  }
-
-  private parseResponse(content: string): AIResponse {
-    try {
-      const parsed = JSON.parse(content);
-      return {
-        summary: parsed.summary,
-        rootCause: parsed.rootCause,
-        remediation: Array.isArray(parsed.remediation) ? parsed.remediation : [parsed.remediation],
-        severity: parsed.severity,
-        classification: parsed.classification,
-        confidence: parsed.confidence,
-        riskAssessment: parsed.riskAssessment,
-        failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
-      };
-    } catch {
-      return {
-        summary: this.extractField(content, "summary"),
-        rootCause: this.extractField(content, "rootCause"),
-        remediation: this.extractArrayField(content, "remediation"),
-        severity: this.extractField(content, "severity") as any,
-        classification: this.extractField(content, "classification") as any,
-        confidence: 0.5,
-        riskAssessment: this.extractField(content, "riskAssessment"),
-        failingFiles: this.extractArrayField(content, "failingFiles"),
-      };
-    }
-  }
-
-  private extractField(content: string, fieldName: string): string | undefined {
-    return content.match(new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i"))?.[1]?.trim();
-  }
-
-  private extractArrayField(content: string, fieldName: string): string[] {
-    const match = content.match(new RegExp(`${fieldName}[:\\s]*([^\\n]+)`, "i"));
-    if (!match) return [];
-    const value = match[1]?.trim() ?? "";
-    try { return JSON.parse(value); } catch { return value.split(/[,;]/).map(s => s.trim()).filter(Boolean); }
-  }
 }
 
 /**
  * Local AI provider implementation for OpenAI-compatible local endpoints
- * (e.g. Ollama, Llama.cpp, LM Studio)
- *
- * Supports reasoning models that emit <think>…</think> blocks
- * (DeepSeek-R1, QwQ, Phi-4-reasoning, etc.).  When enableThinking is true
- * a chain-of-thought instruction is prepended so non-native reasoning models
- * also reason step-by-step.
+ * (e.g. Ollama, Llama.cpp, LM Studio, vLLM)
  */
-export class LocalAIProvider implements AIProviderInterface {
+export class LocalAIProvider extends BaseAIProvider {
   name = "local";
   private baseURL: string;
   private model: string;
@@ -729,6 +519,7 @@ export class LocalAIProvider implements AIProviderInterface {
   private enableThinking: boolean;
 
   constructor(config: AIEngineConfig) {
+    super();
     if (!config.endpoint) {
       throw new Error(
         "[PipelineIQ] Local AI provider requires config.ai.endpoint (e.g. 'http://localhost:11434/v1')",
@@ -757,13 +548,10 @@ export class LocalAIProvider implements AIProviderInterface {
     const prompt = request.isRawPrompt ? request.logs : this.buildPrompt(request);
     console.log(`[PipelineIQ] Using Local AI model: ${this.model}`);
 
+    const defaultSystem = this.getDefaultSystemPrompt();
     const systemContent = this.enableThinking
-      ? `You are a CI/CD failure analysis expert. Before answering, think through the problem step by step inside <think></think> tags, then provide your structured JSON response outside those tags.
-
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`
-      : `You are a CI/CD failure analysis expert. Analyze the provided failure context and provide structured insights.
-
-Return a JSON object with: summary, rootCause, remediation (array), severity (Critical/High/Medium/Low), classification, confidence (0-1), riskAssessment, failingFiles (array of file paths).`;
+      ? `You are a CI/CD failure analysis expert. Before answering, think through the problem step by step inside <think></think> tags, then provide your structured JSON response outside those tags.\n\n${defaultSystem}`
+      : defaultSystem;
 
     const maxRetries = 2;
     let attempt = 0;
@@ -786,17 +574,20 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
         let content = completion.choices[0]?.message?.content;
         if (!content) throw new Error("No response from local AI");
 
-        // Strip <think>…</think> blocks emitted by DeepSeek-R1, QwQ, etc.
         content = stripThinkingTags(content);
 
+        const usageTokens = completion.usage
+          ? { input: completion.usage.prompt_tokens, output: completion.usage.completion_tokens }
+          : undefined;
+
         if (request.isRawPrompt) return { rootCause: content };
-        return this.parseResponse(content);
+        return this.parseResponse(content, { ...usageTokens, model: this.model });
       } catch (error: any) {
         attempt++;
         lastError = error;
         const errorMessage = error.message || "";
 
-        const isRetryable = errorMessage.includes("429") || errorMessage.includes("rate_limit") || errorMessage.includes("503") || errorMessage.includes("500") || errorMessage.includes("fetch failed");
+        const isRetryable = this.isRetryableError(errorMessage) || errorMessage.includes("fetch failed");
 
         if (isRetryable && attempt <= maxRetries) {
           const delay = Math.pow(2, attempt) * 1000;
@@ -810,51 +601,5 @@ Return a JSON object with: summary, rootCause, remediation (array), severity (Cr
     }
 
     throw new Error(`Local AI error: ${lastError?.message || "Unknown error"}`);
-  }
-
-  private buildPrompt(request: AIRequest): string {
-    return `
-Pipeline Failure Analysis Request:
-
-Pipeline: ${request.pipelineName}
-Repository: ${request.repositoryName}
-Branch: ${request.branch}
-Environment: ${request.environment ?? "Not specified"}
-Exit Code: ${request.exitCode ?? "Not specified"}
-Failed Command: ${request.failedCommand ?? "Not specified"}
-
-Error Message:
-${request.errorMessage ?? "No error message provided"}
-
-Stack Trace:
-${request.stackTrace ?? "No stack trace provided"}
-
-Logs:
-${request.logs}
-
-Historical Context:
-${request.historicalContext ?? "No historical context available"}
-
-Current Category: ${request.category ?? "Not classified yet"}`;
-  }
-
-  private parseResponse(content: string): AIResponse {
-    try {
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          summary: parsed.summary,
-          rootCause: parsed.rootCause,
-          remediation: Array.isArray(parsed.remediation) ? parsed.remediation : [parsed.remediation],
-          severity: parsed.severity,
-          classification: parsed.classification,
-          confidence: parsed.confidence,
-          riskAssessment: parsed.riskAssessment,
-          failingFiles: Array.isArray(parsed.failingFiles) ? parsed.failingFiles : undefined,
-        };
-      }
-    } catch { /* fall through */ }
-    return { confidence: 0.5 };
   }
 }
