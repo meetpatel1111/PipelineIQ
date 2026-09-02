@@ -66,11 +66,12 @@ export class FixGenerator {
     remediation: string[],
     category: string,
     retryContext?: { previousError: string; diff?: string | undefined },
+    historicalContext?: string,
   ): Promise<CodeFix | null> {
     if (!this.provider) return null;
 
     const systemPrompt = this.buildSystemPrompt();
-    const prompt = this.buildUserFixPrompt(event, rootCause, remediation, category, retryContext);
+    const prompt = this.buildUserFixPrompt(event, rootCause, remediation, category, retryContext, historicalContext);
 
     try {
       // Use the provider's generateInsights with dedicated system prompt and user prompt
@@ -326,6 +327,35 @@ CRITICAL INVARIANTS:
   }
 
   /**
+   * Generate specialized domain guidance based on failure classification.
+   */
+  private getDomainSpecialistGuidance(category: string): string {
+    switch (category.toLowerCase()) {
+      case "dependency":
+        return `[Domain Focus: Dependency & Package Management]
+- Focus on manifest version constraints, peer dependency conflicts, package lockfile desynchronization, and missing runtime/dev packages.
+- Provide the exact package synchronization command (e.g. 'npm install', 'pnpm install', 'uv sync', 'cargo update', 'dotnet restore', 'composer install', 'bundle install', 'mix deps.get').`;
+      case "build":
+      case "compilation":
+        return `[Domain Focus: Compilation & Type Engineering]
+- Focus on function signature mismatches, missing or altered argument lists, type definitions, syntax errors, and missing exports/imports across interdependent modules.
+- Ensure all caller files and definition files are updated consistently.`;
+      case "test":
+        return `[Domain Focus: Test Suite Reliability]
+- Focus on broken assertions, changed expected outputs, missing mock setups, asynchronous timeout issues, and unhandled promise rejections in test suites.`;
+      case "infrastructure":
+      case "deployment":
+      case "docker":
+      case "kubernetes":
+        return `[Domain Focus: Cloud & Infrastructure Engineering]
+- Focus on multi-stage build copy paths, image tag versions, environment variable bindings, exposed ports, and container runtime permissions without modifying CI workflow secrets.`;
+      default:
+        return `[Domain Focus: Principal Systems Engineering]
+- Analyze the exact error diagnostics, identify the minimal root cause change, and generate surgical verbatim patches.`;
+    }
+  }
+
+  /**
    * Build the specialized user prompt for code fix generation.
    * Universal across all languages, frameworks, and build systems.
    */
@@ -335,18 +365,27 @@ CRITICAL INVARIANTS:
     remediation: string[],
     category: string,
     retryContext?: { previousError: string; diff?: string | undefined },
+    historicalContext?: string,
   ): string {
     const workspaceContext = this.getWorkspaceContext(event, rootCause);
     const retrySection = retryContext
       ? `\nPREVIOUS ATTEMPT FAILED VERIFICATION:\nYour previous fix was applied locally and failed the build with this error:\n${retryContext.previousError}\n\nHere is the exact code patch you generated in that failed attempt (Git Diff):\n\`\`\`diff\n${retryContext.diff || "No diff available"}\n\`\`\`\n\nGenerate a CORRECTED fix that addresses both the original failure AND avoids making the same mistake. Pay special attention to syntax correctness.\n\nCRITICAL INSTRUCTION: The file has been REVERTED to its ORIGINAL state (as shown below in SOURCE CODE FILES). Your \`originalContent\` snippet MUST exactly match the code in SOURCE CODE FILES, NOT the code from your failed patch!\n`
       : "";
 
+    const historySection = historicalContext
+      ? `\nHISTORICAL RESOLUTION FROM SIMILAR PAST INCIDENTS:\n${historicalContext}\n`
+      : "";
+
+    const specialistGuidance = this.getDomainSpecialistGuidance(category);
     const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
     const smartExcerpt = buildSmartExcerpt(event.failure.logs ?? "", event.source, 150).text;
     const cleanLogs = maskSecrets(smartExcerpt);
     const cleanWorkspace = maskSecrets(workspaceContext);
 
-    return `Generate a PRECISE, WORKING code fix for this pipeline failure.${retrySection}
+    return `Generate a PRECISE, WORKING code fix for this pipeline failure.${retrySection}${historySection}
+
+DOMAIN GUIDANCE:
+${specialistGuidance}
 
 FAILURE CONTEXT:
 - Repository: ${event.repository.owner}/${event.repository.name}

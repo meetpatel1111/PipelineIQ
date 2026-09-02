@@ -4,29 +4,35 @@ import { execSync } from "node:child_process";
 import type { FailureEvent, SelfHealingConfig, SelfHealingResult, CodeFix } from "../types/index.js";
 import type { AIEngineConfig } from "../ai/types.js";
 import type { GitProvider } from "./types.js";
+import type { JiraClient } from "../jira/client.js";
 import { FixGenerator } from "./fix-generator.js";
 import { GitHubProvider } from "./github-provider.js";
 import { AzureDevOpsProvider } from "./azure-provider.js";
 import { applyPatch } from "./patch.js";
 import { EcosystemManager } from "./ecosystem-registry.js";
+import { computeDedupSignature } from "../dedup.js";
 
 /**
  * SelfHealingEngine — the orchestrator for autonomous remediation.
  *
  * Flow:
  *   1. Check eligibility (category, config, AI availability)
- *   2. Generate a code fix via AI
- *   3. Validate the fix against safety guardrails
- *   4. Create branch → commit → PR via the appropriate GitProvider
- *   5. Return a SelfHealingResult for Jira linking and notifications
+ *   2. Retrieve persistent historical context from Jira (if available)
+ *   3. Generate a code fix via AI (with domain specialist guidance)
+ *   4. Validate the fix against safety guardrails
+ *   5. Run pre-flight syntax check & sandbox verification loop
+ *   6. Create branch → commit → PR via GitProvider (or apply in-place)
+ *   7. Auto-comment verification proof and remote link on the Jira issue
  */
 export class SelfHealingEngine {
   private config: SelfHealingConfig;
   private fixGenerator: FixGenerator;
+  private jiraClient?: JiraClient | undefined;
 
-  constructor(config: SelfHealingConfig, aiConfig: AIEngineConfig) {
+  constructor(config: SelfHealingConfig, aiConfig: AIEngineConfig, jiraClient?: JiraClient) {
     this.config = config;
     this.fixGenerator = new FixGenerator(aiConfig);
+    this.jiraClient = jiraClient;
   }
 
   /**
@@ -67,10 +73,26 @@ export class SelfHealingEngine {
       };
     }
 
+    // ── Stage 0.5: Query Persistent Jira Memory for Past Incidents ───────
+    let historicalContext: string | undefined;
+    if (this.jiraClient && issueKey && issueKey.includes("-")) {
+      try {
+        const projectKey = issueKey.split("-")[0]!;
+        const signature = computeDedupSignature(event, category as any);
+        const pastIssue = await this.jiraClient.findBySignature(projectKey, signature, 30 * 24);
+        if (pastIssue && pastIssue.key !== issueKey) {
+          historicalContext = `Previous similar Jira ticket ${pastIssue.key} ("${pastIssue.summary}") was encountered and resolved.`;
+          console.log(`[PipelineIQ] Loaded historical resolution context from Jira issue ${pastIssue.key}`);
+        }
+      } catch {
+        // Best-effort lookup
+      }
+    }
+
     // ── Stage 1: Generate fix ────────────────────────────────────────────
     let fix: CodeFix | null;
     try {
-      fix = await this.fixGenerator.generateFix(event, rootCause, remediation, category);
+      fix = await this.fixGenerator.generateFix(event, rootCause, remediation, category, undefined, historicalContext);
     } catch (error) {
       return {
         attempted: true,
@@ -129,6 +151,7 @@ export class SelfHealingEngine {
             const retryFix = await this.fixGenerator.generateFix(
               event, rootCause, remediation, category,
               { previousError: previousVerificationError, diff: previousDiff },
+              historicalContext
             );
             if (retryFix) {
               fix = retryFix;
@@ -215,7 +238,7 @@ export class SelfHealingEngine {
           // If in-place fix mode is requested (local CLI / IDE workflow), keep the changes on disk permanently
           if (this.config.applyInPlace) {
             console.log("[PipelineIQ] In-place fix mode enabled — keeping verified code changes on disk.");
-            return {
+            const inPlaceResult: SelfHealingResult = {
               attempted: true,
               success: true,
               fix,
@@ -223,6 +246,22 @@ export class SelfHealingEngine {
               verifiedCommand: verifiedCommandStr,
               dryRun: false,
             };
+
+            if (this.jiraClient && issueKey) {
+              try {
+                const commentLines = [
+                  `🤖 *PipelineIQ Self-Healing Engine* applied an in-place code fix for this failure:`,
+                  `• *Verification:* Verified locally with \`${verifiedCommandStr || "Tests passed"}\` (Exit code 0)`,
+                  `• *AI Confidence:* ${Math.round(fix.confidence * 100)}% (${fix.riskLevel} risk)`,
+                  fix.estimatedTimeSavedMinutes ? `• *Estimated MTTR Saved:* ${fix.estimatedTimeSavedMinutes} minutes` : "",
+                ].filter(Boolean).join("\n");
+                await this.jiraClient.addComment(issueKey, commentLines);
+              } catch (jiraErr) {
+                console.warn(`[PipelineIQ] Failed to post self-healing comment to Jira: ${jiraErr}`);
+              }
+            }
+
+            return inPlaceResult;
           }
 
           // 4. Restore workspace files before remote PR creation
@@ -304,7 +343,7 @@ export class SelfHealingEngine {
         },
       );
 
-      return {
+      const prResult: SelfHealingResult = {
         attempted: true,
         success: true,
         fix,
@@ -314,6 +353,27 @@ export class SelfHealingEngine {
         verifiedCommand: fix.verificationCommand,
         dryRun: false,
       };
+
+      // Auto-comment on Jira ticket and create remote PR link
+      if (this.jiraClient && issueKey) {
+        try {
+          if (result.prUrl) {
+            await this.jiraClient.createRemoteLink(issueKey, "PipelineIQ Auto-Fix PR", result.prUrl);
+          }
+          const commentLines = [
+            `🤖 *PipelineIQ Self-Healing Engine* created a Pull Request for this failure:`,
+            `• *Pull Request:* [${result.prUrl}|${result.prUrl}] (Branch: \`${result.branchName}\`)`,
+            fix.verificationCommand ? `• *Verification:* Verified in sandbox with \`${fix.verificationCommand}\` (Exit code 0)` : `• *Verification:* Verified in sandbox (Exit code 0)`,
+            `• *AI Confidence:* ${Math.round(fix.confidence * 100)}% (${fix.riskLevel} risk)`,
+            fix.estimatedTimeSavedMinutes ? `• *Estimated MTTR Saved:* ${fix.estimatedTimeSavedMinutes} minutes` : "",
+          ].filter(Boolean).join("\n");
+          await this.jiraClient.addComment(issueKey, commentLines);
+        } catch (jiraErr) {
+          console.warn(`[PipelineIQ] Failed to post self-healing comment to Jira: ${jiraErr}`);
+        }
+      }
+
+      return prResult;
     } catch (error: any) {
       const errorMessage = String(error);
       let reason = `PR creation failed: ${errorMessage}`;
