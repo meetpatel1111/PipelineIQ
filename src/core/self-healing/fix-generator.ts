@@ -144,34 +144,94 @@ export class FixGenerator {
   }
 
   /**
-   * Extract imported relative file paths from a source file's content
+   * Load tsconfig.json / jsconfig.json compilerOptions.paths aliases for path resolution.
+   */
+  private loadTsConfigAliases(root: string): Record<string, string[]> {
+    const tsconfigPaths = ["tsconfig.json", "tsconfig.base.json", "jsconfig.json"];
+    const aliases: Record<string, string[]> = {};
+
+    for (const file of tsconfigPaths) {
+      const full = path.resolve(root, file);
+      if (fs.existsSync(full)) {
+        try {
+          const raw = fs.readFileSync(full, "utf-8").replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, "");
+          const config = JSON.parse(raw);
+          const compilerOptions = config.compilerOptions || {};
+          const baseUrl = compilerOptions.baseUrl ? path.resolve(root, compilerOptions.baseUrl) : root;
+          const paths = compilerOptions.paths || {};
+
+          for (const [aliasPattern, targetList] of Object.entries(paths)) {
+            const cleanPattern = aliasPattern.replace(/\/\*$/, "");
+            aliases[cleanPattern] = (targetList as string[]).map((t) => {
+              const cleanTarget = t.replace(/\/\*$/, "").replace(/^\.\//, "");
+              return path.resolve(baseUrl, cleanTarget);
+            });
+          }
+        } catch {
+          // Ignore JSON parse errors in tsconfig
+        }
+      }
+    }
+
+    return aliases;
+  }
+
+  /**
+   * Extract imported relative and aliased file paths from a source file's content
    */
   private extractImportsFromFile(filePath: string, content: string, root: string): string[] {
     const dir = path.dirname(path.resolve(root, filePath));
     const importedPaths: string[] = [];
     const ext = path.extname(filePath).toLowerCase();
+    const aliases = this.loadTsConfigAliases(root);
 
-    // 1. JavaScript / TypeScript: import ... from './xyz' or require('./xyz')
+    // 1. JavaScript / TypeScript: import ... from './xyz' or import ... from '@/xyz'
     if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx" || ext === ".mjs") {
-      const jsImportRegex = /(?:import|export)\s+(?:[\s\S]*?from\s+)?['"](\.[^'"]+)['"]/g;
-      const requireRegex = /require\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g;
+      const jsImportRegex = /(?:import|export)\s+(?:[\s\S]*?from\s+)?['"]([^'"]+)['"]/g;
+      const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
       let match: RegExpExecArray | null;
+
+      const checkMatch = (importStr: string) => {
+        if (importStr.startsWith(".")) {
+          importedPaths.push(importStr);
+        } else {
+          // Check for path aliases (e.g. "@/lib/db" or "@core/models")
+          for (const [alias, targets] of Object.entries(aliases)) {
+            if (importStr === alias || importStr.startsWith(`${alias}/`)) {
+              const subPath = importStr.slice(alias.length).replace(/^\//, "");
+              for (const targetDir of targets) {
+                importedPaths.push(subPath ? path.join(targetDir, subPath) : targetDir);
+              }
+            }
+          }
+        }
+      };
+
       while ((match = jsImportRegex.exec(content)) !== null) {
-        if (match[1]) importedPaths.push(match[1]);
+        if (match[1]) checkMatch(match[1]);
       }
       while ((match = requireRegex.exec(content)) !== null) {
-        if (match[1]) importedPaths.push(match[1]);
+        if (match[1]) checkMatch(match[1]);
       }
     }
 
-    // 2. Python: from .xyz import ... or from ..xyz import ...
+    // 2. Python: from .xyz import ... or from app.services import ...
     if (ext === ".py") {
-      const pyImportRegex = /from\s+(\.[a-zA-Z0-9_.]*)\s+import/g;
+      const pyRelativeRegex = /from\s+(\.[a-zA-Z0-9_.]*)\s+import/g;
+      const pyAbsoluteRegex = /(?:from|import)\s+([a-zA-Z0-9_.]+)/g;
       let match: RegExpExecArray | null;
-      while ((match = pyImportRegex.exec(content)) !== null) {
+
+      while ((match = pyRelativeRegex.exec(content)) !== null) {
         if (match[1]) {
           const modPath = match[1].replace(/^\./, "").replace(/\./g, "/");
           importedPaths.push(modPath ? `./${modPath}` : "./__init__");
+        }
+      }
+      while ((match = pyAbsoluteRegex.exec(content)) !== null) {
+        if (match[1] && !match[1].startsWith(".")) {
+          const modPath = match[1].replace(/\./g, "/");
+          importedPaths.push(path.resolve(root, modPath));
+          importedPaths.push(path.resolve(root, "src", modPath));
         }
       }
     }
@@ -179,9 +239,16 @@ export class FixGenerator {
     // 3. Rust: mod xyz; or use crate::xyz;
     if (ext === ".rs") {
       const rustModRegex = /mod\s+([a-zA-Z0-9_]+)\s*;/g;
+      const rustUseRegex = /use\s+(?:crate|self)::([a-zA-Z0-9_:]+)/g;
       let match: RegExpExecArray | null;
       while ((match = rustModRegex.exec(content)) !== null) {
         if (match[1]) importedPaths.push(`./${match[1]}`);
+      }
+      while ((match = rustUseRegex.exec(content)) !== null) {
+        if (match[1]) {
+          const modPath = match[1].split("::")[0]!;
+          importedPaths.push(path.resolve(root, "src", modPath));
+        }
       }
     }
 
@@ -194,16 +261,19 @@ export class FixGenerator {
       }
     }
 
-    // Resolve relative candidates to actual workspace files
+    // Resolve relative and aliased candidates to actual workspace files
     const resolved: string[] = [];
     const extensionsToTry = [
       "", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".rs", ".go", ".c", ".cpp", ".h", ".hpp",
-      "/index.ts", "/index.js", "/mod.rs"
+      "/index.ts", "/index.js", "/index.tsx", "/__init__.py", "/mod.rs"
     ];
 
     for (const rel of importedPaths) {
       for (const trialExt of extensionsToTry) {
-        const candidateFull = path.resolve(dir, rel.replace(/\.js$/, "") + trialExt);
+        const candidateFull = path.isAbsolute(rel)
+          ? rel + trialExt
+          : path.resolve(dir, rel.replace(/\.js$/, "") + trialExt);
+
         if (fs.existsSync(candidateFull) && fs.statSync(candidateFull).isFile()) {
           const relToRoot = path.relative(root, candidateFull).replace(/\\/g, "/");
           if (!relToRoot.includes("node_modules") && !relToRoot.includes(".git/")) {

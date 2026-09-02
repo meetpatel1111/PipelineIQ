@@ -174,8 +174,9 @@ export function applyPatch(
     return restoreLineEndings(patched);
   }
 
-  // ── Strategy 5: Append fallback ───────────────────────────────────────────
-  console.warn(`[PipelineIQ] Snippet match failed${fileDesc}. Falling back to appending changes.`);
-  const patched = content + (content.endsWith("\n") ? "" : "\n") + replacement;
-  return restoreLineEndings(patched);
+  // ── If none of the 4 strategies match, snippet cannot be found safely ──────────
+  throw new Error(
+    `Patch application failed${fileDesc}: Target snippet could not be matched. The model may have hallucinated or modified the surrounding lines. ` +
+    `Snippet preview: "${snippet.slice(0, 100)}${snippet.length > 100 ? "..." : ""}"`
+  );
 }

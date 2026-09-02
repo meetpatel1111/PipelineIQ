@@ -10,6 +10,7 @@ import { GitHubProvider } from "./github-provider.js";
 import { AzureDevOpsProvider } from "./azure-provider.js";
 import { applyPatch } from "./patch.js";
 import { EcosystemManager } from "./ecosystem-registry.js";
+import { TestImpactAnalyzer } from "./test-impact.js";
 import { computeDedupSignature } from "../dedup.js";
 import { getWorkspaceRoot } from "./workspace.js";
 import { validateCommand, sanitizeFilePath } from "./command-allowlist.js";
@@ -229,11 +230,14 @@ export class SelfHealingEngine {
               }
               try {
                 // 5-minute timeout per command to protect against hung tests/builds
-                execSync(cmd, { cwd: root, stdio: "inherit", timeout: 300000 });
+                execSync(cmd, { cwd: root, stdio: "pipe", timeout: 300000, encoding: "utf-8" });
                 verifiedCommandStr = cmd;
-              } catch (cmdError) {
-                console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
-                throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
+              } catch (cmdError: any) {
+                const stdout = cmdError.stdout ? cmdError.stdout.toString("utf-8") : "";
+                const stderr = cmdError.stderr ? cmdError.stderr.toString("utf-8") : "";
+                const fullDiagnostic = [stderr, stdout].filter(Boolean).join("\n").trim();
+                console.warn(`[PipelineIQ] Verification command "${cmd}" failed:\n${fullDiagnostic || cmdError.message}`);
+                throw new Error(`Verification command "${cmd}" failed with compiler/test diagnostics:\n${fullDiagnostic || cmdError.message}`);
               }
             }
             console.log("[PipelineIQ] Verification commands completed successfully.");
@@ -720,6 +724,16 @@ export class SelfHealingEngine {
     if (fix?.verificationCommand) {
       console.log(`[PipelineIQ] Using AI-recommended verification command: "${fix.verificationCommand}"`);
       return [fix.verificationCommand];
+    }
+
+    // Predictive Test Selection (PTS): Target only the test files directly matching changed files
+    if (fix && fix.changes && fix.changes.length > 0) {
+      const changedFiles = fix.changes.map((c) => c.filePath);
+      const targetedCmd = TestImpactAnalyzer.resolveTargetedVerificationCommand(root, changedFiles);
+      if (targetedCmd) {
+        console.log(`[PipelineIQ] Resolved targeted test command (PTS): "${targetedCmd}"`);
+        return [targetedCmd];
+      }
     }
 
     if (event) {

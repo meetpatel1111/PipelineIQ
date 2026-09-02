@@ -272,9 +272,9 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
     expect(patchedIndentation).not.toContain("this.setup()");
  
     // 3. Snippet not found throws — prevents corrupt file writes
-    const patched = applyPatch(originalContent, "nonexistentSnippet", "newSnippet");
-    expect(patched).toContain("newSnippet");
-    expect(patched).toContain(originalContent);
+    expect(() => applyPatch(originalContent, "nonexistentSnippet", "newSnippet")).toThrow(
+      /Target snippet could not be matched/
+    );
   });
 
   it("extracts all types of file extensions correctly and ignores numeric versions/decimals", () => {
