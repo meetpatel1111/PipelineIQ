@@ -6,7 +6,7 @@ import type { AIEngineConfig, AIProviderInterface } from "../ai/types.js";
 import { OpenAIProvider, AnthropicProvider, AzureOpenAIProvider, LocalAIProvider } from "../ai/providers.js";
 import { GeminiProvider } from "../ai/gemini-provider.js";
 import { maskSecrets } from "../secret-mask.js";
-import { extractSmartExcerpt } from "../log-parser/smart-excerpt.js";
+import { buildSmartExcerpt } from "../log-parser/smart-excerpt.js";
 
 /**
  * AI-powered code fix generator.
@@ -342,7 +342,7 @@ CRITICAL INVARIANTS:
       : "";
 
     const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
-    const smartExcerpt = extractSmartExcerpt(event.failure.logs ?? "", event.source, 150).text;
+    const smartExcerpt = buildSmartExcerpt(event.failure.logs ?? "", event.source, 150).text;
     const cleanLogs = maskSecrets(smartExcerpt);
     const cleanWorkspace = maskSecrets(workspaceContext);
 
