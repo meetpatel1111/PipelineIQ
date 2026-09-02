@@ -245,21 +245,20 @@ export class SelfHealingEngine {
           // Non-retriable: missing checkout — no point retrying if workspace files don't exist
           const isRetriable = !errorMsg.includes("was not found in the local workspace");
 
-          if (!isRetriable || verifyAttempt >= 2) {
+          if (!isRetriable || verifyAttempt >= maxRetries) {
             return {
               attempted: true,
               success: false,
               fix,
-              reason: `Local verification/regeneration failed: ${errorMsg}`,
+              reason: `Local verification/regeneration failed after ${verifyAttempt} attempt(s): ${errorMsg}`,
               dryRun: this.config.dryRun,
             };
           }
 
-          // First attempt failed with a build error — save the error and let the
-          // loop regenerate the fix with feedback before trying again.
+          // Save the error and diff to let the loop regenerate the fix with feedback before trying again
           previousVerificationError = errorMsg;
           previousDiff = diffOutput.replace(/\u001b\[[0-9;]*[a-zA-Z]/g, "");
-          console.warn("[PipelineIQ] Verification attempt 1 failed — will retry with error context.");
+          console.warn(`[PipelineIQ] Verification attempt ${verifyAttempt} failed — running Agentic Self-Correction cycle ${verifyAttempt + 1}/${maxRetries} with compiler & test feedback.`);
         }
       }
     }

@@ -6,6 +6,7 @@ import type { AIEngineConfig, AIProviderInterface } from "../ai/types.js";
 import { OpenAIProvider, AnthropicProvider, AzureOpenAIProvider, LocalAIProvider } from "../ai/providers.js";
 import { GeminiProvider } from "../ai/gemini-provider.js";
 import { maskSecrets } from "../secret-mask.js";
+import { extractSmartExcerpt } from "../log-parser/smart-excerpt.js";
 
 /**
  * AI-powered code fix generator.
@@ -150,16 +151,92 @@ export class FixGenerator {
   }
 
   /**
-   * Read files from the local workspace to give the AI context.
+   * Extract imported relative file paths from a source file's content
+   */
+  private extractImportsFromFile(filePath: string, content: string, root: string): string[] {
+    const dir = path.dirname(path.resolve(root, filePath));
+    const importedPaths: string[] = [];
+    const ext = path.extname(filePath).toLowerCase();
+
+    // 1. JavaScript / TypeScript: import ... from './xyz' or require('./xyz')
+    if (ext === ".ts" || ext === ".tsx" || ext === ".js" || ext === ".jsx" || ext === ".mjs") {
+      const jsImportRegex = /(?:import|export)\s+(?:[\s\S]*?from\s+)?['"](\.[^'"]+)['"]/g;
+      const requireRegex = /require\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g;
+      let match: RegExpExecArray | null;
+      while ((match = jsImportRegex.exec(content)) !== null) {
+        if (match[1]) importedPaths.push(match[1]);
+      }
+      while ((match = requireRegex.exec(content)) !== null) {
+        if (match[1]) importedPaths.push(match[1]);
+      }
+    }
+
+    // 2. Python: from .xyz import ... or from ..xyz import ...
+    if (ext === ".py") {
+      const pyImportRegex = /from\s+(\.[a-zA-Z0-9_.]*)\s+import/g;
+      let match: RegExpExecArray | null;
+      while ((match = pyImportRegex.exec(content)) !== null) {
+        if (match[1]) {
+          const modPath = match[1].replace(/^\./, "").replace(/\./g, "/");
+          importedPaths.push(modPath ? `./${modPath}` : "./__init__");
+        }
+      }
+    }
+
+    // 3. Rust: mod xyz; or use crate::xyz;
+    if (ext === ".rs") {
+      const rustModRegex = /mod\s+([a-zA-Z0-9_]+)\s*;/g;
+      let match: RegExpExecArray | null;
+      while ((match = rustModRegex.exec(content)) !== null) {
+        if (match[1]) importedPaths.push(`./${match[1]}`);
+      }
+    }
+
+    // 4. C/C++: #include "xyz.h"
+    if (ext === ".c" || ext === ".cpp" || ext === ".cc" || ext === ".h" || ext === ".hpp") {
+      const cIncludeRegex = /#include\s+["']([^"']+)["']/g;
+      let match: RegExpExecArray | null;
+      while ((match = cIncludeRegex.exec(content)) !== null) {
+        if (match[1] && !match[1].startsWith("<")) importedPaths.push(`./${match[1]}`);
+      }
+    }
+
+    // Resolve relative candidates to actual workspace files
+    const resolved: string[] = [];
+    const extensionsToTry = [
+      "", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".rs", ".go", ".c", ".cpp", ".h", ".hpp",
+      "/index.ts", "/index.js", "/mod.rs"
+    ];
+
+    for (const rel of importedPaths) {
+      for (const trialExt of extensionsToTry) {
+        const candidateFull = path.resolve(dir, rel.replace(/\.js$/, "") + trialExt);
+        if (fs.existsSync(candidateFull) && fs.statSync(candidateFull).isFile()) {
+          const relToRoot = path.relative(root, candidateFull).replace(/\\/g, "/");
+          if (!relToRoot.includes("node_modules") && !relToRoot.includes(".git/")) {
+            resolved.push(relToRoot);
+            break;
+          }
+        }
+      }
+    }
+
+    return resolved;
+  }
+
+  /**
+   * Read files from the local workspace to give the AI context, traversing imports.
    */
   private getWorkspaceContext(event: FailureEvent, rootCause: string): string {
     const textToScan = `${event.failure.errorMessage ?? ""}\n${event.failure.logs ?? ""}\n${rootCause}`;
-    const paths = this.extractFilePaths(textToScan);
+    const initialPaths = this.extractFilePaths(textToScan);
     
-    if (paths.length === 0) return "";
+    if (initialPaths.length === 0) return "";
 
     const root = this.getWorkspaceRoot();
     const fileContents: string[] = [];
+    const processedPaths = new Set<string>();
+    const queue = [...initialPaths];
 
     // Helper: find file in workspace if only relative or filename was captured
     const findInWorkspace = (filename: string, dir: string = root, depth: number = 0): string | null => {
@@ -183,8 +260,11 @@ export class FixGenerator {
       return null;
     };
 
-    // Load up to 15 verified workspace files
-    for (const p of paths.slice(0, 15)) {
+    // Load up to 15 verified workspace files, traversing module dependencies
+    while (queue.length > 0 && processedPaths.size < 15) {
+      const p = queue.shift()!;
+      if (processedPaths.has(p)) continue;
+
       try {
         let fullPath = path.resolve(root, p);
         let finalRelPath = p;
@@ -199,10 +279,19 @@ export class FixGenerator {
         }
 
         if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+          processedPaths.add(finalRelPath);
           const content = fs.readFileSync(fullPath, "utf-8");
+          
+          // Traverse and discover imported dependencies for multi-file context
+          const importedDeps = this.extractImportsFromFile(finalRelPath, content, root);
+          for (const dep of importedDeps) {
+            if (!processedPaths.has(dep) && !queue.includes(dep)) {
+              queue.push(dep);
+            }
+          }
+
           // Truncate large files to prevent blowing up the context window
           const truncated = content.split('\n').slice(0, 1000).join('\n');
-          
           fileContents.push(`================================================================================\nFILE: ${finalRelPath}\n================================================================================\n${truncated}`);
         }
       } catch (e) {
@@ -253,7 +342,8 @@ CRITICAL INVARIANTS:
       : "";
 
     const cleanError = maskSecrets(event.failure.errorMessage ?? "No error message");
-    const cleanLogs = maskSecrets((event.failure.logs ?? "").split("\n").slice(-120).join("\n"));
+    const smartExcerpt = extractSmartExcerpt(event.failure.logs ?? "", event.source, 150).text;
+    const cleanLogs = maskSecrets(smartExcerpt);
     const cleanWorkspace = maskSecrets(workspaceContext);
 
     return `Generate a PRECISE, WORKING code fix for this pipeline failure.${retrySection}
