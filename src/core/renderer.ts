@@ -4,6 +4,26 @@ import { maskSecrets } from "./secret-mask.js";
 import { buildSmartExcerpt } from "./log-parser/smart-excerpt.js";
 
 /**
+ * Human-friendly exit code explanations
+ */
+export function getExitCodeDescription(code?: number): string | null {
+  if (code === undefined || code === null) return null;
+  switch (code) {
+    case 0: return "0 (Success)";
+    case 1: return "1 (General Command / Script Failure)";
+    case 2: return "2 (Misuse of shell builtins / Syntax Error)";
+    case 126: return "126 (Command cannot execute / Permission Denied)";
+    case 127: return "127 (Command Not Found in PATH)";
+    case 128: return "128 (Invalid exit argument)";
+    case 130: return "130 (Terminated by Ctrl+C / SIGINT)";
+    case 137: return "137 (Killed by OS - Out of Memory / SIGKILL)";
+    case 139: return "139 (Segmentation Fault / SIGSEGV)";
+    case 143: return "143 (Terminated by SIGTERM)";
+    default: return `${code}`;
+  }
+}
+
+/**
  * Build the markdown ticket description from the event + already-populated fields.
  * Called late in the pipeline, after all enrichers have run.
  */
@@ -39,6 +59,23 @@ export function renderDescription(
   }
   out.push(summary);
   out.push("");
+
+  // Incident Breakdown (Rich Structural Details Without AI)
+  const step = event.pipeline.step ?? event.failure.failedStep;
+  const exitDesc = getExitCodeDescription(event.failure.exitCode);
+  if (step || exitDesc || fields.category) {
+    out.push("### Incident Breakdown");
+    out.push(`- **Pipeline:** \`${event.pipeline.name}\``);
+    if (step) out.push(`- **Failing Step:** \`${step}\``);
+    if (event.pipeline.stage) out.push(`- **Failing Stage:** \`${event.pipeline.stage}\``);
+    if (exitDesc) out.push(`- **Exit Status:** \`${exitDesc}\``);
+    if (fields.category && fields.category !== "Unknown") out.push(`- **Classification:** \`${fields.category}\``);
+    if (event.failure.errorMessage) {
+      const firstLine = event.failure.errorMessage.trim().split("\n")[0]!;
+      out.push(`- **Key Diagnostic:** \`${firstLine.length > 100 ? firstLine.substring(0, 97) + "..." : firstLine}\``);
+    }
+    out.push("");
+  }
 
   if (rca) {
     out.push("### Root Cause");
@@ -103,7 +140,7 @@ export function renderDescription(
     {
       key: "pipeline",
       label: "Pipeline",
-      value: `[${event.pipeline.name}](${event.pipeline.url})`,
+      value: event.pipeline.url ? `[${event.pipeline.name}](${event.pipeline.url})` : event.pipeline.name,
     },
     {
       key: "runUrl",
@@ -113,20 +150,24 @@ export function renderDescription(
     {
       key: "repository",
       label: "Repository",
-      value: `[${event.repository.owner}/${event.repository.name}](${event.repository.url})`,
+      value: event.repository.url
+        ? `[${event.repository.owner}/${event.repository.name}](${event.repository.url})`
+        : `${event.repository.owner}/${event.repository.name}`,
     },
     {
       key: "pullRequest",
       label: "Pull Request",
       value: event.pullRequest
-        ? `[#${event.pullRequest.number} ${event.pullRequest.title}](${event.pullRequest.url})`
+        ? (event.pullRequest.url ? `[#${event.pullRequest.number} ${event.pullRequest.title}](${event.pullRequest.url})` : `#${event.pullRequest.number} ${event.pullRequest.title}`)
         : "",
     },
     { key: "branch", label: "Branch", value: event.branch },
     {
       key: "commit",
       label: "Commit",
-      value: `[\`${event.commit.sha.slice(0, 7)}\`](${event.commit.url})`,
+      value: event.commit.url
+        ? `[\`${event.commit.sha.slice(0, 7)}\`](${event.commit.url})`
+        : `\`${event.commit.sha.slice(0, 7)}\``,
     },
     {
       key: "commitMessage",
@@ -377,22 +418,24 @@ export function renderDescription(
   }
 
   // Links
-  out.push("### Links");
-  // Pipeline/Workflow URL
-  out.push(`- [Pipeline](${event.pipeline.url})`);
-  if (event.pipeline.runUrl) {
-    out.push(`- [Pipeline Run](${event.pipeline.runUrl})`);
+  const links: string[] = [];
+  if (event.pipeline.url) {
+    links.push(`- [Pipeline](${event.pipeline.url})`);
   }
-  // Repository URL
-  out.push(`- [Repository](${event.repository.url})`);
-  // Commit URL
-  out.push(`- [Commit](${event.commit.url})`);
-  // Pull Request URL (if available)
-  if ((event as any).pullRequest) {
-    out.push(`- [Pull Request #${(event as any).pullRequest.number}](${(event as any).pullRequest.url})`);
+  if (event.pipeline.runUrl) {
+    links.push(`- [Pipeline Run](${event.pipeline.runUrl})`);
+  }
+  if (event.repository.url) {
+    links.push(`- [Repository](${event.repository.url})`);
+  }
+  if (event.commit.url) {
+    links.push(`- [Commit](${event.commit.url})`);
+  }
+  if (event.pullRequest?.url) {
+    links.push(`- [Pull Request #${event.pullRequest.number}](${event.pullRequest.url})`);
   }
   // Additional external links from fields
-  const externalLinks = fields.externalLinks as any[] || [];
+  const externalLinks = (fields.externalLinks as any[]) || [];
   const renderedTitles = new Set(["Pipeline", "Pipeline Run", "Repository", "Commit"]);
   for (const link of externalLinks) {
     if (
@@ -403,9 +446,16 @@ export function renderDescription(
     ) {
       continue;
     }
-    out.push(`- [${link.title}](${link.url})`);
+    if (link.url) {
+      links.push(`- [${link.title}](${link.url})`);
+    }
   }
-  out.push("");
+
+  if (links.length > 0) {
+    out.push("### Links");
+    out.push(...links);
+    out.push("");
+  }
 
   // Provenance footer — small, builds trust about which stage produced what.
   if (fields.provenance && Object.keys(fields.provenance).length > 0) {

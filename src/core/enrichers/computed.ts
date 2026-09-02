@@ -60,6 +60,43 @@ export const computedEnricher: Enricher = {
       category = match?.category ?? categoryHint ?? "Unknown";
       setField(ctx, "category", category, match ? "computed" : "fallback");
 
+      // 1. Standardized Root Cause Analysis (RCA)
+      const rca = match?.cause ?? (failedCommands.length > 0
+        ? `Command '${failedCommands[0]}' failed${exitCodes.length > 0 ? ` (exit ${exitCodes[0]})` : ""}.${errorMessages.length > 0 ? ` ${errorMessages[0]}` : ""}`
+        : DeterministicFallbackEngine.generateRootCause(event, category));
+      setField(ctx, "rca", rca, match ? "computed" : "fallback", true);
+
+      // 2. Standardized Remediation Steps
+      const remediation = match?.remediation ?? (failedCommands.length > 0
+        ? [
+            "Verify command syntax, flags, and script arguments.",
+            "Check that required dependencies and CLI tools are installed in the CI runner environment.",
+            "Review step execution logs for specific error details.",
+          ]
+        : DeterministicFallbackEngine.generateRemediation(category, event));
+      setField(ctx, "remediationSteps", remediation, match ? "computed" : "fallback", true);
+
+      // 3. Standardized Title (Summary)
+      // Format: [Category] Pipeline '<pipeline>' failed at '<step>' with error "<conciseError>" (<branch>)
+      const step = event.pipeline.step ?? event.failure.failedStep ?? "step";
+      const exitInfo = event.failure.exitCode !== undefined ? ` (exit ${event.failure.exitCode})` : "";
+      const catPrefix = category && category !== "Unknown" ? `[${category}] ` : "";
+      const pipelineName = event.pipeline.name;
+      const branchOrPr = event.pullRequest ? `PR #${event.pullRequest.number}` : event.branch;
+      const conciseError = extractConciseError(event.failure.errorMessage, event.failure.logs);
+
+      let standardizedSummary: string;
+      if (conciseError) {
+        standardizedSummary = `${catPrefix}Pipeline '${pipelineName}' failed at '${step}' with error "${conciseError}" (${branchOrPr})`;
+      } else {
+        standardizedSummary = `${catPrefix}Pipeline '${pipelineName}' failed at '${step}' on ${branchOrPr}${exitInfo}`;
+      }
+
+      if (standardizedSummary.length > 250) {
+        standardizedSummary = standardizedSummary.substring(0, 247) + "...";
+      }
+      setField(ctx, "summary", standardizedSummary, "computed", true);
+
       if (match) {
         ctx.fields.customFields = {
           ...(ctx.fields.customFields ?? {}),
@@ -94,12 +131,12 @@ export const computedEnricher: Enricher = {
     // Repo-independent fingerprint — lets blast-radius counting span repositories.
     const failureFingerprint = computeFailureFingerprint(event, category);
 
-    // Append the signature + fingerprint labels so JQL can find duplicates and
-    // cross-repo occurrences.
+    // Append standard labels
     const labels = new Set(ctx.fields.labels ?? []);
     labels.add(`piq-sig:${signature}`);
     labels.add(`piq-fp:${failureFingerprint}`);
     if (category !== "Unknown") labels.add(`piq-cat:${category.toLowerCase()}`);
+    labels.add(aiEnabled ? "piq-mode:ai" : "piq-mode:deterministic");
     setField(ctx, "labels", Array.from(labels), "computed", true);
   },
 };
@@ -144,3 +181,29 @@ function severityToPriority(severity: Severity): Priority {
       return "Low";
   }
 }
+
+/**
+ * Extract a concise, single-line error message for the summary title
+ */
+function extractConciseError(errorMessage?: string, logs?: string): string | null {
+  if (errorMessage && errorMessage.trim().length > 0) {
+    const firstLine = errorMessage.trim().split("\n")[0]!;
+    const clean = firstLine.replace(/^(?:Error:\s*|npm ERR!\s*|fatal:\s*|Exception:\s*)/i, "").trim();
+    if (clean.length > 0) {
+      return clean.length > 70 ? clean.substring(0, 67) + "..." : clean;
+    }
+  }
+
+  if (logs) {
+    const errors = extractErrorMessages(logs);
+    if (errors.length > 0) {
+      const clean = errors[0]!.split("\n")[0]!.replace(/^(?:Error:\s*|npm ERR!\s*|fatal:\s*|Exception:\s*)/i, "").trim();
+      if (clean.length > 0) {
+        return clean.length > 70 ? clean.substring(0, 67) + "..." : clean;
+      }
+    }
+  }
+
+  return null;
+}
+
