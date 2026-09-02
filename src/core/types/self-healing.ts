@@ -102,6 +102,8 @@ export const SelfHealingConfigSchema = z.object({
   autoRegenerateLockfile: z.boolean().default(true),
   /** Maximum number of verification feedback retry cycles for agent self-correction (default: 3) */
   maxVerificationRetries: z.number().default(3).optional(),
+  /** Apply fix directly in-place to local files (CLI / IDE mode) instead of opening a remote PR */
+  applyInPlace: z.boolean().default(false).optional(),
 });
 export type SelfHealingConfig = z.infer<typeof SelfHealingConfigSchema>;
 
@@ -120,6 +122,10 @@ export const SelfHealingResultSchema = z.object({
   prNumber: z.number().optional(),
   /** Branch name used for the fix */
   branchName: z.string().optional(),
+  /** Command that was executed to verify the fix locally */
+  verifiedCommand: z.string().optional(),
+  /** Whether the fix was applied directly to local workspace files */
+  appliedInPlace: z.boolean().default(false).optional(),
   /** Reason if self-healing was skipped or failed */
   reason: z.string().optional(),
   /** Whether this was a dry run */

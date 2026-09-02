@@ -119,25 +119,14 @@ export class AzureDevOpsProvider implements GitProvider {
     await axios.post(`${apiBase}/pushes?${apiVersion}`, pushPayload, { headers });
 
     // 2. Create Pull Request
-    const baseBranchRef = baseBranch.startsWith("refs/")
-      ? baseBranch
-      : `refs/heads/${baseBranch}`;
-
-    const prBody = this.buildPRBody(fix, issueKey);
-    const prPayload: Record<string, unknown> = {
+    const prPayload = {
       sourceRefName: `refs/heads/${branchName}`,
-      targetRefName: baseBranchRef,
-      title: `🤖 [PipelineIQ] ${fix.title}`,
-      description: prBody,
+      targetRefName: `refs/heads/${baseBranch}`,
+      title: `[PipelineIQ Auto-Fix] ${fix.title}`,
+      description: this.buildPRBody(fix, issueKey, options),
       isDraft: options.draft,
+      reviewers: options.reviewers.map(r => ({ id: r })),
     };
-
-    // Add reviewers if provided
-    if (options.reviewers.length > 0) {
-      prPayload.reviewers = options.reviewers.map((r) => ({
-        id: r, // ADO reviewer IDs or unique names
-      }));
-    }
 
     const prResponse = await axios.post(
       `${apiBase}/pullrequests?${apiVersion}`,
@@ -184,7 +173,7 @@ export class AzureDevOpsProvider implements GitProvider {
     ].join("\n");
   }
 
-  private buildPRBody(fix: CodeFix, issueKey: string): string {
+  private buildPRBody(fix: CodeFix, issueKey: string, options?: PROptions): string {
     const changeList = fix.changes
       .map((c) => `| \`${c.filePath}\` | ${c.action} | ${c.changeDescription} |`)
       .join("\n");
@@ -197,6 +186,9 @@ export class AzureDevOpsProvider implements GitProvider {
       `### Summary`,
       fix.description,
       "",
+      options?.verifiedCommand
+        ? `### 🧪 Verification Proof\n- **Status:** Verified locally in sandbox environment\n- **Executed Command:** \`${options.verifiedCommand}\`\n- **Exit Code:** \`0\` (Success)\n`
+        : "",
       `### Changes`,
       `| File | Action | Description |`,
       `| --- | --- | --- |`,

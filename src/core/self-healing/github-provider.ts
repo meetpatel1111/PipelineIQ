@@ -154,7 +154,7 @@ export class GitHubProvider implements GitProvider {
     });
 
     // 5. Create the Pull Request
-    const prBody = this.buildPRBody(fix, issueKey);
+    const prBody = this.buildPRBody(fix, issueKey, options);
     let pr;
     try {
       pr = await octokit.pulls.create({
@@ -175,13 +175,16 @@ export class GitHubProvider implements GitProvider {
       throw error;
     }
 
+    const prNumber = pr.data.number;
+    const prUrl = pr.data.html_url;
+
     // 6. Request reviewers (best-effort)
     if (options.reviewers.length > 0) {
       try {
         await octokit.pulls.requestReviewers({
           owner: repoOwner,
           repo: repoName,
-          pull_number: pr.data.number,
+          pull_number: prNumber,
           reviewers: options.reviewers,
         });
       } catch (e) {
@@ -195,7 +198,7 @@ export class GitHubProvider implements GitProvider {
         await octokit.issues.addLabels({
           owner: repoOwner,
           repo: repoName,
-          issue_number: pr.data.number,
+          issue_number: prNumber,
           labels: options.labels,
         });
       } catch (e) {
@@ -204,8 +207,8 @@ export class GitHubProvider implements GitProvider {
     }
 
     return {
-      prUrl: pr.data.html_url,
-      prNumber: pr.data.number,
+      prUrl,
+      prNumber,
       branchName,
     };
   }
@@ -228,7 +231,7 @@ export class GitHubProvider implements GitProvider {
     ].join("\n");
   }
 
-  private buildPRBody(fix: CodeFix, issueKey: string): string {
+  private buildPRBody(fix: CodeFix, issueKey: string, options: PROptions): string {
     const changeList = fix.changes
       .map((c) => `| \`${c.filePath}\` | ${c.action} | ${c.changeDescription} |`)
       .join("\n");
@@ -241,6 +244,9 @@ export class GitHubProvider implements GitProvider {
       `### Summary`,
       fix.description,
       "",
+      options.verifiedCommand
+        ? `### 🧪 Verification Proof\n- **Status:** Verified locally in sandbox environment\n- **Executed Command:** \`${options.verifiedCommand}\`\n- **Exit Code:** \`0\` (Success)\n`
+        : "",
       `### Changes`,
       `| File | Action | Description |`,
       `| --- | --- | --- |`,

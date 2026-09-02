@@ -53,4 +53,6 @@ export type PROptions = {
   labels: string[];
   /** Branch name to use for the fix */
   branchName: string;
+  /** Executed verification command that proved the fix works */
+  verifiedCommand?: string | undefined;
 };

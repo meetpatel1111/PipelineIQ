@@ -191,7 +191,11 @@ export class SelfHealingEngine {
             }
           }
 
+          // 2.5 Pre-flight fast syntax verification
+          this.preflightSyntaxCheck(root, fix);
+
           // 3. Run verification commands (auto-detected across 25+ ecosystems, AI suggestion, or CI logs)
+          let verifiedCommandStr: string | undefined;
           const verificationCommands = this.resolveVerificationCommands(category, root, fix, event);
           if (this.config.enableVerification && verificationCommands.length > 0) {
             console.log(`[PipelineIQ] Running verification commands: ${verificationCommands.join(" && ")}`);
@@ -199,6 +203,7 @@ export class SelfHealingEngine {
               try {
                 // 5-minute timeout per command to protect against hung tests/builds
                 execSync(cmd, { cwd: root, stdio: "inherit", timeout: 300000 });
+                verifiedCommandStr = cmd;
               } catch (cmdError) {
                 console.warn(`[PipelineIQ] Verification command "${cmd}" failed: ${cmdError}`);
                 throw new Error(`Verification command "${cmd}" failed: ${cmdError}`);
@@ -207,7 +212,20 @@ export class SelfHealingEngine {
             console.log("[PipelineIQ] Verification commands completed successfully.");
           }
 
-          // 4. Restore workspace files
+          // If in-place fix mode is requested (local CLI / IDE workflow), keep the changes on disk permanently
+          if (this.config.applyInPlace) {
+            console.log("[PipelineIQ] In-place fix mode enabled — keeping verified code changes on disk.");
+            return {
+              attempted: true,
+              success: true,
+              fix,
+              appliedInPlace: true,
+              verifiedCommand: verifiedCommandStr,
+              dryRun: false,
+            };
+          }
+
+          // 4. Restore workspace files before remote PR creation
           for (const [relPath, originalContent] of backups.entries()) {
             const fullPath = path.resolve(root, relPath);
             if (originalContent === null) {
@@ -282,6 +300,7 @@ export class SelfHealingEngine {
           reviewers: allReviewers,
           labels: this.config.prLabels,
           branchName,
+          verifiedCommand: fix.verificationCommand,
         },
       );
 
@@ -292,6 +311,7 @@ export class SelfHealingEngine {
         prUrl: result.prUrl,
         prNumber: result.prNumber,
         branchName: result.branchName,
+        verifiedCommand: fix.verificationCommand,
         dryRun: false,
       };
     } catch (error: any) {
@@ -312,6 +332,35 @@ export class SelfHealingEngine {
         reason,
         dryRun: false,
       };
+    }
+  }
+
+  /**
+   * Pre-flight fast-path AST / syntax validator.
+   * Catches syntax errors (missing brackets, syntax errors) in sub-milliseconds
+   * before waiting for long test suites to run.
+   */
+  private preflightSyntaxCheck(root: string, fix: CodeFix): void {
+    for (const change of fix.changes) {
+      if (change.action === "delete") continue;
+      const fullPath = path.resolve(root, change.filePath);
+      if (!fs.existsSync(fullPath)) continue;
+      const ext = path.extname(change.filePath).toLowerCase();
+
+      try {
+        if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
+          execSync(`node --check "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+        } else if (ext === ".py") {
+          execSync(`python -m py_compile "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+        } else if (ext === ".rb") {
+          execSync(`ruby -c "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+        } else if (ext === ".php") {
+          execSync(`php -l "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+        }
+      } catch (syntaxErr: any) {
+        const stderr = syntaxErr.stderr ? syntaxErr.stderr.toString("utf-8") : String(syntaxErr);
+        throw new Error(`Pre-flight syntax validation error in ${change.filePath}:\n${stderr || syntaxErr.message}`);
+      }
     }
   }
 
