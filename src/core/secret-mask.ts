@@ -13,8 +13,8 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/\bsk-ant-api[A-Za-z0-9_\-]{80,}\b/g, "[REDACTED_ANTHROPIC_KEY]"],
   [/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED_OPENAI_KEY]"],
   [/\bhf_[A-Za-z0-9]{34}\b/g, "[REDACTED_HUGGINGFACE_TOKEN]"],
-  // Azure
-  [/\b[a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12}\b/gi, "[REDACTED_UUID]"], // UUIDs/GUIDs often sensitive
+  // Azure & Sensitive GUIDs (only in sensitive context)
+  [/(password|passwd|pwd|secret|api[_-]?key|token|auth|bearer)\s*[:=]\s*([a-z0-9]{8}-(?:[a-z0-9]{4}-){3}[a-z0-9]{12})\b/gi, "$1=[REDACTED_UUID]"],
   [/SharedAccessKey=[A-Za-z0-9+/=]{30,}/g, "SharedAccessKey=[REDACTED]"],
   // GCP / Google AI
   [/\bAIza[0-9A-Za-z\\-_]{35}\b/g, "[REDACTED_GCP_API_KEY]"],

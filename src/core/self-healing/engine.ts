@@ -11,6 +11,8 @@ import { AzureDevOpsProvider } from "./azure-provider.js";
 import { applyPatch } from "./patch.js";
 import { EcosystemManager } from "./ecosystem-registry.js";
 import { computeDedupSignature } from "../dedup.js";
+import { getWorkspaceRoot } from "./workspace.js";
+import { validateCommand, sanitizeFilePath } from "./command-allowlist.js";
 
 /**
  * SelfHealingEngine — the orchestrator for autonomous remediation.
@@ -136,17 +138,15 @@ export class SelfHealingEngine {
 
     // ── Stage 3.5: Local Verification and Lockfile Regeneration ──────────────
     if (this.config.enableVerification || (this.config.autoRegenerateLockfile && this.isLockfileDesync(event))) {
-      const root = this.getWorkspaceRoot();
+      const root = getWorkspaceRoot();
       let previousVerificationError: string | undefined;
       let previousDiff: string | undefined;
 
       const maxRetries = Math.max(1, this.config.maxVerificationRetries ?? 3);
 
       for (let verifyAttempt = 1; verifyAttempt <= maxRetries; verifyAttempt++) {
-        // On retry: regenerate the fix with the previous error as context so the
-        // AI can self-correct (e.g. syntax, imports, tests it broke in the previous attempt).
+        // On retry turns, regenerate fix with compiler error & diff feedback
         if (verifyAttempt > 1 && previousVerificationError) {
-          console.log(`[PipelineIQ] Verification attempt ${verifyAttempt - 1} failed — running Agentic Self-Correction cycle ${verifyAttempt}/${maxRetries} with compiler & test feedback...`);
           try {
             const retryFix = await this.fixGenerator.generateFix(
               event, rootCause, remediation, category,
@@ -179,11 +179,12 @@ export class SelfHealingEngine {
           // 2. Backup and apply code fixes
           for (const change of fix.changes) {
             if (this.isLockfileName(change.filePath)) continue;
-            const fullPath = path.resolve(root, change.filePath);
+            const sanitizedRelPath = sanitizeFilePath(change.filePath);
+            const fullPath = path.resolve(root, sanitizedRelPath);
             if (fs.existsSync(fullPath)) {
-              backups.set(change.filePath, fs.readFileSync(fullPath, "utf-8"));
+              backups.set(sanitizedRelPath, fs.readFileSync(fullPath, "utf-8"));
             } else {
-              backups.set(change.filePath, null);
+              backups.set(sanitizedRelPath, null);
             }
 
             if (change.action === "delete") {
@@ -191,10 +192,10 @@ export class SelfHealingEngine {
                 fs.unlinkSync(fullPath);
               }
             } else if (change.action === "modify" && change.originalContent) {
-              const diskContent = backups.get(change.filePath);
+              const diskContent = backups.get(sanitizedRelPath);
               if (diskContent === null || diskContent === undefined) {
                 throw new Error(
-                  `File "${change.filePath}" was not found in the local workspace (${root}). ` +
+                  `File "${sanitizedRelPath}" was not found in the local workspace (${root}). ` +
                   `Add an "actions/checkout" step before "pipelineiq analyze" in your workflow ` +
                   `so that self-healing verification can read and patch source files.`,
                 );
@@ -202,9 +203,9 @@ export class SelfHealingEngine {
               const originalContent: string = diskContent;
               let patched: string;
               try {
-                patched = applyPatch(originalContent, change.originalContent ?? "", change.newContent ?? "", change.filePath, change.action as "modify" | "create" | "delete");
+                patched = applyPatch(originalContent, change.originalContent ?? "", change.newContent ?? "", sanitizedRelPath, change.action as "modify" | "create" | "delete");
               } catch (patchError) {
-                throw new Error(`AI-generated fix references code not found in ${change.filePath} — the snippet may be hallucinated. ${patchError}`);
+                throw new Error(`AI-generated fix references code not found in ${sanitizedRelPath} — the snippet may be hallucinated. ${patchError}`);
               }
               fs.mkdirSync(path.dirname(fullPath), { recursive: true });
               fs.writeFileSync(fullPath, patched, "utf-8");
@@ -223,6 +224,9 @@ export class SelfHealingEngine {
           if (this.config.enableVerification && verificationCommands.length > 0) {
             console.log(`[PipelineIQ] Running verification commands: ${verificationCommands.join(" && ")}`);
             for (const cmd of verificationCommands) {
+              if (!validateCommand(cmd)) {
+                throw new Error(`[PipelineIQ Security] Verification command rejected by security policy: "${cmd}"`);
+              }
               try {
                 // 5-minute timeout per command to protect against hung tests/builds
                 execSync(cmd, { cwd: root, stdio: "inherit", timeout: 300000 });
@@ -403,23 +407,29 @@ export class SelfHealingEngine {
   private preflightSyntaxCheck(root: string, fix: CodeFix): void {
     for (const change of fix.changes) {
       if (change.action === "delete") continue;
-      const fullPath = path.resolve(root, change.filePath);
+      const sanitizedRelPath = sanitizeFilePath(change.filePath);
+      const fullPath = path.resolve(root, sanitizedRelPath);
       if (!fs.existsSync(fullPath)) continue;
-      const ext = path.extname(change.filePath).toLowerCase();
+      const ext = path.extname(sanitizedRelPath).toLowerCase();
 
       try {
+        let checkCmd: string | null = null;
         if (ext === ".js" || ext === ".mjs" || ext === ".cjs") {
-          execSync(`node --check "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+          checkCmd = `node --check "${fullPath}"`;
         } else if (ext === ".py") {
-          execSync(`python -m py_compile "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+          checkCmd = `python -m py_compile "${fullPath}"`;
         } else if (ext === ".rb") {
-          execSync(`ruby -c "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+          checkCmd = `ruby -c "${fullPath}"`;
         } else if (ext === ".php") {
-          execSync(`php -l "${fullPath}"`, { cwd: root, stdio: "pipe", timeout: 10000 });
+          checkCmd = `php -l "${fullPath}"`;
+        }
+
+        if (checkCmd) {
+          execSync(checkCmd, { cwd: root, stdio: "pipe", timeout: 10000 });
         }
       } catch (syntaxErr: any) {
         const stderr = syntaxErr.stderr ? syntaxErr.stderr.toString("utf-8") : String(syntaxErr);
-        throw new Error(`Pre-flight syntax validation error in ${change.filePath}:\n${stderr || syntaxErr.message}`);
+        throw new Error(`Pre-flight syntax validation error in ${sanitizedRelPath}:\n${stderr || syntaxErr.message}`);
       }
     }
   }
@@ -524,14 +534,6 @@ export class SelfHealingEngine {
     return `${this.config.branchPrefix}/${issueKey.toLowerCase()}-${slug}`;
   }
 
-  private getWorkspaceRoot(): string {
-    return (
-      process.env.GITHUB_WORKSPACE ||
-      process.env.SYSTEM_DEFAULTWORKINGDIRECTORY ||
-      process.cwd()
-    );
-  }
-
   private isLockfileName(filePath: string): boolean {
     const name = path.basename(filePath).toLowerCase();
     return [
@@ -573,6 +575,10 @@ export class SelfHealingEngine {
     const commandsToRun = EcosystemManager.resolveLockfileCommands(root, fix);
 
     for (const cmd of commandsToRun) {
+      if (!validateCommand(cmd)) {
+        console.warn(`[PipelineIQ Security] Skipped unapproved lockfile command: "${cmd}"`);
+        continue;
+      }
       console.log(`[PipelineIQ] Synchronizing dependencies/lockfiles via '${cmd}'...`);
       try {
         execSync(cmd, { cwd: root, stdio: "inherit", timeout: 180000 });
@@ -622,12 +628,16 @@ export class SelfHealingEngine {
   private async ensureWorkspaceDependencies(root: string, fix: CodeFix, event: FailureEvent): Promise<void> {
     // 1. Dynamic AI-recommended packageSyncCommand
     if (fix.packageSyncCommand) {
-      console.log(`[PipelineIQ] Running AI-specified dependency sync: "${fix.packageSyncCommand}"`);
-      try {
-        execSync(fix.packageSyncCommand, { cwd: root, stdio: "inherit", timeout: 180000 });
-        return;
-      } catch (err) {
-        console.warn(`[PipelineIQ] AI packageSyncCommand warning: ${err}. Falling back to CI replay & ecosystem discovery.`);
+      if (!validateCommand(fix.packageSyncCommand)) {
+        console.warn(`[PipelineIQ Security] Blocked unapproved packageSyncCommand: "${fix.packageSyncCommand}"`);
+      } else {
+        console.log(`[PipelineIQ] Running AI-specified dependency sync: "${fix.packageSyncCommand}"`);
+        try {
+          execSync(fix.packageSyncCommand, { cwd: root, stdio: "inherit", timeout: 180000 });
+          return;
+        } catch (err) {
+          console.warn(`[PipelineIQ] AI packageSyncCommand warning: ${err}. Falling back to CI replay & ecosystem discovery.`);
+        }
       }
     }
 
@@ -636,6 +646,10 @@ export class SelfHealingEngine {
     if (ciInstallCmds.length > 0) {
       console.log(`[PipelineIQ] Replaying CI pipeline setup commands: ${ciInstallCmds.join(" && ")}`);
       for (const cmd of ciInstallCmds) {
+        if (!validateCommand(cmd)) {
+          console.warn(`[PipelineIQ Security] Skipped unapproved CI setup command: "${cmd}"`);
+          continue;
+        }
         try {
           execSync(cmd, { cwd: root, stdio: "inherit", timeout: 180000 });
         } catch (err) {
@@ -648,6 +662,10 @@ export class SelfHealingEngine {
     // 3. Data-driven Universal Ecosystem Registry Resolution
     const commands = EcosystemManager.resolveInstallCommands(root, fix);
     for (const cmd of commands) {
+      if (!validateCommand(cmd)) {
+        console.warn(`[PipelineIQ Security] Skipped unapproved ecosystem install command: "${cmd}"`);
+        continue;
+      }
       console.log(`[PipelineIQ] Auto-provisioning workspace dependencies via: '${cmd}'`);
       try {
         execSync(cmd, { cwd: root, stdio: "inherit", timeout: 120000 });
@@ -922,19 +940,21 @@ export class SelfHealingEngine {
 // ── Utility ──────────────────────────────────────────────────────────────────
 
 /**
- * Simple glob matcher for blocked path patterns.
- * Supports * (any chars) and ? (single char).
+ * Robust glob matcher for blocked path patterns.
+ * Supports * (single level), ** (recursive), and ? (single char).
  */
-function matchGlob(filePath: string, pattern: string): boolean {
+export function matchGlob(filePath: string, pattern: string): boolean {
   const normalizedPath = filePath.replace(/\\/g, "/").toLowerCase();
   const normalizedPattern = pattern.replace(/\\/g, "/").toLowerCase();
 
-  // Convert glob pattern to regex
+  // Convert glob pattern (* -> [^/]*, ** -> .*, ? -> [^/])
   const regexStr = normalizedPattern
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*/g, ".*")
-    .replace(/\?/g, ".");
+    .replace(/\*\*/g, "___GLOBSTAR___")
+    .replace(/\*/g, "[^/]*")
+    .replace(/___GLOBSTAR___/g, ".*")
+    .replace(/\?/g, "[^/]");
 
-  return new RegExp(`^${regexStr}$`).test(normalizedPath) ||
-    new RegExp(`(^|/)${regexStr}($|/)`).test(normalizedPath);
+  const regex = new RegExp(`^(?:.*/)?${regexStr}$`);
+  return regex.test(normalizedPath);
 }

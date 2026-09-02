@@ -231,6 +231,7 @@ export async function processFailureEvent(
           enableThinking: config.ai.enableThinking ?? false,
           thinkingBudget: config.ai.thinkingBudget ?? 8000,
         },
+        jira as any,
       );
 
       const rootCause = (ctx.fields.rca as string) ?? "";
@@ -252,18 +253,6 @@ export async function processFailureEvent(
         logger.info(
           { issueKey: created.key, prUrl: selfHealingResult.prUrl },
           "self-healing PR created",
-        );
-        // Add a comment on the Jira ticket linking to the PR
-        await jira.addComment(
-          created.key,
-          `🤖 **Self-Healing Fix Available**\n\n` +
-            `PipelineIQ has generated an automated fix and opened a Pull Request for review:\n\n` +
-            `🔗 [${selfHealingResult.prUrl}](${selfHealingResult.prUrl})\n\n` +
-            `| Field | Value |\n| --- | --- |\n` +
-            `| Confidence | ${Math.round((selfHealingResult.fix?.confidence ?? 0) * 100)}% |\n` +
-            `| Risk | ${selfHealingResult.fix?.riskLevel ?? "unknown"} |\n` +
-            `| Files Changed | ${selfHealingResult.fix?.changes.length ?? 0} |\n\n` +
-            `> ⚠️ This fix requires human review and approval before merging.`,
         );
       } else if (selfHealingResult.attempted) {
         logger.info(

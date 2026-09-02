@@ -5,6 +5,25 @@ import type { JiraAuth, JiraTicketSpec } from "../types/index.js";
 import { markdownToAdf } from "./adf.js";
 import { JiraApiError } from "./errors.js";
 
+/**
+ * Escape characters for safe embedding inside JQL quoted strings.
+ * Jira requires escaping \ and " inside quoted string literals.
+ */
+export function escapeJql(value: string): string {
+  if (!value || typeof value !== "string") return "";
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+/**
+ * Validate that a Jira project key conforms to standard Jira key syntax (e.g. "PROJ", "CORE_1").
+ */
+export function sanitizeProjectKey(key: string): string {
+  if (!key || typeof key !== "string" || !/^[A-Z][A-Z0-9_]{0,30}$/i.test(key.trim())) {
+    throw new Error(`[PipelineIQ Security] Invalid Jira project key: "${key}"`);
+  }
+  return key.trim().toUpperCase();
+}
+
 export type CreateIssueResult = {
   id: string;
   key: string;
@@ -153,8 +172,11 @@ class JiraCloudClient implements JiraClient {
   }
 
   async findBySignature(projectKey: string, signature: string, windowHours: number): Promise<FoundIssue | null> {
-    const label = `piq-sig:${signature}`;
-    const jql = `project = "${projectKey}" AND labels = "${label}" AND created >= -${windowHours}h ORDER BY created DESC`;
+    const safeProject = sanitizeProjectKey(projectKey);
+    const safeSignature = escapeJql(signature);
+    const label = `piq-sig:${safeSignature}`;
+    const safeHours = Math.max(1, Math.min(8760, Number(windowHours) || 24));
+    const jql = `project = "${safeProject}" AND labels = "${label}" AND created >= -${safeHours}h ORDER BY created DESC`;
 
     try {
       // Atlassian deprecated /rest/api/3/search in favor of /rest/api/3/search/jql
@@ -230,12 +252,16 @@ class JiraCloudClient implements JiraClient {
     const allItems: T[] = [];
     let startAt = 0;
     let isLast = false;
+    let pageCount = 0;
+    const maxPages = 100;
 
-    while (!isLast) {
+    while (!isLast && pageCount < maxPages) {
       const page = await fetcher(startAt);
       allItems.push(...page.values);
       isLast = page.isLast;
       startAt += page.values.length;
+      pageCount++;
+      if (page.values.length === 0) break;
     }
 
     return allItems;
@@ -499,8 +525,11 @@ class JiraServerClient implements JiraClient {
   }
 
   async findBySignature(projectKey: string, signature: string, windowHours: number): Promise<FoundIssue | null> {
-    const label = `piq-sig:${signature}`;
-    const jql = `project = "${projectKey}" AND labels = "${label}" AND created >= -${windowHours}h ORDER BY created DESC`;
+    const safeProject = sanitizeProjectKey(projectKey);
+    const safeSignature = escapeJql(signature);
+    const label = `piq-sig:${safeSignature}`;
+    const safeHours = Math.max(1, Math.min(8760, Number(windowHours) || 24));
+    const jql = `project = "${safeProject}" AND labels = "${label}" AND created >= -${safeHours}h ORDER BY created DESC`;
 
     try {
       const result = await this.client.searchJira(jql, {
@@ -559,12 +588,16 @@ class JiraServerClient implements JiraClient {
     const allItems: T[] = [];
     let startAt = 0;
     let isLast = false;
+    let pageCount = 0;
+    const maxPages = 100;
 
-    while (!isLast) {
+    while (!isLast && pageCount < maxPages) {
       const page = await fetcher(startAt);
       allItems.push(...page.values);
       isLast = page.isLast;
       startAt += page.values.length;
+      pageCount++;
+      if (page.values.length === 0) break;
     }
 
     return allItems;
