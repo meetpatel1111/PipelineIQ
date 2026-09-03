@@ -653,6 +653,10 @@ export function applyCIPreset(rawOptions: any = {}): any {
     options.jobName ??= process.env.AGENT_JOBNAME;
     options.environment ??= process.env.ENVIRONMENT_NAME || process.env.BUILD_SOURCEBRANCHNAME || "production";
     options.apiUrl ??= process.env.SYSTEM_COLLECTIONURI;
+    options.project ??= process.env.SYSTEM_TEAMPROJECT;
+    options.runUrl ??= (process.env.SYSTEM_COLLECTIONURI && process.env.SYSTEM_TEAMPROJECT && process.env.BUILD_BUILDID)
+      ? `${process.env.SYSTEM_COLLECTIONURI.replace(/\/$/, "")}/${process.env.SYSTEM_TEAMPROJECT}/_build/results?buildId=${process.env.BUILD_BUILDID}`
+      : undefined;
   }
 
   return options;

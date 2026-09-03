@@ -61,6 +61,9 @@ describe("applyCIPreset (CI Platform Auto-Detection & Presets)", () => {
     process.env.BUILD_SOURCEVERSION = "abcdef123456";
     process.env.BUILD_SOURCEBRANCHNAME = "staging";
     process.env.SYSTEM_ACCESSTOKEN = "azure_secret_pat";
+    process.env.SYSTEM_TEAMPROJECT = "CoreBanking";
+    process.env.SYSTEM_COLLECTIONURI = "https://dev.azure.com/acme/";
+    process.env.BUILD_BUILDID = "5544";
 
     const options = applyCIPreset({ preset: "azure-devops" });
 
@@ -71,6 +74,9 @@ describe("applyCIPreset (CI Platform Auto-Detection & Presets)", () => {
     expect(options.commit).toBe("abcdef123456");
     expect(options.branch).toBe("staging");
     expect(options.azureToken).toBe("azure_secret_pat");
+    expect(options.project).toBe("CoreBanking");
+    expect(options.apiUrl).toBe("https://dev.azure.com/acme/");
+    expect(options.runUrl).toBe("https://dev.azure.com/acme/CoreBanking/_build/results?buildId=5544");
   });
 
   it("falls back to standard environment variables for Jira and AI", () => {
