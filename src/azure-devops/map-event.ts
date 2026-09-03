@@ -1,4 +1,5 @@
 import type { FailureEvent } from "../core/index.js";
+import { buildSmartExcerpt } from "../core/index.js";
 import * as tl from "azure-pipelines-task-lib/task";
 import * as azdev from "azure-devops-node-api";
 
@@ -155,27 +156,32 @@ export async function mapAzureDevOpsContext(
   const build = await buildApi.getBuild(teamProject, buildId);
   const timeline = await buildApi.getBuildTimeline(teamProject, buildId);
 
-  const failedRecord = timeline?.records?.find(
+  const failedTasks = timeline?.records?.filter(
     (r) => r.result === 2 /* TaskResult.Failed */ && r.type === "Task",
-  );
+  ) || [];
+  const primaryFailedTask = failedTasks[0];
+  const taskName = failedTasks.length > 1 ? failedTasks.map((t) => t.name).filter(Boolean).join(", ") : primaryFailedTask?.name;
   const failedJob = timeline?.records?.find(
     (r) => r.type === "Job" && r.result === 2,
   );
 
   let logs = "";
   let logsTruncated = false;
-  if (failedRecord?.log?.id) {
+  if (primaryFailedTask?.log?.id) {
     try {
       const lines = await buildApi.getBuildLogLines(
         teamProject,
         buildId,
-        failedRecord.log.id,
+        primaryFailedTask.log.id,
       );
-      if (lines.length > 500) {
-        logs = lines.slice(-500).join("\n");
+      const fullText = lines.join("\n");
+      if (lines.length > 300) {
+        // Use smart excerpt to ensure the failing step's output is preserved and not pushed out by cleanup lines
+        const smart = buildSmartExcerpt(fullText, "azure-devops", 300);
+        logs = smart.text || lines.slice(-300).join("\n");
         logsTruncated = true;
       } else {
-        logs = lines.join("\n");
+        logs = fullText;
       }
     } catch {
       logs = "(failed to fetch task logs — check System.AccessToken permissions)";
@@ -211,7 +217,7 @@ export async function mapAzureDevOpsContext(
       runId: String(buildId),
       runNumber: Number.parseInt(buildNumber, 10) || 0,
       ...(failedJob?.name ? { stage: failedJob.name } : {}),
-      ...(failedRecord?.name ? { task: failedRecord.name, step: failedRecord.name } : {}),
+      ...(taskName ? { task: taskName, step: taskName } : {}),
       ...(failedJob?.workerName ? { runnerType: failedJob.workerName } : {}),
       ...(agentOs ? { runnerOs: agentOs } : {}),
       ...(agentOsArch ? { runnerArch: agentOsArch } : {}),
@@ -343,9 +349,9 @@ export async function mapAzureDevOpsContext(
     metadata: {},
     explicitFields: [],
     failure: {
-      ...(failedRecord?.name ? { failedStep: failedRecord.name } : {}),
-      ...(failedRecord?.errorCount !== undefined
-        ? { errorMessage: `Task '${failedRecord.name}' reported ${failedRecord.errorCount} error(s).` }
+      ...(taskName ? { failedStep: taskName } : {}),
+      ...(primaryFailedTask?.errorCount !== undefined
+        ? { errorMessage: `Task '${taskName}' reported ${primaryFailedTask.errorCount} error(s).` }
         : {}),
       logs,
       logsTruncated,
