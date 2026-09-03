@@ -36,6 +36,7 @@ program
   .description("Analyze failure logs and create Jira tickets")
   .argument("[extraArgs...]", "Optional extra trailing arguments")
   .allowExcessArguments(true)
+  .option("-p, --preset <preset>", "CI/CD platform preset to auto-populate environment and runner metadata (github, azure-devops, auto, none)", "auto")
   .option("-l, --logs <path>", "Path to log file or directory")
   .option("-f, --format <format>", "Log format (github-actions, azure-devops, terraform, kubernetes, docker, junit, generic)", "generic")
   .option("-s, --source <source>", "Failure source (github, azure-devops)", "github")
@@ -222,7 +223,8 @@ program
     await handleTest(options);
   });
 
-async function handleAnalyze(options: any) {
+async function handleAnalyze(rawOptions: any) {
+  const options = applyCIPreset(rawOptions);
   const spinner = ora("Analyzing failure...").start();
 
   try {
@@ -572,6 +574,90 @@ async function handleTest(options: any) {
   }
 }
 
+/**
+ * Automatically applies CI/CD platform defaults (GitHub Actions, Azure DevOps)
+ * to options while preserving any user-specified CLI flags.
+ */
+export function applyCIPreset(rawOptions: any = {}): any {
+  const options = { ...rawOptions };
+  const preset = options.preset || "auto";
+
+  if (preset === "none") {
+    return options;
+  }
+
+  const isGithub = preset === "github" || preset === "github-actions" || 
+    (preset === "auto" && (Boolean(process.env.GITHUB_ACTIONS) || options.format === "github-actions" || options.source === "github"));
+
+  const isAzure = preset === "azure-devops" || preset === "azure" ||
+    (preset === "auto" && (Boolean(process.env.TF_BUILD) || options.format === "azure-devops" || options.source === "azure-devops" || Boolean(process.env.SYSTEM_COLLECTIONURI)));
+
+  // Common environment variables for Jira & AI if not explicitly passed as CLI flags
+  options.jiraUrl ??= process.env.JIRA_URL;
+  options.jiraEmail ??= process.env.JIRA_EMAIL;
+  options.jiraToken ??= process.env.JIRA_TOKEN;
+  options.jiraProject ??= process.env.JIRA_PROJECT;
+  options.aiApiKey ??= process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  if (!options.aiProvider) {
+    if (process.env.AI_PROVIDER) options.aiProvider = process.env.AI_PROVIDER;
+    else if (process.env.GEMINI_API_KEY) options.aiProvider = "gemini";
+    else if (process.env.ANTHROPIC_API_KEY) options.aiProvider = "anthropic";
+    else if (process.env.OPENAI_API_KEY) options.aiProvider = "openai";
+  }
+  if (!options.aiModel && process.env.AI_MODEL) options.aiModel = process.env.AI_MODEL;
+  if (!options.aiMode && (options.aiApiKey || process.env.AI_API_KEY)) {
+    options.aiMode = process.env.AI_MODE || "assist";
+  }
+
+  if (isGithub) {
+    options.source ??= "github";
+    if (!options.format || options.format === "generic") {
+      options.format = "github-actions";
+    }
+    options.githubToken ??= process.env.GITHUB_TOKEN;
+    options.repository ??= process.env.GITHUB_REPOSITORY;
+    options.branch ??= process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || process.env.GITHUB_REF;
+    options.commit ??= process.env.GITHUB_SHA;
+    options.pipeline ??= process.env.GITHUB_WORKFLOW;
+    options.runId ??= process.env.GITHUB_RUN_ID;
+    options.runNumber ??= process.env.GITHUB_RUN_NUMBER;
+    options.actor ??= process.env.GITHUB_ACTOR;
+    options.eventName ??= process.env.GITHUB_EVENT_NAME;
+    options.runAttempt ??= process.env.GITHUB_RUN_ATTEMPT;
+    options.runnerOs ??= process.env.RUNNER_OS;
+    options.runnerArch ??= process.env.RUNNER_ARCH;
+    options.apiUrl ??= process.env.GITHUB_API_URL || "https://api.github.com";
+    options.jobName ??= process.env.GITHUB_JOB;
+    options.repositoryOwner ??= process.env.GITHUB_REPOSITORY_OWNER;
+    options.environment ??= process.env.GITHUB_REF_NAME || "production";
+    options.runUrl ??= (process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID)
+      ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+      : undefined;
+  } else if (isAzure) {
+    options.source ??= "azure-devops";
+    if (!options.format || options.format === "generic") {
+      options.format = "azure-devops";
+    }
+    options.azureToken ??= process.env.SYSTEM_ACCESSTOKEN || process.env.AZURE_DEVOPS_EXT_PAT;
+    options.repository ??= process.env.BUILD_REPOSITORY_NAME;
+    options.branch ??= process.env.BUILD_SOURCEBRANCHNAME || process.env.BUILD_SOURCEBRANCH;
+    options.commit ??= process.env.BUILD_SOURCEVERSION;
+    options.pipeline ??= process.env.BUILD_DEFINITIONNAME;
+    options.runId ??= process.env.BUILD_BUILDID;
+    options.runNumber ??= process.env.BUILD_BUILDNUMBER;
+    options.actor ??= process.env.BUILD_REQUESTEDFOR || process.env.BUILD_QUEUEDBY;
+    options.eventName ??= process.env.BUILD_REASON;
+    options.runAttempt ??= process.env.SYSTEM_STAGEATTEMPT;
+    options.runnerOs ??= process.env.AGENT_OS;
+    options.runnerArch ??= process.env.AGENT_OSARCHITECTURE;
+    options.jobName ??= process.env.AGENT_JOBNAME;
+    options.environment ??= process.env.ENVIRONMENT_NAME || process.env.BUILD_SOURCEBRANCHNAME || "production";
+    options.apiUrl ??= process.env.SYSTEM_COLLECTIONURI;
+  }
+
+  return options;
+}
+
 async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
   const source = options.source || (process.env.GITHUB_ACTIONS ? "github" : process.env.SYSTEM_COLLECTIONURI ? "azure-devops" : "github");
 
@@ -632,6 +718,11 @@ async function loadConfig(configPath: string): Promise<any> {
     }
   }
 
+  const aiKey = (process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || "").trim();
+  const aiProvider = (process.env.AI_PROVIDER || (process.env.GEMINI_API_KEY ? "gemini" : process.env.ANTHROPIC_API_KEY ? "anthropic" : "openai")).trim();
+  const aiModel = (process.env.AI_MODEL || "").trim();
+  const aiMode = (process.env.AI_MODE || (aiKey ? "assist" : "disabled")).trim();
+
   // No config file found, return environment variable structure for merging
   return {
     jira: {
@@ -640,7 +731,12 @@ async function loadConfig(configPath: string): Promise<any> {
       apiToken: (process.env.JIRA_TOKEN || "").trim(),
     },
     jiraProject: (process.env.JIRA_PROJECT || "").trim(),
-    ai: { mode: "disabled" },
+    ai: {
+      mode: aiMode,
+      ...(aiKey ? { apiKey: aiKey } : {}),
+      provider: aiProvider,
+      ...(aiModel ? { model: aiModel } : {}),
+    },
     dedup: { enabled: true, windowHours: 24 },
   };
 }
@@ -1385,5 +1481,7 @@ process.on("unhandledRejection", (reason, promise) => {
   process.exit(1);
 });
 
-// Run CLI
-program.parse();
+// Run CLI when not in unit test environment
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  program.parse();
+}
