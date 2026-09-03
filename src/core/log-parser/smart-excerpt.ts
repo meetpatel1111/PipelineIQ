@@ -128,9 +128,11 @@ function hasError(lines: string[]): boolean {
 function markSkippedSteps(steps: StepInfo[]): StepInfo[] {
   const failIdx = steps.findIndex(s => s.status === "failed");
   if (failIdx === -1) return steps;
-  return steps.map((s, i) =>
-    i > failIdx ? { ...s, status: "skipped" as StepStatus } : s,
-  );
+  return steps.map((s, i) => {
+    // If a subsequent step also encountered errors (e.g. continue-on-error), preserve its failed status
+    if (s.status === "failed") return s;
+    return i > failIdx ? { ...s, status: "skipped" as StepStatus } : s;
+  });
 }
 
 /**
@@ -211,14 +213,17 @@ export function buildSmartExcerpt(
   // ── Strategy 1: step-aware ────────────────────────────────────────────────
   const steps = parseSteps(lines, source);
   if (steps.length > 0) {
-    const failingStep = steps.find(s => s.status === "failed");
+    const failingSteps = steps.filter(s => s.status === "failed");
     const breadcrumb = renderBreadcrumb(steps);
 
-    if (failingStep) {
-      const stepBudget = Math.max(Math.floor(clampedMax * 0.75), 20);
-      const stepOutput = renderStepOutput(lines, failingStep, stepBudget);
-      const text = `${breadcrumb}\n\n${stepOutput}`;
-      return { text, strategy: "step-aware", failingStep: failingStep.name };
+    if (failingSteps.length > 0) {
+      const stepBudget = Math.max(Math.floor((clampedMax * 0.75) / failingSteps.length), 20);
+      const stepOutputs = failingSteps.map(s => {
+        const out = renderStepOutput(lines, s, stepBudget);
+        return failingSteps.length > 1 ? `### Failing Step: ${s.name}\n${out}` : out;
+      }).join("\n\n");
+      const text = `${breadcrumb}\n\n${stepOutputs}`;
+      return { text, strategy: "step-aware", failingStep: failingSteps.map(s => s.name).join(", ") };
     }
 
     // Steps parsed but none failed (all passed) — fall through to anchors

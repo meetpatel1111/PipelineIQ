@@ -1,4 +1,5 @@
 import type { FailureEvent } from "../core/index.js";
+import { buildSmartExcerpt } from "../core/index.js";
 import type { Octokit } from "@octokit/rest";
 
 /**
@@ -118,9 +119,11 @@ export async function mapGithubContext(
     }
   }
 
-  const failedStep = failedJob?.steps?.find((s: any) => s.conclusion === "failure" || s.conclusion === "cancelled");
+  const failedSteps = failedJob?.steps?.filter((s: any) => s.conclusion === "failure" || s.conclusion === "cancelled") || [];
+  const primaryFailedStep = failedSteps.find((s: any) => s.conclusion === "failure") || failedSteps[0];
+  const stepName = failedSteps.length > 1 ? failedSteps.map((s: any) => s.name).join(", ") : primaryFailedStep?.name;
 
-  // Fetch the failed job's logs (truncated to last 200 lines for the event).
+  // Fetch the failed job's logs (using step-aware smart excerpt when large)
   let logs = "";
   let logsTruncated = false;
   if (failedJob) {
@@ -141,8 +144,10 @@ export async function mapGithubContext(
       }
 
       const lines = fullText.split("\n");
-      if (lines.length > 200) {
-        logs = lines.slice(-200).join("\n");
+      if (lines.length > 250) {
+        // Use smart excerpt to ensure the failing step's output is preserved and not pushed out by post-job steps
+        const smart = buildSmartExcerpt(fullText, "github", 250);
+        logs = smart.text || lines.slice(-250).join("\n");
         logsTruncated = true;
       } else {
         logs = fullText;
@@ -173,7 +178,7 @@ export async function mapGithubContext(
       runId: String(ctx.runId),
       runNumber: ctx.runNumber,
       ...(failedJob ? { job: failedJob.name } : {}),
-      ...(failedStep ? { step: failedStep.name } : {}),
+      ...(stepName ? { step: stepName } : {}),
       ...(ctx.runAttempt ? { runAttempt: ctx.runAttempt, retryCount: Math.max(0, ctx.runAttempt - 1) } : 
          runData.run_attempt ? { runAttempt: runData.run_attempt, retryCount: Math.max(0, runData.run_attempt - 1) } : {}),
       runnerType: failedJob?.runner_name ?? "github-hosted",
@@ -254,7 +259,7 @@ export async function mapGithubContext(
     metadata: {},
     explicitFields: [],
     failure: {
-      ...(failedStep ? { failedStep: failedStep.name } : {}),
+      ...(stepName ? { failedStep: stepName } : {}),
       logs,
       logsTruncated,
     },
