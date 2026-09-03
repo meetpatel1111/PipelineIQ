@@ -629,7 +629,7 @@ export function applyCIPreset(rawOptions: any = {}): any {
     options.apiUrl ??= process.env.GITHUB_API_URL || "https://api.github.com";
     options.jobName ??= process.env.GITHUB_JOB;
     options.repositoryOwner ??= process.env.GITHUB_REPOSITORY_OWNER;
-    options.environment ??= process.env.GITHUB_REF_NAME || "production";
+    options.environment ??= process.env.GITHUB_REF_NAME;
     options.runUrl ??= (process.env.GITHUB_SERVER_URL && process.env.GITHUB_REPOSITORY && process.env.GITHUB_RUN_ID)
       ? `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
       : undefined;
@@ -651,7 +651,7 @@ export function applyCIPreset(rawOptions: any = {}): any {
     options.runnerOs ??= process.env.AGENT_OS;
     options.runnerArch ??= process.env.AGENT_OSARCHITECTURE;
     options.jobName ??= process.env.AGENT_JOBNAME;
-    options.environment ??= process.env.ENVIRONMENT_NAME || process.env.BUILD_SOURCEBRANCHNAME || "production";
+    options.environment ??= process.env.ENVIRONMENT_NAME || process.env.BUILD_SOURCEBRANCHNAME || process.env.BUILD_SOURCEBRANCH;
     options.apiUrl ??= process.env.SYSTEM_COLLECTIONURI;
     options.project ??= process.env.SYSTEM_TEAMPROJECT;
     options.runUrl ??= (process.env.SYSTEM_COLLECTIONURI && process.env.SYSTEM_TEAMPROJECT && process.env.BUILD_BUILDID)
