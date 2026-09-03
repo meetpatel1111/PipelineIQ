@@ -13,20 +13,21 @@ import * as azdev from "azure-devops-node-api";
  */
 export async function mapAzureDevOpsContext(
   environment: string | undefined,
+  options?: any,
 ): Promise<FailureEvent> {
-  const collectionUri = tl.getInput("teamFoundationCollectionUri") || required("System.CollectionUri");
-  const teamProject = tl.getInput("teamProject") || required("System.TeamProject");
-  const buildIdInput = tl.getInput("buildId");
-  const buildId = Number.parseInt(buildIdInput || required("Build.BuildId"), 10);
-  const buildNumber = tl.getInput("buildNumber") || required("Build.BuildNumber");
-  const definitionName = tl.getInput("definitionName") || required("Build.DefinitionName");
-  const sourceVersion = tl.getInput("sourceVersion") || required("Build.SourceVersion");
-  const fullSourceBranch = tl.getInput("sourceBranch") || tl.getVariable("Build.SourceBranch") || "";
+  const collectionUri = options?.apiUrl || tl.getInput("teamFoundationCollectionUri") || tl.getVariable("System.CollectionUri") || process.env.SYSTEM_COLLECTIONURI || "";
+  const teamProject = options?.project || tl.getInput("teamProject") || tl.getVariable("System.TeamProject") || process.env.SYSTEM_TEAMPROJECT || "";
+  const buildIdInput = options?.runId || tl.getInput("buildId");
+  const buildId = Number.parseInt(buildIdInput || tl.getVariable("Build.BuildId") || process.env.BUILD_BUILDID || "0", 10);
+  const buildNumber = options?.runNumber || tl.getInput("buildNumber") || tl.getVariable("Build.BuildNumber") || process.env.BUILD_BUILDNUMBER || "0";
+  const definitionName = options?.pipeline || tl.getInput("definitionName") || tl.getVariable("Build.DefinitionName") || process.env.BUILD_DEFINITIONNAME || "unknown";
+  const sourceVersion = options?.commit || tl.getInput("sourceVersion") || tl.getVariable("Build.SourceVersion") || process.env.BUILD_SOURCEVERSION || "";
+  const fullSourceBranch = options?.branch || tl.getInput("sourceBranch") || tl.getVariable("Build.SourceBranch") || process.env.BUILD_SOURCEBRANCH || "";
   const sourceBranch = fullSourceBranch.replace(/^refs\/heads\//, "");
-  const repositoryName = tl.getInput("repositoryName") || required("Build.Repository.Name");
-  const repositoryUri = tl.getInput("repositoryUri") || required("Build.Repository.Uri");
-  const requestedFor = (tl.getInput("requestedFor") || tl.getVariable("Build.RequestedFor")) ?? "unknown";
-  const accessToken = tl.getVariable("System.AccessToken") ?? "";
+  const repositoryName = options?.repository || tl.getInput("repositoryName") || tl.getVariable("Build.Repository.Name") || process.env.BUILD_REPOSITORY_NAME || "";
+  const repositoryUri = tl.getInput("repositoryUri") || tl.getVariable("Build.Repository.Uri") || process.env.BUILD_REPOSITORY_URI || "";
+  const requestedFor = (options?.actor || tl.getInput("requestedFor") || tl.getVariable("Build.RequestedFor") || process.env.BUILD_REQUESTEDFOR) ?? "unknown";
+  const accessToken = options?.azureToken || tl.getVariable("System.AccessToken") || process.env.SYSTEM_ACCESSTOKEN || process.env.AZURE_DEVOPS_EXT_PAT || "";
   
   // Additional Azure DevOps variables
   const sourceVersionMessage = tl.getInput("sourceVersionMessage") || tl.getVariable("Build.SourceVersionMessage");

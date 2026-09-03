@@ -696,7 +696,7 @@ async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
     return await mapGithubContext(ghContext as any, octokit as any, options.environment);
   } else if (source === "azure-devops") {
     const { mapAzureDevOpsContext } = await import("../azure-devops/map-event.js");
-    return await mapAzureDevOpsContext(options.environment);
+    return await mapAzureDevOpsContext(options.environment, options);
   }
 
   throw new Error(`Unsupported failure source for automatic log fetching: ${source}. Please provide logs via --logs.`);
