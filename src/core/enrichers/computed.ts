@@ -155,17 +155,48 @@ export const computedEnricher: Enricher = {
 function computeSeverity(ctx: EnrichmentContext): Severity {
   const { event } = ctx;
   const env = (event.environment ?? "").toLowerCase();
+  const branch = (event.branch ?? "").toLowerCase();
   const cat = (ctx.fields.category ?? "Unknown") as FailureCategory;
   const isProd = env === "production" || env === "prod";
-  const isMain = event.branch === "main" || event.branch === "master";
+  const isMain = branch === "main" || branch === "master";
+  const isRelease = branch.startsWith("release/") || branch.startsWith("release-") || branch === "staging";
 
-  if (isProd && (cat === "Infrastructure" || cat === "Deployment" || cat === "Network")) {
-    return "Critical";
+  // 1. Production outages are always Critical or High
+  if (isProd) {
+    if (cat === "Infrastructure" || cat === "Deployment" || cat === "Network" || cat === "Security") {
+      return "Critical";
+    }
+    return "High";
   }
-  if (cat === "Security") return "High";
-  if (isProd) return "High";
-  if (isMain) return "High";
-  if (event.pullRequest) return "Medium";
+
+  // 2. Main/master branch failures block the core deployment pipeline
+  if (isMain) {
+    if (cat === "Infrastructure" || cat === "Deployment" || cat === "Security") {
+      return "Critical";
+    }
+    return "High";
+  }
+
+  // 3. Security vulnerabilities in any environment warrant High urgency
+  if (cat === "Security") {
+    return "High";
+  }
+
+  // 4. Staging / Release candidate branch failures
+  if (isRelease) {
+    return "High";
+  }
+
+  // 5. Flaky test failures on PRs should not page on-call
+  if (ctx.history?.isFlaky || (ctx.history?.flakinessScore ?? 0) >= 0.5) {
+    return "Low";
+  }
+
+  // 6. General feature branch or pull request builds
+  if (event.pullRequest || branch.startsWith("feat/") || branch.startsWith("feature/") || branch.startsWith("fix/")) {
+    return "Medium";
+  }
+
   return "Low";
 }
 

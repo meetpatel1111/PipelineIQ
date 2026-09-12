@@ -18,6 +18,8 @@ import { renderDescription } from "./renderer.js";
 import { NotificationService } from "./notifications/index.js";
 import type { NotificationResult, NotificationPayload } from "./notifications/index.js";
 import { SelfHealingEngine } from "./self-healing/index.js";
+import { findReferencedIssueKeys } from "./jira/key-extractor.js";
+import { registerPipelineRemoteLinks } from "./jira/remote-links.js";
 
 type ProcessResultBase = {
   spec: JiraTicketSpec;
@@ -176,6 +178,25 @@ export async function processFailureEvent(
           }
         }
 
+        // Register native Jira remote links (pipeline, PR, commit)
+        if (config.createRemoteLinks !== false) {
+          await registerPipelineRemoteLinks(jira, existing.key, event, { logger });
+        }
+
+        // Link to referenced developer issues on recurrence if not already linked
+        if (config.linkReferencedIssues !== false) {
+          const referencedKeys = findReferencedIssueKeys(event, config.jiraProject);
+          for (const refKey of referencedKeys) {
+            try {
+              const linkType = config.referencedIssueLinkType || "Blocks";
+              await (jira as EnhancedJiraClient).linkIssues(existing.key, refKey, linkType);
+              logger.info({ existingKey: existing.key, refKey, linkType }, "linked recurring incident to referenced issue");
+            } catch (linkErr) {
+              logger.debug({ linkErr, existingKey: existing.key, refKey }, "failed to link referenced issue on recurrence");
+            }
+          }
+        }
+
         let selfHealingResult: SelfHealingResult | undefined;
         if (config.selfHealing?.enabled && config.selfHealing.healOnRecurrence !== false) {
           selfHealingResult = await maybeRunSelfHealing(existing.key);
@@ -196,6 +217,46 @@ export async function processFailureEvent(
 
   const created = await jira.createIssue(spec);
   logger.info({ key: created.key, signature: spec.dedupSignature }, "created Jira issue");
+
+  // Register native Jira remote links (pipeline, PR, commit)
+  if (config.createRemoteLinks !== false) {
+    await registerPipelineRemoteLinks(jira, created.key, event, { logger });
+  }
+
+  // Bidirectional linking to developer tickets referenced in branch, commit, or PR
+  if (config.linkReferencedIssues !== false) {
+    const referencedKeys = findReferencedIssueKeys(event, config.jiraProject);
+    for (const refKey of referencedKeys) {
+      try {
+        const linkType = config.referencedIssueLinkType || "Blocks";
+        await (jira as EnhancedJiraClient).linkIssues(created.key, refKey, linkType);
+        logger.info({ createdKey: created.key, refKey, linkType }, "linked incident to referenced issue");
+
+        if (config.commentOnReferencedIssues !== false) {
+          const runNumber = event.pipeline.runNumber ?? event.pipeline.runId;
+          const incidentUrl = `${config.jira.baseUrl.replace(/\/+$/, "")}/browse/${created.key}`;
+          const commentBody = `⚠️ CI/CD pipeline **${event.pipeline.name || "Pipeline"}** failed on branch \`${event.branch}\`${runNumber ? ` (Run #${runNumber})` : ""}.\nFailure incident: [${created.key}|${incidentUrl}]`;
+          await jira.addComment(refKey, commentBody);
+        }
+
+        // Optionally adopt developer's assignee identity if incident ticket is unassigned
+        if (config.assignFromReferencedIssue !== false && !spec.assignee) {
+          try {
+            const refIssue = await jira.getIssue(refKey);
+            const refAssigneeId = refIssue?.fields?.assignee?.accountId ?? refIssue?.fields?.assignee?.name;
+            if (refAssigneeId) {
+              await jira.assignIssue(created.key, refAssigneeId);
+              logger.info({ createdKey: created.key, assignee: refAssigneeId }, "assigned incident ticket to referenced issue owner");
+            }
+          } catch (assignErr) {
+            logger.debug({ assignErr, refKey }, "could not adopt assignee from referenced issue");
+          }
+        }
+      } catch (linkErr) {
+        logger.warn({ linkErr, createdKey: created.key, refKey }, "failed to link referenced issue");
+      }
+    }
+  }
 
   // If this was a "create-new" dedup hit, link to the old closed issue
   if (closedDuplicateKey) {

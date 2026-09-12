@@ -105,6 +105,11 @@ export const PipelineIQConfigSchema = z.object({
   notifications: NotificationsConfigSchema.optional(),
   selfHealing: SelfHealingConfigSchema.optional(),
   userMapping: z.record(z.string(), z.string()).optional(),
+  linkReferencedIssues: z.boolean().default(true),
+  referencedIssueLinkType: z.string().default("Blocks"),
+  commentOnReferencedIssues: z.boolean().default(true),
+  assignFromReferencedIssue: z.boolean().default(true),
+  createRemoteLinks: z.boolean().default(true),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;

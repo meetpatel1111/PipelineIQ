@@ -241,6 +241,29 @@ Analyzes historical incident patterns across runs:
 - Computes dynamic flakiness percentage scores (`flakinessScore = (retryResolvedCount / occurrences) * 100`).
 - Renders flaky indicators and metrics in Jira descriptions and CI/CD step summaries.
 
+### Contextual Issue Linking & Assignee Inheritance (`src/core/jira/key-extractor.ts`, `src/core/pipeline.ts`)
+- Extracts referenced Jira issue keys (`PROJ-123`) from git branch names, commit messages, and PR titles.
+- Automatically bidirectionally links the newly created or updated CI incident ticket to the developer's story (`Blocks` or `Relates`).
+- Posts an alert comment directly on the developer's story indicating which pipeline run failed.
+- Adopts the developer story's assignee if the incident ticket is unassigned (`assignFromReferencedIssue`).
+
+### Native Remote Links Engine (`src/core/jira/remote-links.ts`)
+- Uses the official Jira REST API `/rest/api/2/issue/{issueIdOrKey}/remotelink` to register structured web links.
+- Emits dedicated remote links for the CI pipeline run (with run number and status), the active Pull Request, and the Git commit diff.
+- Appears natively in Jira's Development panel and Web Links section without consuming custom fields.
+
+### Enterprise Transition Resolution Engine (`src/core/jira/enhanced-client.ts`)
+- Queries transitions with `expand=transitions.fields` to discover required transition screen fields.
+- Automatically resolves common transition name aliases (`Done` -> `Resolved` -> `Closed` -> `Complete`).
+- Automatically supplies required resolution objects (e.g. `resolution: { name: "Fixed" }`) when transitioning issues to completion, preventing 400 Bad Request errors across strict enterprise Jira setups.
+
+### Environment-Aware Priority Matrix (`src/core/enrichers/computed.ts`)
+- Enforces an automated SLA priority hierarchy based on failure context:
+  * **Highest**: Production environments (`production`, `prod`, `live`).
+  * **High**: Main/master branches or release candidate environments (`staging`, `stage`, `release`, `rc`).
+  * **Low**: Known flaky test failures on pull request branches.
+  * **Medium**: General pull requests and development feature branches.
+
 ### Local & Historical Context Engine (`src/core/enrichers/codeowners.ts`, `src/core/self-healing/engine.ts`)
 - **CODEOWNERS Identity Mapping (`userMapping`)**: Maps GitHub/GitLab usernames directly to Jira account IDs or user names.
 - **Historical Resolution RAG (`buildHistoricalRAGContext`)**: Queries Jira for previously resolved tickets with the same signature, extracting past fix PR links, sandbox verification commands, and resolution comments to prime the AI Fix Generator.

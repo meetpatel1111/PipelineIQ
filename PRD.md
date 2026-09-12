@@ -341,6 +341,10 @@ pipelineiq/
 | 38 | Add environment metadata    |
 | 39 | Add custom Jira fields      |
 | 40 | Auto-assign owners          |
+| 40a | Contextual issue linking (branch/commit/PR) |
+| 40b | Native Jira remote web links API |
+| 40c | Enterprise transition resolution intelligence |
+| 40d | Environment-aware priority matrix |
 
 ---
 

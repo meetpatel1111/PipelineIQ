@@ -304,15 +304,30 @@ export class EnhancedJiraClient implements JiraClient {
    * Transition issue to new status
    */
   async transitionIssue(issueKey: string, transitionName: string, comment?: string): Promise<void> {
-    // First get available transitions
-    const transitions = await this.request<any>("GET", this.getApiPath(`/issue/${issueKey}/transitions`));
+    // First get available transitions with fields expanded
+    const transitionsRes = await this.request<any>("GET", this.getApiPath(`/issue/${issueKey}/transitions?expand=transitions.fields`));
+    const transitionsList: any[] = transitionsRes?.transitions || [];
     
-    const transition = transitions.transitions.find((t: any) => 
+    // 1. Try exact or case-insensitive match
+    let transition = transitionsList.find((t: any) => 
       t.name.toLowerCase() === transitionName.toLowerCase()
     );
 
+    // 2. If not found and transitionName is a completion/resolution transition, check standard aliases
+    const completionAliases = ["done", "resolved", "close issue", "closed", "complete", "resolve issue"];
+    if (!transition && completionAliases.includes(transitionName.toLowerCase())) {
+      transition = transitionsList.find((t: any) =>
+        completionAliases.includes(t.name.toLowerCase()) || t.to?.statusCategory?.key === "done"
+      );
+    }
+
+    // 3. Fall back to matching any transition whose target status category is 'done'
+    if (!transition && completionAliases.includes(transitionName.toLowerCase())) {
+      transition = transitionsList.find((t: any) => t.to?.statusCategory?.key === "done");
+    }
+
     if (!transition) {
-      throw new JiraApiError(`Transition "${transitionName}" not available`, 400);
+      throw new JiraApiError(`Transition "${transitionName}" not available in current workflow step`, 400);
     }
 
     const payload: any = {
@@ -322,6 +337,21 @@ export class EnhancedJiraClient implements JiraClient {
     if (comment) {
       payload.update = {
         comment: [{ add: { body: markdownToAdf(comment) } }],
+      };
+    }
+
+    // 4. Check if resolution field is required or present on this transition screen
+    const resolutionField = transition.fields?.resolution;
+    if (resolutionField) {
+      let resolutionName = "Fixed";
+      if (Array.isArray(resolutionField.allowedValues) && resolutionField.allowedValues.length > 0) {
+        const match = resolutionField.allowedValues.find((v: any) =>
+          v.name?.toLowerCase() === "fixed" || v.name?.toLowerCase() === "done"
+        );
+        resolutionName = match?.name || resolutionField.allowedValues[0].name;
+      }
+      payload.fields = {
+        resolution: { name: resolutionName },
       };
     }
 

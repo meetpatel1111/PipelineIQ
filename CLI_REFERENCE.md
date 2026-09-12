@@ -259,6 +259,11 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `dedup.windowHours` | integer | No | `24` | Lookback window in hours |
 | `dedup.autoResolveOnSuccess` | boolean | No | `true` | Auto-transition matching open tickets when a pipeline succeeds |
 | `dedup.resolveTransition` | string | No | `"Done"` | Jira transition name for auto-resolving issues |
+| `linkReferencedIssues` | boolean | No | `true` | Automatically extract Jira keys (`PROJ-123`) from branch/commit/PR and link incident to developer stories |
+| `referencedIssueLinkType` | string | No | `"Blocks"` | Jira link type name for referenced developer issues (e.g. `"Blocks"` or `"Relates"`) |
+| `commentOnReferencedIssues` | boolean | No | `true` | Post an alert comment on referenced developer stories when a CI pipeline fails |
+| `assignFromReferencedIssue` | boolean | No | `true` | Assign incident ticket to the assignee of the referenced developer story if incident is unassigned |
+| `createRemoteLinks` | boolean | No | `true` | Register native Jira Remote Links for CI run URL, PR URL, and Commit diff |
 | `userMapping` | Record<string, string> | No | — | Map GitHub usernames (e.g. `meetpatel1111`) to Jira account IDs or emails |
 | `selfHealing.enabled` | boolean | No | `false` | Enable autonomous self-healing code fix generation |
 | `selfHealing.healOnRecurrence` | boolean | No | `true` | Trigger self-healing patch generation on recurring deduplication hits |

@@ -4,6 +4,16 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.23.0] - 2026-09-13
+
+### Added
+- **Contextual Jira Issue Key Extraction & Bidirectional Linking**: Added `extractJiraKeys` and `findReferencedIssueKeys` in `src/core/jira/key-extractor.ts`. Automatically extracts referenced developer tickets (`PROJ-123`) from git branch names, commit messages, and PR titles. Creates bidirectional links (`Blocks` or `Relates`) between CI incident tickets and developer stories, posts notification comments on developer stories, and inherits the developer's Jira assignee identity (`assignFromReferencedIssue: true`).
+- **Native Jira Remote Links API Integration**: Added `registerPipelineRemoteLinks` in `src/core/jira/remote-links.ts` using Jira's official `/rest/api/2/issue/{issueKey}/remotelink` endpoint. Automatically attaches clickable web links directly into Jira's Development panel and Web Links view for the CI execution run (with status and run number), active Pull Request, and Git commit diff.
+- **Enterprise Workflow Transition & Resolution Intelligence**: Enhanced `EnhancedJiraClient.transitionIssue()` to query transition screens with `expand=transitions.fields`. Resolves common transition name aliases (`Done` -> `Resolved` -> `Closed` -> `Complete`), and automatically supplies required resolution screen fields (e.g. `resolution: { name: "Fixed" }`), preventing HTTP 400 Bad Request errors in enterprise Jira workflows.
+- **Environment-Aware SLA Priority Matrix**: Enhanced `computeSeverity()` in `src/core/enrichers/computed.ts` to automatically enforce environment and operational SLA rules: `Highest` priority for production environments (`production`, `prod`, `live`), `High` for release candidate environments (`staging`, `stage`, `release`, `rc`) and main/master branches, `Low` for known flaky test failures on PR branches, and `Medium` for general PR and feature branches.
+
+---
+
 ## [0.22.0] - 2026-09-13
 
 ### Added

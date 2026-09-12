@@ -149,6 +149,10 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 ### Core Capabilities
 
 - **Failure Detection**: Automatically detects failed GitHub workflows and Azure DevOps pipelines.
+- **Contextual Jira Issue Key Extraction & Linking**: Scans branch names, commit messages, and PR titles for Jira issue keys (`PROJ-123`). Automatically creates bidirectional links (`Blocks` / `Relates`) to developer tickets, posts failure alerts directly on developer stories, and adopts developer assignees.
+- **Native Jira Remote Links API Integration**: Registers official clickable Jira remote web links for CI/CD pipeline runs, Pull Requests, and Git commit diffs directly in Jira's web links and Development panel.
+- **Enterprise Transition & Resolution Intelligence**: Dynamically queries transition screens (`expand=transitions.fields`), matches status aliases (`Done` -> `Resolved` -> `Closed`), and auto-populates required `resolution: { name: "Fixed" }` fields to prevent 400 Bad Request errors in enterprise workflows.
+- **Environment-Aware Priority Matrix**: Automatically computes Jira issue priority (`Highest` for Production failures, `High` for Release/Staging, `Medium` for PRs, and `Low` for flaky PR test failures).
 - **Two-Way Jira Lifecycle Sync**: Automatically transitions open Jira incident tickets to "Done" / "Resolved" when a subsequent retry or commit succeeds (`piq-resolved-by-retry`).
 - **Flaky Test Intelligence & Scoring**: Computes dynamic flakiness percentage scores (0–100%) and tracks retry-resolution frequency across pipeline runs.
 - **Automated Log Fetching**: Natively fetches logs from GitHub/Azure APIs—no log redirection required.
@@ -192,13 +196,16 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 ### Jira Integration
 
 - **Multi-Platform Renderer**: Intelligent branching between **ADF v3** (Jira Cloud) and **WikiMarkup** (Jira Server/DC).
+- **Contextual Issue Linking**: Automatically extracts referenced Jira issue keys (`PROJ-123`) from branches, commit messages, and PR titles, bidirectionally linking incidents (`Blocks` or `Relates`) and notifying developers.
+- **Native Remote Links**: Adds official clickable Jira Remote Links (`/remotelink`) for CI pipeline runs, PRs, and commit diffs.
+- **Enterprise Workflow Transition Engine**: Resolves transition aliases (`Done` -> `Resolved` -> `Closed`) and auto-supplies required screen fields (e.g. `resolution: { name: "Fixed" }`).
 - **Custom Fields**: Full support for mapping 100+ operational metadata fields.
 - **API Reliability**: Automatic truncation of long fields (Summary/Description) to ensure Atlassian API compliance.
-- **Dedup Search**: JQL-based duplicate detection with configurable time windows.
+- **Dedup Search**: JQL-based duplicate detection with configurable time windows and recurrence linking.
 - **Bulk Operations**: High-performance client for transitions, linking, and enrichment comments.
 
 > [!TIP]
-> **Jira Workflow Tip**: To ensure issues remain unassigned by default across any organization, you can configure your Jira workflow. Go to the **Create** transition → **Post Functions** → Add **Update Issue Field** → Set **Assignee** to **Unassigned**.
+> **Jira Workflow Tip**: To ensure issues remain unassigned by default across any organization, you can configure your Jira workflow. Go to the **Create** transition → **Post Functions** → Add **Update Issue Field** → Set **Assignee** to **Unassigned**. Alternatively, enable `assignFromReferencedIssue: true` to route CI incidents directly to the author of the referenced Jira story.
 
 ## 📊 CI/CD Platform Integrations & Reporting
 
