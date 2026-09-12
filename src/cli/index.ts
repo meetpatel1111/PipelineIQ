@@ -6,6 +6,7 @@ import ora from "ora";
 import inquirer from "inquirer";
 import fs from "fs-extra";
 import path from "path";
+import { spawn, execSync } from "child_process";
 import { 
   processFailureEvent, 
   resolvePipelineSuccess,
@@ -37,10 +38,11 @@ program
   .description("Analyze failure logs and create Jira tickets")
   .argument("[extraArgs...]", "Optional extra trailing arguments")
   .allowExcessArguments(true)
-  .option("-p, --preset <preset>", "CI/CD platform preset to auto-populate environment and runner metadata (github, azure-devops, auto, none)", "auto")
+  .option("-p, --preset <preset>", "CI/CD platform preset to auto-populate environment and runner metadata (github, azure-devops, gitlab, bitbucket, circleci, jenkins, auto, none)", "auto")
   .option("-l, --logs <path>", "Path to log file or directory")
+  .option("--stdin", "Read failure logs from standard input", false)
   .option("-f, --format <format>", "Log format (github-actions, azure-devops, terraform, kubernetes, docker, junit, generic)", "generic")
-  .option("-s, --source <source>", "Failure source (github, azure-devops)", "github")
+  .option("-s, --source <source>", "Failure source (github, azure-devops, gitlab, bitbucket, circleci, jenkins, generic)", "github")
   .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
   .option("--dry-run", "Show what would be done without creating Jira issues", false)
   .option("--github-token <token>", "GitHub token for API access")
@@ -254,6 +256,100 @@ program
     await handleResolve(options);
   });
 
+// Exec command: wraps command execution, captures logs, and reports failures directly to Jira
+program
+  .command("exec <cmd...>")
+  .description("Execute a command, capture its logs, and report failures directly to Jira")
+  .allowUnknownOption(true)
+  .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
+  .option("-p, --preset <preset>", "CI/CD platform preset (github, azure-devops, gitlab, bitbucket, circleci, jenkins, auto, none)", "auto")
+  .action(async (cmdArgs: string[], options: any) => {
+    const exitCode = await handleExec(cmdArgs, options);
+    process.exit(exitCode);
+  });
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = "";
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => {
+      data += chunk;
+    });
+    process.stdin.on("end", () => {
+      resolve(data);
+    });
+    if (process.stdin.isTTY) {
+      resolve("");
+    }
+  });
+}
+
+export async function handleExec(cmdArgs: string[], cmdOptions: any = {}): Promise<number> {
+  if (!cmdArgs || cmdArgs.length === 0) {
+    console.error(chalk.red("Error: No command specified to execute. Usage: pipelineiq exec -- <command>"));
+    return 1;
+  }
+
+  const fullCommand = cmdArgs.join(" ");
+  const child = spawn(fullCommand, {
+    stdio: ["inherit", "pipe", "pipe"],
+    shell: true,
+  });
+
+  const chunks: string[] = [];
+
+  child.stdout?.on("data", (data) => {
+    process.stdout.write(data);
+    chunks.push(data.toString());
+  });
+
+  child.stderr?.on("data", (data) => {
+    process.stderr.write(data);
+    chunks.push(data.toString());
+  });
+
+  const exitCode = await new Promise<number>((resolve) => {
+    child.on("close", (code) => {
+      resolve(code ?? 0);
+    });
+    child.on("error", (err) => {
+      console.error(chalk.red(`Failed to run command "${fullCommand}": ${err.message}`));
+      resolve(1);
+    });
+  });
+
+  if (exitCode === 0) {
+    try {
+      const config = await loadConfig(cmdOptions.config || "./pipelineiq.json");
+      if (config?.dedup?.autoResolveOnSuccess) {
+        const resolveOpts = applyCIPreset({ ...cmdOptions });
+        await handleResolve(resolveOpts);
+      }
+    } catch {
+      // Ignore resolution errors on clean exit
+    }
+    return 0;
+  }
+
+  console.log(chalk.bold.yellow(`\n[PipelineIQ] Command failed with exit code ${exitCode}. Reporting failure to Jira...`));
+  const fullLog = chunks.join("");
+  const analyzeOpts = applyCIPreset({
+    ...cmdOptions,
+    rawLogContent: fullLog,
+    format: "generic",
+    noExit: true,
+  });
+  analyzeOpts.pipeline ??= `Run: ${fullCommand}`.trim();
+
+  try {
+    await handleAnalyze(analyzeOpts);
+  } catch (err: any) {
+    console.error(chalk.red(`[PipelineIQ] Error reporting failure to Jira: ${err.message}`));
+  }
+
+  return exitCode;
+}
+
 async function handleAnalyze(rawOptions: any) {
   const options = applyCIPreset(rawOptions);
   if (options.status === "success") {
@@ -341,7 +437,27 @@ async function handleAnalyze(rawOptions: any) {
     if (options.logs) {
       const logContent = await readLogs(options.logs);
       const parsedLogs = parseLogs(logContent, {
-        format: options.format as LogFormat,
+        format: (options.format || "generic") as LogFormat,
+        extractStackTraces: true,
+        extractErrorMessages: true,
+        extractExitCodes: true,
+        extractCommands: true,
+      });
+      event = await createFailureEvent(options.source as FailureSource, parsedLogs, options);
+    } else if (options.rawLogContent) {
+      const parsedLogs = parseLogs(options.rawLogContent, {
+        format: (options.format || "generic") as LogFormat,
+        extractStackTraces: true,
+        extractErrorMessages: true,
+        extractExitCodes: true,
+        extractCommands: true,
+      });
+      event = await createFailureEvent(options.source as FailureSource, parsedLogs, options);
+    } else if (options.stdin) {
+      spinner.text = "Reading logs from stdin...";
+      const logContent = await readStdin();
+      const parsedLogs = parseLogs(logContent, {
+        format: (options.format || "generic") as LogFormat,
         extractStackTraces: true,
         extractErrorMessages: true,
         extractExitCodes: true,
@@ -490,6 +606,9 @@ async function handleAnalyze(rawOptions: any) {
   } catch (error) {
     spinner.fail();
     console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    if (options.noExit) {
+      throw error;
+    }
     process.exit(1);
   }
 }
@@ -689,6 +808,18 @@ export function applyCIPreset(rawOptions: any = {}): any {
   const isAzure = preset === "azure-devops" || preset === "azure" ||
     (preset === "auto" && (Boolean(process.env.TF_BUILD) || options.format === "azure-devops" || options.source === "azure-devops" || Boolean(process.env.SYSTEM_COLLECTIONURI)));
 
+  const isGitLab = preset === "gitlab" || preset === "gitlab-ci" ||
+    (preset === "auto" && (Boolean(process.env.GITLAB_CI) || options.format === "gitlab" || options.source === "gitlab"));
+
+  const isBitbucket = preset === "bitbucket" || preset === "bitbucket-pipelines" ||
+    (preset === "auto" && (Boolean(process.env.BITBUCKET_BUILD_NUMBER) || options.format === "bitbucket" || options.source === "bitbucket"));
+
+  const isCircleCI = preset === "circleci" ||
+    (preset === "auto" && (Boolean(process.env.CIRCLECI) || options.format === "circleci" || options.source === "circleci"));
+
+  const isJenkins = preset === "jenkins" ||
+    (preset === "auto" && (Boolean(process.env.JENKINS_URL) || options.format === "jenkins" || options.source === "jenkins"));
+
   // Common environment variables for Jira & AI if not explicitly passed as CLI flags
   options.jiraUrl ??= process.env.JIRA_URL;
   options.jiraEmail ??= process.env.JIRA_EMAIL;
@@ -754,6 +885,83 @@ export function applyCIPreset(rawOptions: any = {}): any {
     options.runUrl ??= (process.env.SYSTEM_COLLECTIONURI && process.env.SYSTEM_TEAMPROJECT && process.env.BUILD_BUILDID)
       ? `${process.env.SYSTEM_COLLECTIONURI.replace(/\/$/, "")}/${process.env.SYSTEM_TEAMPROJECT}/_build/results?buildId=${process.env.BUILD_BUILDID}`
       : undefined;
+  } else if (isGitLab) {
+    options.source ??= "gitlab";
+    if (!options.format || options.format === "generic") {
+      options.format = "gitlab";
+    }
+    options.repository ??= process.env.CI_PROJECT_PATH;
+    options.branch ??= process.env.CI_COMMIT_REF_NAME;
+    options.commit ??= process.env.CI_COMMIT_SHA;
+    options.pipeline ??= process.env.CI_JOB_NAME || process.env.CI_PIPELINE_ID;
+    options.runId ??= process.env.CI_PIPELINE_ID;
+    options.runNumber ??= process.env.CI_PIPELINE_IID;
+    options.actor ??= process.env.GITLAB_USER_LOGIN || process.env.GITLAB_USER_NAME || process.env.GITLAB_USER_EMAIL;
+    options.jobName ??= process.env.CI_JOB_NAME;
+    options.environment ??= process.env.CI_ENVIRONMENT_NAME || process.env.CI_COMMIT_REF_NAME;
+    options.runUrl ??= process.env.CI_JOB_URL || process.env.CI_PIPELINE_URL;
+  } else if (isBitbucket) {
+    options.source ??= "bitbucket";
+    if (!options.format || options.format === "generic") {
+      options.format = "bitbucket";
+    }
+    options.repository ??= process.env.BITBUCKET_REPO_FULL_NAME;
+    options.branch ??= process.env.BITBUCKET_BRANCH;
+    options.commit ??= process.env.BITBUCKET_COMMIT;
+    options.pipeline ??= process.env.BITBUCKET_STEP_TRIGGER || "Bitbucket Pipeline";
+    options.runId ??= process.env.BITBUCKET_BUILD_NUMBER;
+    options.runNumber ??= process.env.BITBUCKET_BUILD_NUMBER;
+    options.actor ??= process.env.BITBUCKET_STEP_TRIGGERER_UUID;
+    options.runUrl ??= (process.env.BITBUCKET_GIT_HTTP_ORIGIN && process.env.BITBUCKET_REPO_FULL_NAME && process.env.BITBUCKET_BUILD_NUMBER)
+      ? `${process.env.BITBUCKET_GIT_HTTP_ORIGIN}/${process.env.BITBUCKET_REPO_FULL_NAME}/addon/pipelines/home#!/results/${process.env.BITBUCKET_BUILD_NUMBER}`
+      : undefined;
+  } else if (isCircleCI) {
+    options.source ??= "circleci";
+    if (!options.format || options.format === "generic") {
+      options.format = "circleci";
+    }
+    options.repository ??= (process.env.CIRCLE_PROJECT_USERNAME && process.env.CIRCLE_PROJECT_REPONAME)
+      ? `${process.env.CIRCLE_PROJECT_USERNAME}/${process.env.CIRCLE_PROJECT_REPONAME}`
+      : undefined;
+    options.branch ??= process.env.CIRCLE_BRANCH;
+    options.commit ??= process.env.CIRCLE_SHA1;
+    options.pipeline ??= process.env.CIRCLE_JOB || "CircleCI Job";
+    options.runId ??= process.env.CIRCLE_BUILD_NUM;
+    options.runNumber ??= process.env.CIRCLE_BUILD_NUM;
+    options.actor ??= process.env.CIRCLE_USERNAME;
+    options.runUrl ??= process.env.CIRCLE_BUILD_URL;
+  } else if (isJenkins) {
+    options.source ??= "jenkins";
+    if (!options.format || options.format === "generic") {
+      options.format = "jenkins";
+    }
+    options.pipeline ??= process.env.JOB_NAME;
+    options.runId ??= process.env.BUILD_NUMBER;
+    options.runNumber ??= process.env.BUILD_NUMBER;
+    options.branch ??= process.env.GIT_BRANCH || process.env.BRANCH_NAME;
+    options.commit ??= process.env.GIT_COMMIT;
+    options.runUrl ??= process.env.BUILD_URL;
+  }
+
+  // Local Git Fallback for any core fields still missing
+  if (!options.branch || !options.commit || !options.repository) {
+    try {
+      if (!options.branch) {
+        options.branch = execSync("git rev-parse --abbrev-ref HEAD", { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).trim();
+      }
+      if (!options.commit) {
+        options.commit = execSync("git rev-parse HEAD", { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).trim();
+      }
+      if (!options.repository) {
+        const remoteUrl = execSync("git config --get remote.origin.url", { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }).trim();
+        const match = remoteUrl.match(/[:/]([^/:]+\/[^/:]+?)(?:\.git)?$/);
+        if (match) {
+          options.repository = match[1];
+        }
+      }
+    } catch {
+      // not in a git repo or git not available, ignore
+    }
   }
 
   return options;
@@ -803,14 +1011,14 @@ async function fetchEventFromPlatform(options: any): Promise<FailureEvent> {
   throw new Error(`Unsupported failure source for automatic log fetching: ${source}. Please provide logs via --logs.`);
 }
 
-async function loadConfig(configPath: string): Promise<any> {
+async function loadConfig(configPath?: string): Promise<any> {
   try {
-    if (await fs.pathExists(configPath)) {
+    if (configPath && await fs.pathExists(configPath)) {
       return await fs.readJson(configPath);
     }
     
     // If a specific config path was provided but doesn't exist, throw error
-    if (configPath !== "./pipelineiq.json" && configPath !== "pipelineiq.json") {
+    if (configPath && configPath !== "./pipelineiq.json" && configPath !== "pipelineiq.json") {
       throw new Error(`Configuration file not found at: ${configPath}`);
     }
   } catch (error) {

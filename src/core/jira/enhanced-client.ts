@@ -392,6 +392,33 @@ export class EnhancedJiraClient implements JiraClient {
   }
 
   /**
+   * Get all versions defined for a project
+   */
+  async getProjectVersions(projectKey: string): Promise<Array<{ id: string; name: string }>> {
+    try {
+      const res = await this.request<any>("GET", this.getApiPath(`/project/${projectKey}/versions`));
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Create a new project version
+   */
+  async createProjectVersion(projectKey: string, name: string): Promise<{ id: string; name: string } | null> {
+    try {
+      const payload = {
+        name,
+        project: projectKey,
+      };
+      return await this.request<any>("POST", this.getApiPath("/version"), payload);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Get issue types for project
    */
   async getIssueTypes(projectKey: string): Promise<any[]> {
@@ -421,6 +448,12 @@ export class EnhancedJiraClient implements JiraClient {
       ...(spec.environment ? { environment: this.formatDescription(spec.environment as string) } : {}),
       ...(spec.components.length > 0 
         ? { components: spec.components.map((name) => ({ name })) }
+        : {}),
+      ...(spec.fixVersions && spec.fixVersions.length > 0
+        ? { fixVersions: spec.fixVersions.map((name) => ({ name })) }
+        : {}),
+      ...(spec.affectsVersions && spec.affectsVersions.length > 0
+        ? { versions: spec.affectsVersions.map((name) => ({ name })) }
         : {}),
       ...spec.customFields,
     };

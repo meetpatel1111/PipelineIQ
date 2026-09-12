@@ -110,6 +110,9 @@ export const PipelineIQConfigSchema = z.object({
   commentOnReferencedIssues: z.boolean().default(true),
   assignFromReferencedIssue: z.boolean().default(true),
   createRemoteLinks: z.boolean().default(true),
+  syncReleaseVersions: z.boolean().default(true),
+  autoCreateReleaseVersions: z.boolean().default(false),
+  releaseVersionPattern: z.string().optional(),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;

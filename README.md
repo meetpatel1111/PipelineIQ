@@ -2,9 +2,9 @@
 
 [![npm version](https://img.shields.io/npm/v/pipelineiq?color=blue)](https://www.npmjs.com/package/pipelineiq) [![npm downloads](https://img.shields.io/npm/dm/pipelineiq)](https://www.npmjs.com/package/pipelineiq) [![npm weekly downloads](https://img.shields.io/npm/dw/pipelineiq?color=blue&logo=npm)](https://www.npmjs.com/package/pipelineiq)
 ![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue?logo=typescript) ![Node.js Compatibility](https://img.shields.io/badge/Node.js-%3E%3D20-green) ![npm last publish](https://img.shields.io/npm/last-publisher/pipelineiq?color=orange&logo=npm) ![npm unpacked size](https://img.shields.io/npm/unpacked-size/pipelineiq?color=brightgreen&logo=npm) ![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
-![Platform Support](https://img.shields.io/badge/Platform-GitHub%20%7C%20Azure%20DevOps-orange) ![AI Providers](https://img.shields.io/badge/AI-Gemini%20%7C%20OpenAI%20%7C%20Anthropic-purple) ![npm dependencies](https://img.shields.io/badge/dependencies-18-informational?logo=npm) ![Security](https://img.shields.io/badge/Security-Snyk-blueviolet) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
+![Platform Support](https://img.shields.io/badge/Platform-GitHub%20%7C%20Azure%20%7C%20GitLab%20%7C%20Bitbucket%20%7C%20CircleCI%20%7C%20Jenkins-orange) ![AI Providers](https://img.shields.io/badge/AI-Gemini%20%7C%20OpenAI%20%7C%20Anthropic-purple) ![npm dependencies](https://img.shields.io/badge/dependencies-18-informational?logo=npm) ![Security](https://img.shields.io/badge/Security-Snyk-blueviolet) ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-PipelineIQ is the **Intelligence Layer** that connects **GitHub Actions** and **Azure DevOps** directly to **Jira**. It automatically transforms raw pipeline failures into high-fidelity, intelligent incident tickets with AI-powered Root Cause Analysis (RCA), Failure Summaries, Suggested Remediation, deduplication, and deep operational context.
+PipelineIQ is the **Universal Intelligence Layer** that connects any CI/CD pipeline (**GitHub Actions**, **Azure DevOps**, **GitLab CI**, **Bitbucket Pipelines**, **CircleCI**, **Jenkins**, or **Local CLI**) directly to **Jira**. It automatically transforms raw pipeline failures into high-fidelity, intelligent incident tickets with AI-powered Root Cause Analysis (RCA), Failure Summaries, Suggested Remediation, Releases / FixVersion tracking, deduplication, and deep operational context.
 
 ## 🛑 The Problem
 
@@ -45,21 +45,134 @@ npx pipelineiq init
 ```
 Prompts for your Jira type (Cloud or Server/Data Center PAT), project key, AI provider, and automation preferences.
 
-### 2. Run CLI Failure Analysis
+### 2. Universal CLI Execution Everywhere (Zero Custom Actions Needed)
+
+PipelineIQ runs natively anywhere Node.js is available. You do **not** need custom GitHub Actions, Azure DevOps marketplace tasks, or CI plugins.
+
+#### Option A: Transparent Command Wrapper (`pipelineiq exec`)
+Wrap your test, build, or deploy command directly. Streams terminal output, captures failures, creates Jira tickets automatically on error, and auto-resolves tickets on success:
 ```bash
-# Analyze a failure and create/update Jira incident tickets
-npx pipelineiq analyze --jira-project "DEVOPS"
+# Runs npm test; if it fails, auto-creates a Jira ticket with AI RCA and exit code preserved
+npx -y pipelineiq exec -- npm test
+```
+
+#### Option B: Post-Failure Analysis (`pipelineiq analyze`)
+Trigger failure analysis on failure conditions:
+```bash
+# Auto-detects GitHub, Azure, GitLab, Bitbucket, CircleCI, Jenkins, or local git context
+npx -y pipelineiq analyze
+
+# Or pipe logs directly via stdin
+npm test 2>&1 | npx -y pipelineiq analyze --stdin
 
 # Auto-resolve open incidents when a subsequent retry succeeds
-npx pipelineiq resolve --jira-project "DEVOPS"
+npx -y pipelineiq resolve
 ```
 
-#### Option: Global Install
-```bash
-npm install -g pipelineiq
-pipelineiq init
-pipelineiq analyze --jira-project "DEVOPS"
+### 3. Copy-Paste Universal CI/CD Configurations
+
+<details>
+<summary><b>GitHub Actions (<code>.github/workflows/ci.yml</code>)</b></summary>
+
+```yaml
+steps:
+  - uses: actions/checkout@v4
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 20
+  - name: Run Tests with PipelineIQ Wrapper
+    env:
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+      JIRA_PROJECT: "DEVOPS"
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    run: npx -y pipelineiq exec -- npm test
 ```
+</details>
+
+<details>
+<summary><b>Azure DevOps Pipelines (<code>azure-pipelines.yml</code>)</b></summary>
+
+```yaml
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '20.x'
+  - script: npx -y pipelineiq exec -- npm test
+    displayName: 'Run Tests with PipelineIQ'
+    env:
+      JIRA_URL: $(JIRA_URL)
+      JIRA_EMAIL: $(JIRA_EMAIL)
+      JIRA_TOKEN: $(JIRA_TOKEN)
+      JIRA_PROJECT: 'DEVOPS'
+      OPENAI_API_KEY: $(OPENAI_API_KEY)
+```
+</details>
+
+<details>
+<summary><b>GitLab CI (<code>.gitlab-ci.yml</code>)</b></summary>
+
+```yaml
+test:
+  image: node:20
+  script:
+    - npx -y pipelineiq exec -- npm test
+  variables:
+    JIRA_URL: $JIRA_URL
+    JIRA_EMAIL: $JIRA_EMAIL
+    JIRA_TOKEN: $JIRA_TOKEN
+    JIRA_PROJECT: "DEVOPS"
+```
+</details>
+
+<details>
+<summary><b>Bitbucket Pipelines (<code>bitbucket-pipelines.yml</code>)</b></summary>
+
+```yaml
+pipelines:
+  default:
+    - step:
+        name: Build & Test
+        image: node:20
+        script:
+          - npx -y pipelineiq exec -- npm test
+```
+</details>
+
+<details>
+<summary><b>CircleCI (<code>.circleci/config.yml</code>)</b></summary>
+
+```yaml
+version: 2.1
+jobs:
+  build:
+    docker:
+      - image: cimg/node:20.0
+    steps:
+      - checkout
+      - run:
+          name: Run Tests
+          command: npx -y pipelineiq exec -- npm test
+```
+</details>
+
+<details>
+<summary><b>Jenkins (<code>Jenkinsfile</code>)</b></summary>
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Test') {
+            steps {
+                sh 'npx -y pipelineiq exec -- npm test'
+            }
+        }
+    }
+}
+```
+</details>
 
 ## 🏗 How It Works: CI/CD → Jira Integration
 
@@ -148,20 +261,22 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 ### Core Capabilities
 
-- **Failure Detection**: Automatically detects failed GitHub workflows and Azure DevOps pipelines.
+- **Failure Detection**: Automatically detects failed workflows and pipelines across GitHub Actions, Azure DevOps, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins, and local environments.
+- **Automated Jira Release & Version Sync**: Auto-detects release candidates (`release/v1.2.0`, `v2.0.0`) and tags, automatically attaching incident tickets directly to the corresponding Jira Release FixVersion and AffectsVersion (`syncReleaseVersions: true`).
 - **Contextual Jira Issue Key Extraction & Linking**: Scans branch names, commit messages, and PR titles for Jira issue keys (`PROJ-123`). Automatically creates bidirectional links (`Blocks` / `Relates`) to developer tickets, posts failure alerts directly on developer stories, and adopts developer assignees.
 - **Native Jira Remote Links API Integration**: Registers official clickable Jira remote web links for CI/CD pipeline runs, Pull Requests, and Git commit diffs directly in Jira's web links and Development panel.
 - **Enterprise Transition & Resolution Intelligence**: Dynamically queries transition screens (`expand=transitions.fields`), matches status aliases (`Done` -> `Resolved` -> `Closed`), and auto-populates required `resolution: { name: "Fixed" }` fields to prevent 400 Bad Request errors in enterprise workflows.
 - **Environment-Aware Priority Matrix**: Automatically computes Jira issue priority (`Highest` for Production failures, `High` for Release/Staging, `Medium` for PRs, and `Low` for flaky PR test failures).
 - **Two-Way Jira Lifecycle Sync**: Automatically transitions open Jira incident tickets to "Done" / "Resolved" when a subsequent retry or commit succeeds (`piq-resolved-by-retry`).
 - **Flaky Test Intelligence & Scoring**: Computes dynamic flakiness percentage scores (0–100%) and tracks retry-resolution frequency across pipeline runs.
-- **Automated Log Fetching**: Natively fetches logs from GitHub/Azure APIs—no log redirection required.
+- **Universal Multi-CI Runner**: Zero custom marketplace actions or tasks required; auto-extracts environment context everywhere.
+- **Automated Log Fetching**: Natively fetches logs from GitHub/Azure APIs or accepts streaming stdin pipes and command execution wrappers.
 - **Proactive Validation**: Built-in connectivity checks for Jira Cloud and Jira Server/Data Center (`checkConnection`) and AI providers before analysis starts.
 - **Intelligent Enrichment**: AI-powered analysis with deterministic fallbacks and CODEOWNERS identity mapping (`userMapping`).
 - **Deduplication with Tail Slicing**: Normalizes CRLF/ANSI codes and extracts tail execution failure logs to prevent false runner-setup collisions.
 - **Dynamic Secret Masking Firewall**: Automatically scans and strips runtime environment secrets (`GITHUB_TOKEN`, `JIRA_TOKEN`, `SYSTEM_ACCESSTOKEN`) and custom tokens.
 - **Rich Context**: 80-120 operational fields vs typical 5-10.
-- **Multi-Platform**: Native support for GitHub Actions and Azure DevOps.
+- **Multi-Platform**: Native support for all major CI platforms and local development.
 - **Autonomous Self-Healing with RAG**: Automatically generates and submits verified Draft Pull Requests to fix pipeline failures, leveraging historical resolution context from prior similar Jira incidents.
 
 ### AI Features
@@ -202,6 +317,7 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 - **Custom Fields**: Full support for mapping 100+ operational metadata fields.
 - **API Reliability**: Automatic truncation of long fields (Summary/Description) to ensure Atlassian API compliance.
 - **Dedup Search**: JQL-based duplicate detection with configurable time windows and recurrence linking.
+- **Automated Releases / FixVersions & AffectsVersions Sync**: Automatically extracts semantic versions from release branches (`release/v1.4.0`, `rc/2.0.0`) and tags (`v1.4.0`). Checks against Jira project versions (and optionally creates missing project versions with `autoCreateReleaseVersions: true`), populating both `fixVersions` and `affectsVersions` on incident tickets.
 - **Bulk Operations**: High-performance client for transitions, linking, and enrichment comments.
 
 > [!TIP]

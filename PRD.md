@@ -6,16 +6,21 @@
 
 ## Tagline
 
-### AI-Powered CI/CD Failure Intelligence for GitHub, Azure DevOps & Jira
+### Universal AI-Powered CI/CD Failure Intelligence for GitHub, Azure DevOps, GitLab, Bitbucket, CircleCI, Jenkins & Jira
 
 ---
 
 # 1. Executive Summary
 
-PipelineIQ is a developer-native DevOps intelligence platform that automatically detects CI/CD failures from:
+PipelineIQ is a developer-native DevOps intelligence platform that automatically detects CI/CD failures across:
 
-* [GitHub Actions](https://github.com/features/actions?utm_source=chatgpt.com)
-* [Azure DevOps Pipelines](https://azure.microsoft.com/en-us/products/devops/pipelines/?utm_source=chatgpt.com)
+* [GitHub Actions](https://github.com/features/actions)
+* [Azure DevOps Pipelines](https://azure.microsoft.com/en-us/products/devops/pipelines/)
+* [GitLab CI/CD](https://about.gitlab.com/stages-devops-lifecycle/continuous-integration/)
+* [Bitbucket Pipelines](https://bitbucket.org/product/features/pipelines)
+* [CircleCI](https://circleci.com/)
+* [Jenkins](https://www.jenkins.io/)
+* Local Git / CLI Environments
 
 and creates intelligent Jira issues enriched with:
 

@@ -49,6 +49,8 @@ export const JiraTicketSpecSchema = z.object({
   customFields: z.record(z.string(), z.unknown()).default({}),
   dedupSignature: z.string(),
   externalLinks: z.array(ExternalLinkSchema).default([]),
+  fixVersions: z.array(z.string()).default([]),
+  affectsVersions: z.array(z.string()).default([]),
   provenance: z.record(z.string(), FieldProvenanceSchema).default({}),
   metrics: z.custom<ComputedMetrics>().optional(),
 });

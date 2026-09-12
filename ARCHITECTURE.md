@@ -21,9 +21,13 @@ PipelineIQ bridges the "Intelligence Gap" between automated CI/CD pipelines (Git
 4. **AI-Assisted Efficiency**: Use LLMs to summarize complex logs into human-readable insights.
 
 ### Current Scope
-- Integration with GitHub Actions and Azure DevOps.
-- Support for Jira Cloud and Jira Server/Data Center.
-- Deterministic and AI-driven enrichment.
+- Universal multi-CI execution: Native auto-detection and execution across GitHub Actions, Azure DevOps, GitLab CI, Bitbucket Pipelines, CircleCI, Jenkins, and Local Git CLI.
+- Execution wrapper & Stdin streaming (`pipelineiq exec`, `pipelineiq analyze --stdin`).
+- Automated Jira Releases / FixVersions & AffectsVersions synchronization.
+- Support for Jira Cloud and Jira Server/Data Center (REST v2 API, ADF v3, and WikiMarkup).
+- Contextual developer ticket extraction (`PROJ-123`) and bidirectional linking (`Blocks` / `Relates`).
+- Native Jira Remote Links API integration for run executions, PRs, and commit diffs.
+- Enterprise transition screen dynamic query and resolution auto-population.
 - Two-way Jira lifecycle synchronization (auto-resolution on pipeline retry / success).
 - Flaky test intelligence & scoring across pipeline executions.
 - Autonomous remediation (Self-healing pipelines with Historical Resolution RAG).
@@ -37,6 +41,7 @@ PipelineIQ bridges the "Intelligence Gap" between automated CI/CD pipelines (Git
 
 - **Scalability**: Stateless core engine capable of processing thousands of pipeline failures in parallel.
 - **Reliability**: Deterministic-first design ensuring reports are generated even if AI services fail.
+- **Universal Portability**: Zero marketplace plugins, tasks, or actions required; CLI runs anywhere Node.js exists.
 - **Extensibility**: Plugin-based architecture for CI/CD adapters, AI providers, and ticketing systems.
 - **Security**: Robust secret masking and log sanitization to protect sensitive operational data.
 - **Low Overhead**: Zero-configuration defaults with high-fidelity "auto-discovery" of metadata.
@@ -51,17 +56,23 @@ PipelineIQ follows a modular, adapter-based architecture. The core processing en
 
 ```mermaid
 graph TD
-    subgraph "CI/CD Platforms"
+    subgraph "Universal CI/CD Runners"
         GHA[GitHub Actions]
         ADO[Azure DevOps]
-        CLI[Standalone CLI]
+        GL[GitLab CI]
+        BB[Bitbucket Pipelines]
+        CCI[CircleCI]
+        JEN[Jenkins]
+        CLI[Local / Custom CLI]
     end
 
     subgraph "PipelineIQ Core Engine"
-        In[Ingestion Adapter]
+        In[Ingestion Adapter & Presets]
+        Wrap[Exec Wrapper & Stdin Stream]
         Norm[Normalization Layer]
         EP[Enrichment Pipeline]
         Res[Auto-Resolution Engine]
+        VerSync[Jira Release Version Sync]
         
         subgraph "Enrichment Pipeline"
             Det[Deterministic Enricher]
@@ -77,7 +88,7 @@ graph TD
     end
 
     subgraph "External Integrations"
-        Jira[Jira Cloud / Server DC]
+        Jira[Jira Cloud / Server DC: Issues, Versions, Transitions, Remote Links]
         Notify[Slack / Teams / Discord]
         LLM[AI Providers: Gemini / OpenAI / Anthropic / Ollama]
         GitPR[GitHub / Azure DevOps PRs]
@@ -85,10 +96,17 @@ graph TD
 
     GHA --> In
     ADO --> In
-    CLI --> In
+    GL --> In
+    BB --> In
+    CCI --> In
+    JEN --> In
+    CLI --> Wrap
+    Wrap --> In
     In --> Norm
     Norm --> EP
     In -->|Status = Success| Res
+    Norm --> VerSync
+    VerSync --> Jira
     
     EP --> SL
     EP --> AE

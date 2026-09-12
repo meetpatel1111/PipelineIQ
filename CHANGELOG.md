@@ -4,6 +4,16 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.24.0] - 2026-09-13
+
+### Added
+- **Universal Multi-CI Runner Architecture (`applyCIPreset`)**: The PipelineIQ CLI can now be executed anywhere with zero custom marketplace plugins, tasks, or actions. Automatically senses runtime environments and populates repository, commit SHA, branch name, pipeline name, run IDs, and actor across **GitLab CI** (`GITLAB_CI`), **Bitbucket Pipelines** (`BITBUCKET_BUILD_NUMBER`), **CircleCI** (`CIRCLECI`), **Jenkins** (`JENKINS_URL`), **GitHub Actions** (`GITHUB_ACTIONS`), and **Azure DevOps** (`TF_BUILD`). Includes a zero-crash local Git fallback (`git rev-parse`, `git config`) for pre-push hooks and local developer runs.
+- **Execution Wrapper Command (`pipelineiq exec -- <cmd...>`)**: Added dedicated `pipelineiq exec` command that transparently spawns any build, test, or deployment command, streams stdout/stderr live to the terminal, captures logs, and automatically reports failures directly into Jira with root cause analysis. Exits with the wrapped command's original exit code and triggers auto-resolution on exit code 0 when `autoResolveOnSuccess: true`.
+- **Piped Stdin Log Ingestion (`pipelineiq analyze --stdin`)**: Added `--stdin` option to pipe command outputs directly into the failure analyzer (`npm test 2>&1 | npx pipelineiq analyze --stdin`).
+- **Automated Jira Releases / FixVersions & AffectsVersions Synchronization**: Added `version-extractor.ts` and Jira Project Version APIs (`getProjectVersions`, `createProjectVersion`). Automatically extracts semantic release versions from branch names (`release/v1.4.0`, `release/2.0.0`, `rc/1.1.0`) or tags (`v1.4.0`), maps candidates to Jira project versions, and links them into `fixVersions` and `affectsVersions` fields on created and updated Jira tickets. Supports `syncReleaseVersions: true` (default), `autoCreateReleaseVersions: true`, and custom `releaseVersionPattern`.
+
+---
+
 ## [0.23.0] - 2026-09-13
 
 ### Added

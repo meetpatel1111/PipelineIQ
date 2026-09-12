@@ -1,6 +1,14 @@
 import { z } from "zod";
 
-export const FailureSourceSchema = z.enum(["github", "azure-devops"]);
+export const FailureSourceSchema = z.enum([
+  "github",
+  "azure-devops",
+  "gitlab",
+  "bitbucket",
+  "circleci",
+  "jenkins",
+  "generic",
+]);
 export type FailureSource = z.infer<typeof FailureSourceSchema>;
 
 export const RepositorySchema = z.object({

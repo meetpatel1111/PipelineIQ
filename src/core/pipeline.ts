@@ -20,6 +20,7 @@ import type { NotificationResult, NotificationPayload } from "./notifications/in
 import { SelfHealingEngine } from "./self-healing/index.js";
 import { findReferencedIssueKeys } from "./jira/key-extractor.js";
 import { registerPipelineRemoteLinks } from "./jira/remote-links.js";
+import { extractReleaseVersions, matchJiraVersion } from "./jira/version-extractor.js";
 
 type ProcessResultBase = {
   spec: JiraTicketSpec;
@@ -96,6 +97,30 @@ export async function processFailureEvent(
   // Propagate computed metrics to fields for Jira custom field mapping
   if (ctx.metrics) {
     ctx.fields.metrics = ctx.metrics;
+  }
+
+  // Release Version / FixVersion synchronization from branch or tag
+  if (config.syncReleaseVersions !== false) {
+    const candidateVersions = extractReleaseVersions(event.branch, config.releaseVersionPattern);
+    if (candidateVersions.length > 0) {
+      try {
+        const projectVersions = await (jira as EnhancedJiraClient).getProjectVersions(config.jiraProject);
+        let matched = matchJiraVersion(candidateVersions, projectVersions);
+        if (!matched && config.autoCreateReleaseVersions && candidateVersions[0]) {
+          const createdVer = await (jira as EnhancedJiraClient).createProjectVersion(config.jiraProject, candidateVersions[0]);
+          if (createdVer) {
+            matched = createdVer.name;
+          }
+        }
+        if (matched) {
+          ctx.fields.fixVersions = [matched];
+          ctx.fields.affectsVersions = [matched];
+          logger.info({ fixVersion: matched }, "associated Jira release fixVersion");
+        }
+      } catch (verErr) {
+        logger.debug({ verErr }, "failed to sync project release version");
+      }
+    }
   }
 
   const spec = JiraTicketSpecSchema.parse(ctx.fields);

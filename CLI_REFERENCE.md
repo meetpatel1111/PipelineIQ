@@ -15,6 +15,7 @@ Complete reference for the `pipelineiq` command-line interface — covering all 
   - [parse](#parse)
   - [test](#test)
   - [resolve](#resolve)
+  - [exec](#exec)
 - [Config File](#config-file)
 - [analyze — Complete Flag Reference](#analyze--complete-flag-reference)
   - [General Flags](#general-flags)
@@ -67,12 +68,13 @@ Analyze a CI/CD failure and create or update a Jira ticket.
 pipelineiq analyze [options]
 ```
 
-**Two operating modes:**
+**Three operating modes:**
 
 | Mode | Trigger | Behavior |
 |---|---|---|
 | **Log file** | `--logs <path>` is provided | Reads and parses the file/directory; builds context from flags + env vars |
-| **Platform API** | `--logs` is omitted | Fetches logs directly from GitHub Actions REST API or Azure DevOps; requires `GITHUB_TOKEN` |
+| **Stdin pipe** | `--stdin` is provided (or piped via `| pipelineiq analyze --stdin`) | Reads raw logs directly from stdin stream |
+| **Platform API** | `--logs` and `--stdin` are omitted | Fetches logs directly from GitHub Actions REST API or Azure DevOps; requires `GITHUB_TOKEN` |
 
 **Configuration precedence (highest → lowest):**
 
@@ -185,6 +187,34 @@ Queries Jira for open tickets matching candidate dedup signatures (`labels = "pi
 
 ---
 
+### exec
+
+Transparently execute any command, stream stdout and stderr live to the terminal, and automatically report failures to Jira with AI root cause analysis. Exits with the wrapped command's original exit code, and auto-resolves open Jira incident tickets if the command exits with code 0 and `dedup.autoResolveOnSuccess: true`.
+
+```bash
+pipelineiq exec [options] -- <command...>
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-c, --config <path>` | `./pipelineiq.json` | Path to config file |
+| `-p, --preset <preset>` | `auto` | CI platform preset (`auto`, `github`, `azure-devops`, `gitlab`, `bitbucket`, `circleci`, `jenkins`, `none`) |
+
+**Examples:**
+
+```bash
+# Run npm test anywhere (GitHub, Azure, GitLab, Jenkins, Bitbucket, CircleCI, or local)
+pipelineiq exec -- npm test
+
+# Run build command with options
+pipelineiq exec -- npm run build:production
+
+# Execute tests with pytest
+pipelineiq exec -- pytest tests/ -v
+```
+
+---
+
 ## Config File
 
 Default path: `./pipelineiq.json`. Override with `--config`.
@@ -264,6 +294,9 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `commentOnReferencedIssues` | boolean | No | `true` | Post an alert comment on referenced developer stories when a CI pipeline fails |
 | `assignFromReferencedIssue` | boolean | No | `true` | Assign incident ticket to the assignee of the referenced developer story if incident is unassigned |
 | `createRemoteLinks` | boolean | No | `true` | Register native Jira Remote Links for CI run URL, PR URL, and Commit diff |
+| `syncReleaseVersions` | boolean | No | `true` | Automatically extract candidate semantic versions from branch/tag and link Jira FixVersion & AffectsVersion |
+| `autoCreateReleaseVersions` | boolean | No | `false` | Automatically create release version in Jira project if it does not already exist |
+| `releaseVersionPattern` | string | No | — | Custom regex pattern with capture group for extracting release versions from branch names |
 | `userMapping` | Record<string, string> | No | — | Map GitHub usernames (e.g. `meetpatel1111`) to Jira account IDs or emails |
 | `selfHealing.enabled` | boolean | No | `false` | Enable autonomous self-healing code fix generation |
 | `selfHealing.healOnRecurrence` | boolean | No | `true` | Trigger self-healing patch generation on recurring deduplication hits |
@@ -300,6 +333,7 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `-s, --source <source>` | `github` | Platform source: `github` or `azure-devops`. Auto-detected from env if omitted |
 | `-c, --config <path>` | `./pipelineiq.json` | Path to the config file |
 | `--status <status>` | `failed` | Run status (`failed` or `success`). When `success`, triggers auto-resolution |
+| `--stdin` | `false` | Read raw failure logs directly from stdin stream (`npm test 2>&1 \| pipelineiq analyze --stdin`) |
 | `--dry-run` | `false` | Print the result JSON without calling the Jira API |
 | `--github-token <token>` | `$GITHUB_TOKEN` | GitHub token for Platform API mode (fetching run logs and job data) |
 
@@ -370,28 +404,41 @@ Send notifications to Slack and/or Microsoft Teams when a Jira ticket is created
 
 ---
 
-### Core Pipeline Context
+### Core Pipeline Context & Universal Multi-CI Auto-Detection
 
-These flags apply to **both GitHub Actions and Azure DevOps**. When inside either platform, values are auto-read from the corresponding environment variables — flags are only needed for local testing or CI wrappers that don't set standard env vars.
+PipelineIQ automatically senses and auto-populates all operational metadata from environment variables across **GitHub Actions**, **Azure DevOps**, **GitLab CI**, **Bitbucket Pipelines**, **CircleCI**, **Jenkins**, and **Local Git**. CLI flags are only needed if you wish to explicitly override the auto-detected values.
 
-| Flag | GitHub env | ADO env | Description |
-|---|---|---|---|
-| `--repository <owner/repo>` | `GITHUB_REPOSITORY` | `BUILD_REPOSITORY_NAME` | Repository in `owner/repo` format |
-| `--repository-owner <owner>` | `GITHUB_REPOSITORY_OWNER` | `SYSTEM_TEAMPROJECT` | Repository owner or team project |
-| `--branch <branch>` | `GITHUB_REF` | `BUILD_SOURCEBRANCH` | Branch name or full ref |
-| `--commit <sha>` | `GITHUB_SHA` | `BUILD_SOURCEVERSION` | Commit SHA |
-| `--pipeline <name>` | `GITHUB_WORKFLOW` | `BUILD_DEFINITIONNAME` | Pipeline or workflow name |
-| `--run-id <id>` | `GITHUB_RUN_ID` | `BUILD_BUILDID` | Unique run/build ID |
-| `--run-number <number>` | `GITHUB_RUN_NUMBER` | `BUILD_BUILDNUMBER` | Sequential run number |
-| `--run-url <url>` | auto-constructed | `BUILD_BUILDURI` | Direct URL to the pipeline run |
-| `--run-attempt <count>` | `GITHUB_RUN_ATTEMPT` | `SYSTEM_JOBATTEMPT` | Retry attempt number (1-based) |
-| `--event-name <name>` | `GITHUB_EVENT_NAME` | `BUILD_REASON` | Trigger event (`push`, `Manual`, `Schedule`, etc.) |
-| `--environment <env>` | `$ENVIRONMENT` | `ENVIRONMENT_NAME` | Deployment environment label (`dev`, `staging`, `production`) |
-| `--actor <name>` | `GITHUB_ACTOR` | `BUILD_REQUESTEDFOR` | Username who triggered the run |
-| `--job-name <name>` | `GITHUB_JOB` | `SYSTEM_JOBNAME` | Job or phase name |
-| `--runner-os <os>` | `RUNNER_OS` | `AGENT_OS` | Operating system (`Linux`, `Windows`, `macOS`) |
-| `--runner-arch <arch>` | `RUNNER_ARCH` | `AGENT_OSARCHITECTURE` | CPU architecture (`X64`, `ARM64`) |
-| `--api-url <url>` | `GITHUB_API_URL` | `SYSTEM_COLLECTIONURI` | REST API base URL |
+| Operational Field | GitHub Actions | Azure DevOps | GitLab CI | Bitbucket | CircleCI | Jenkins | Local Git Fallback |
+|---|---|---|---|---|---|---|---|
+| Repository | `GITHUB_REPOSITORY` | `BUILD_REPOSITORY_NAME` | `CI_PROJECT_PATH` | `BITBUCKET_REPO_FULL_NAME` | `CIRCLE_PROJECT_REPONAME` | `JOB_NAME` | `git remote get-url` |
+| Branch | `GITHUB_REF_NAME` | `BUILD_SOURCEBRANCHNAME` | `CI_COMMIT_REF_NAME` | `BITBUCKET_BRANCH` | `CIRCLE_BRANCH` | `GIT_BRANCH` | `git rev-parse HEAD` |
+| Commit SHA | `GITHUB_SHA` | `BUILD_SOURCEVERSION` | `CI_COMMIT_SHA` | `BITBUCKET_COMMIT` | `CIRCLE_SHA1` | `GIT_COMMIT` | `git rev-parse HEAD` |
+| Pipeline / Job | `GITHUB_WORKFLOW` | `BUILD_DEFINITIONNAME` | `CI_JOB_NAME` | `BITBUCKET_STEP_TRIGGER` | `CIRCLE_JOB` | `JOB_BASE_NAME` | `"Local CLI"` |
+| Run / Build ID | `GITHUB_RUN_ID` | `BUILD_BUILDID` | `CI_PIPELINE_ID` | `BITBUCKET_BUILD_NUMBER` | `CIRCLE_BUILD_NUM` | `BUILD_NUMBER` | timestamp |
+| Run Number | `GITHUB_RUN_NUMBER` | `BUILD_BUILDNUMBER` | `CI_JOB_ID` | `BITBUCKET_BUILD_NUMBER` | `CIRCLE_BUILD_NUM` | `BUILD_NUMBER` | `"1"` |
+| Run URL | auto-constructed | `BUILD_BUILDURI` | `CI_JOB_URL` | auto-constructed | `CIRCLE_BUILD_URL` | `BUILD_URL` | — |
+| Actor | `GITHUB_ACTOR` | `BUILD_REQUESTEDFOR` | `GITLAB_USER_LOGIN` | triggerer UUID | `CIRCLE_USERNAME` | `CHANGE_AUTHOR` | `git config user.name` |
+
+#### Explicit CLI Flags
+
+| Flag | Description |
+|---|---|
+| `--repository <owner/repo>` | Repository in `owner/repo` format |
+| `--repository-owner <owner>` | Repository owner or team project |
+| `--branch <branch>` | Branch name or full ref |
+| `--commit <sha>` | Commit SHA |
+| `--pipeline <name>` | Pipeline or workflow name |
+| `--run-id <id>` | Unique run/build ID |
+| `--run-number <number>` | Sequential run number |
+| `--run-url <url>` | Direct URL to the pipeline run |
+| `--run-attempt <count>` | Retry attempt number (1-based) |
+| `--event-name <name>` | Trigger event (`push`, `Manual`, `Schedule`, etc.) |
+| `--environment <env>` | Deployment environment label (`dev`, `staging`, `production`) |
+| `--actor <name>` | Username who triggered the run |
+| `--job-name <name>` | Job or phase name |
+| `--runner-os <os>` | Operating system (`Linux`, `Windows`, `macOS`) |
+| `--runner-arch <arch>` | CPU architecture (`X64`, `ARM64`) |
+| `--api-url <url>` | REST API base URL |
 
 ---
 
