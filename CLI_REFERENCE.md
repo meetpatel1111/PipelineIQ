@@ -27,6 +27,7 @@ Complete reference for the `pipelineiq` command-line interface — covering all 
   - [GitHub Actions — Auto-read Env Vars (no CLI override)](#github-actions--auto-read-env-vars-no-cli-override)
   - [Azure DevOps — CLI Flags](#azure-devops--cli-flags)
   - [Azure DevOps — Auto-read Env Vars (no CLI override)](#azure-devops--auto-read-env-vars-no-cli-override)
+  - [Bitbucket Pipelines — Auto-read Env Vars (no CLI override)](#bitbucket-pipelines--auto-read-env-vars-no-cli-override)
   - [Display & Metadata](#display--metadata)
 - [display-meta Field Keys](#display-meta-field-keys)
 - [Examples](#examples)
@@ -329,8 +330,8 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | Flag | Default | Description |
 |---|---|---|
 | `-l, --logs <path>` | — | Path to a log file or directory. Directories: reads last 10 `*.log` / `*.txt` / `*.out` files |
-| `-f, --format <format>` | `generic` | Log format: `github-actions`, `azure-devops`, `terraform`, `kubernetes`, `docker`, `junit`, `generic` |
-| `-s, --source <source>` | `github` | Platform source: `github` or `azure-devops`. Auto-detected from env if omitted |
+| `-f, --format <format>` | `generic` | Log format: `github-actions`, `azure-devops`, `gitlab`, `bitbucket`, `terraform`, `kubernetes`, `docker`, `junit`, `generic` |
+| `-s, --source <source>` | `github` | Platform source: `github`, `azure-devops`, `gitlab`, `bitbucket`. Auto-detected from env if omitted |
 | `-c, --config <path>` | `./pipelineiq.json` | Path to the config file |
 | `--status <status>` | `failed` | Run status (`failed` or `success`). When `success`, triggers auto-resolution |
 | `--stdin` | `false` | Read raw failure logs directly from stdin stream (`npm test 2>&1 \| pipelineiq analyze --stdin`) |
@@ -661,6 +662,48 @@ All environment variables matching `RELEASE_ARTIFACTS_*` are automatically scann
 
 ---
 
+### Bitbucket Pipelines — Auto-read Env Vars (no CLI override)
+
+Bitbucket Cloud predefined variables automatically captured when running inside Bitbucket Pipelines (`BITBUCKET_BUILD_NUMBER` is set).
+
+| Environment Variable | PipelineIQ Schema Field | Description |
+|---|---|---|
+| `BITBUCKET_BUILD_NUMBER` | `pipeline.bitbucketBuildNumber` | The unique, monotonic build number for the pipeline execution |
+| `BITBUCKET_CLONE_DIR` | `pipeline.bitbucketCloneDir` | Absolute path of the directory where repository was cloned |
+| `BITBUCKET_COMMIT` | `pipeline.bitbucketCommit` | The commit hash of the commit that kicked off the pipeline |
+| `BITBUCKET_WORKSPACE` | `pipeline.bitbucketWorkspace` | The workspace slug in which the repository lives |
+| `BITBUCKET_WORKSPACE_UUID` | `pipeline.bitbucketWorkspaceUuid` | Canonical UUID of the workspace |
+| `BITBUCKET_REPO_OWNER` | `pipeline.bitbucketRepoOwner` | The repository owner name |
+| `BITBUCKET_REPO_OWNER_UUID` | `pipeline.bitbucketRepoOwnerUuid` | Canonical UUID of the repository owner |
+| `BITBUCKET_REPO_SLUG` | `pipeline.bitbucketRepoSlug` | The repository slug (URL-friendly name) |
+| `BITBUCKET_REPO_UUID` | `pipeline.bitbucketRepoUuid` | Canonical UUID of the repository |
+| `BITBUCKET_REPO_FULL_NAME` | `pipeline.bitbucketRepoFullName` | Full repository identifier (`{workspace}/{repo-slug}`) |
+| `BITBUCKET_REPO_IS_PRIVATE` | `pipeline.bitbucketRepoIsPrivate` | Boolean indicating whether repository is private |
+| `BITBUCKET_BRANCH` | `pipeline.bitbucketBranch` | Branch name that kicked off the pipeline |
+| `BITBUCKET_TAG` | `pipeline.bitbucketTag` | Tag name that kicked off the pipeline |
+| `BITBUCKET_BOOKMARK` | `pipeline.bitbucketBookmark` | Bookmark name that kicked off the pipeline |
+| `BITBUCKET_PARALLEL_STEP` | `pipeline.bitbucketParallelStep` | Zero-based index of step in a parallel group |
+| `BITBUCKET_PARALLEL_STEP_COUNT` | `pipeline.bitbucketParallelStepCount` | Total number of steps in parallel group |
+| `BITBUCKET_PR_ID` | `pipeline.bitbucketPrId` | Pull request ID if pipeline run is on a PR |
+| `BITBUCKET_PR_DESTINATION_BRANCH` | `pipeline.bitbucketPrDestinationBranch` | Target branch of the pull request |
+| `BITBUCKET_PR_DESTINATION_COMMIT` | `pipeline.bitbucketPrDestinationCommit` | Commit SHA of the target branch |
+| `BITBUCKET_MERGE_QUEUE_PR_IDS` | `pipeline.bitbucketMergeQueuePrIds` | Pull request IDs included in merge queue run |
+| `BITBUCKET_GIT_HTTP_ORIGIN` | `pipeline.bitbucketGitHttpOrigin` | Git clone HTTP origin URL |
+| `BITBUCKET_GIT_SSH_ORIGIN` | `pipeline.bitbucketGitSshOrigin` | Git clone SSH origin URL |
+| `BITBUCKET_EXIT_CODE` | `pipeline.bitbucketExitCode` | Exit code of the step execution |
+| `BITBUCKET_STEP_UUID` | `pipeline.bitbucketStepUuid` | Canonical UUID of the step execution |
+| `BITBUCKET_PIPELINE_UUID` | `pipeline.bitbucketPipelineUuid` | Canonical UUID of the pipeline run |
+| `BITBUCKET_DEPLOYMENT_ENVIRONMENT` | `pipeline.bitbucketDeploymentEnvironment` | Target deployment environment name |
+| `BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID` | `pipeline.bitbucketDeploymentEnvironmentUuid` | Canonical UUID of deployment environment |
+| `BITBUCKET_PROJECT_KEY` | `pipeline.bitbucketProjectKey` | The Bitbucket project key |
+| `BITBUCKET_PROJECT_UUID` | `pipeline.bitbucketProjectUuid` | Canonical UUID of the Bitbucket project |
+| `BITBUCKET_STEP_TRIGGERER_UUID` | `pipeline.bitbucketStepTriggererUuid` | UUID of user who triggered the step |
+| `BITBUCKET_STEP_RUN_NUMBER` | `pipeline.bitbucketStepRunNumber` | Run number of the step execution |
+| `BITBUCKET_PACKAGES_USERNAME` | `pipeline.bitbucketPackagesUsername` | Username for Bitbucket package registries |
+| `BITBUCKET_DOCKER_HOST` | `pipeline.bitbucketDockerHost` | Docker daemon host IP or socket |
+
+---
+
 ### Display & Metadata
 
 | Flag | Description |
@@ -683,153 +726,186 @@ pipelineiq analyze \
 
 Pass these keys to `--display-meta` to control exactly which rows appear in the Jira ticket metadata table.
 
-| Key | Label in ticket | Source |
-|---|---|---|
-| `source` | Source | Platform (`github` / `azure-devops`) |
-| `pipeline` | Pipeline | Name + URL |
-| `repository` | Repository | Owner/repo + URL |
-| `branch` | Branch | Branch name |
-| `commit` | Commit | Short SHA + URL |
-| `commitMessage` | Commit Message | First 80 chars of commit message |
-| `environment` | Environment | Deployment environment label |
-| `step` | Failed Step | Specific step that failed |
-| `stage` | Failed Stage | Stage name |
-| `job` | Job | Failed job name (GitHub Actions) |
-| `jobName` | Job Name | Job display name (Azure DevOps) |
-| `eventName` | Event Name | Trigger event |
-| `runNumber` | Run Number | Sequential run number |
-| `runAttempt` | Run Attempt | Retry attempt number |
-| `retryCount` | Retry Count | Number of retries (`attempt − 1`) |
-| `triggeredBy` | Triggered By | Actor who triggered the run |
-| `exitCode` | Exit Code | Process exit code |
-| `duration` | Duration | Wall-clock run time |
-| `startedAt` | Started At | Run start timestamp (UTC) |
-| `runnerOs` | Runner OS | Operating system |
-| `runnerArch` | Runner Arch | CPU architecture |
-| `runnerType` | Runner Type | `github-hosted` / `self-hosted` |
-| `runnerEnvironment` | Runner Environment | `github-hosted` / `self-hosted` (from `RUNNER_ENVIRONMENT`) |
-| `runnerDebug` | Runner Debug | `true` if debug logging was enabled |
-| `runnerName` | Agent Name | Runner or agent display name |
-| `runnerTemp` | Runner Temp | Temporary directory |
-| `runnerToolCache` | Runner Tool Cache | Tool cache path |
-| `runnerWorkspace` | Runner Workspace | Workspace directory |
-| `workspace` | Workspace | Working directory |
-| `jobStatus` | Job Status | `success`, `failure`, or `cancelled` |
-| `jobContainer` | Job Container | Container details |
-| `jobServices` | Job Services | Service container details |
-| `strategyIndex` | Matrix Index | `strategy.job-index` value |
-| `strategyTotal` | Matrix Total | `strategy.job-total` value |
-| `refType` | Ref Type | `branch` or `tag` |
-| `refProtected` | Ref Protected | Whether branch protection applies |
-| `workflowRef` | Workflow Ref | Full workflow file path |
-| `workflowSha` | Workflow SHA | Commit SHA of the workflow file |
-| `retentionDays` | Log Retention | Days logs are retained |
-| `baseRef` | Base Ref | PR target branch |
-| `headRef` | Head Ref | PR source branch |
-| `action` | Action | Action name |
-| `actionPath` | Action Path | Action filesystem path |
-| `actionRepository` | Action Repo | Action repository |
-| `actionRef` | Action Ref | Action git reference |
-| `actionStatus` | Action Status | Action execution status |
-| `repositoryGitUrl` | Repo Git URL | Git clone URL |
-| `secretSource` | Secret Source | GitHub secret source |
-| `apiUrl` | API URL | REST API URL |
-| `graphqlUrl` | GraphQL URL | GraphQL API URL |
-| `eventPayload` | Event Payload | `Included (JSON)` if present |
-| `teamProject` | Team Project | ADO team project |
-| `agentPool` | Agent Pool | ADO agent pool |
-| `buildNumber` | Build Number | ADO build number |
-| `buildUri` | Build URI | ADO build URI |
-| `reason` | Build Reason | ADO build trigger reason |
-| `requestedFor` | Requested For | ADO: build requestor name |
-| `requestedForEmail` | Requester Email | ADO: build requestor email |
-| `sourceBranchName` | Source Branch Name | ADO: short branch name |
-| `fullSourceBranch` | Source Branch (full ref) | ADO: full `refs/heads/…` ref |
-| `sourceVersionMessage` | Commit Message | ADO: `Build.SourceVersionMessage` |
-| `repositoryClean` | Repo Clean | ADO: `Build.Repository.Clean` |
-| `repositoryGitSubmoduleCheckout` | Git Submodule Checkout | ADO: submodule checkout mode |
-| `agentId` | Agent ID | ADO agent ID |
-| `agentMachineName` | Agent Machine | ADO agent hostname |
-| `agentJobStatus` | Agent Job Status | ADO: `Agent.JobStatus` |
-| `agentBuildDirectory` | Agent Build Dir | ADO agent build directory |
-| `agentHomeDirectory` | Agent Home Dir | ADO agent install directory |
-| `agentTempDirectory` | Agent Temp Dir | ADO agent temp directory |
-| `agentToolsDirectory` | Agent Tools Dir | ADO agent tools directory |
-| `agentWorkFolder` | Agent Work Folder | ADO agent work folder |
-| `agentContainerMapping` | Container Mapping | ADO container mapping JSON |
-| `agentReleaseDirectory` | Release Dir | ADO release artifacts directory |
-| `agentRootDirectory` | Agent Root | ADO agent root directory |
-| `pipelineWorkspace` | Pipeline Workspace | ADO pipeline workspace |
-| `systemDebug` | System Debug | ADO: `System.Debug` |
-| `systemDefaultWorkingDirectory` | Default Working Dir | ADO: default working directory |
-| `systemCollectionUri` | Collection URI | ADO organization URL |
-| `systemTeamFoundationCollectionUri` | TF Collection URI | ADO TFS collection URL |
-| `systemJobDisplayName` | Job Display Name | ADO: `System.JobDisplayName` |
-| `systemJobId` | Job ID | ADO: `System.JobId` |
-| `systemJobName` | System Job Name | ADO: `System.JobName` |
-| `systemPhaseAttempt` | Phase Attempt | ADO phase retry count |
-| `systemPhaseDisplayName` | Phase Display Name | ADO phase display name |
-| `systemPhaseName` | Phase Name | ADO phase system name |
-| `systemPlanId` | System Plan ID | ADO plan ID |
-| `systemStageAttempt` | Stage Attempt | ADO stage retry count |
-| `systemStageDisplayName` | Stage Display Name | ADO stage display name |
-| `systemStageName` | Stage Name | ADO stage system name |
-| `systemWorkFolder` | System Work Folder | ADO system work folder |
-| `systemHostType` | System Host Type | `build` or `release` |
-| `systemCollectionId` | System Collection ID | ADO collection GUID |
-| `systemTimelineId` | System Timeline ID | ADO timeline ID |
-| `tfBuild` | TF Build | `True` in all ADO jobs |
-| `checksStageAttempt` | Checks Stage Attempt | ADO checks gate attempt |
-| `strategyName` | Strategy Name | ADO deployment strategy name |
-| `strategyCycleName` | Strategy Cycle Name | ADO strategy cycle name |
-| `cronScheduleDisplayName` | Cron Display Name | ADO cron schedule name |
-| `releaseId` | Release ID | ADO release ID |
-| `releaseName` | Release Name | ADO release name |
-| `releaseUri` | Release URI | ADO release URL |
-| `releaseDescription` | Release Description | ADO release description |
-| `releaseDefinitionId` | Release Def ID | ADO release definition ID |
-| `releaseDefinitionName` | Release Def Name | ADO release definition name |
-| `releaseDefinitionEnvironmentId` | Release Def Env ID | ADO release definition environment ID |
-| `releaseEnvironmentId` | Release Env ID | ADO release environment ID |
-| `releaseEnvironmentName` | Release Env Name | ADO release environment name |
-| `releasePrimaryArtifactSourceAlias` | Primary Artifact Alias | ADO primary artifact source alias |
-| `releaseDeploymentId` | Release Deployment ID | ADO deployment ID |
-| `releaseDeploymentRequestedFor` | Release Requested For | ADO deployment requestor name |
-| `releaseDeploymentRequestedForEmail` | Release Requester Email | ADO deployment requestor email |
-| `triggeredByDefinitionName` | Triggered By Pipeline | ADO: name of upstream pipeline |
-| `triggeredByBuildNumber` | Triggered By Build # | ADO: upstream build number |
-| `triggeredByDefinitionId` | Triggered By Def ID | ADO: upstream definition ID |
-| `triggeredByBuildId` | Triggered By Build ID | ADO: upstream build ID |
-| `environmentResourceName` | Env Resource Name | ADO deployment environment resource |
-| `environmentId` | Environment ID | ADO deployment environment ID |
-| `prIsFork` | PR Is Fork | ADO: whether PR is from a fork |
-| `prId` | PR ID | ADO: pull request ID |
-| `prNumber` | PR Number | ADO: pull request number |
-| `prTargetBranchName` | PR Target Branch | ADO: PR target branch name |
-| `prSourceBranch` | PR Source Branch | ADO: PR source branch |
-| `prSourceCommitId` | PR Source Commit | ADO: PR source commit SHA |
-| `prSourceRepoUri` | PR Source Repo URI | ADO: PR source repository URI (forks) |
-| `prTargetBranch` | PR Target Branch (full) | ADO: full PR target branch ref |
-| `stageRequestedBy` | Stage Requested By | ADO: user who triggered the stage |
-| `stageRequestedForId` | Stage Requester ID | ADO: GUID of stage trigger user |
-| `sourceTfvcShelveset` | TFVC Shelveset | ADO: TFVC shelveset name |
-| `definitionId` | Definition ID | ADO build definition ID |
-| `definitionVersion` | Definition Version | ADO build definition version |
-| `containerId` | Container ID | ADO artifact container ID |
-| `repositoryId` | Repository ID | Repository ID |
-| `repositoryProvider` | Repo Provider | Repository provider type |
-| `repositoryUri` | Repo URI | Repository URL |
-| `repositoryLocalPath` | Repo Local Path | Local checkout path |
-| `sourcesDirectory` | Sources Dir | Source code directory |
-| `binariesDirectory` | Binaries Dir | Compiled output directory |
-| `artifactStagingDirectory` | Artifact Staging Dir | Artifact staging directory |
-| `stagingDirectory` | Staging Dir | Staging directory |
-| `testResultsDirectory` | Test Results Dir | Test results directory |
-| `requestedFor` | Requested For | Build requestor display name |
-| `requestedForEmail` | Requester Email | Build requestor email |
-| `requestedForId` | Requester ID | Build requestor GUID |
-| `queuedBy` | Queued By | Queue entity display name |
-| `queuedById` | Queued By ID | Queue entity GUID |
+| Key                                  | Label in ticket          | Source                                                      |
+| --------------------------------------| --------------------------| -------------------------------------------------------------|
+| `source`                             | Source                   | Platform (`github` / `azure-devops`)                        |
+| `pipeline`                           | Pipeline                 | Name + URL                                                  |
+| `repository`                         | Repository               | Owner/repo + URL                                            |
+| `branch`                             | Branch                   | Branch name                                                 |
+| `commit`                             | Commit                   | Short SHA + URL                                             |
+| `commitMessage`                      | Commit Message           | First 80 chars of commit message                            |
+| `environment`                        | Environment              | Deployment environment label                                |
+| `step`                               | Failed Step              | Specific step that failed                                   |
+| `stage`                              | Failed Stage             | Stage name                                                  |
+| `job`                                | Job                      | Failed job name (GitHub Actions)                            |
+| `jobName`                            | Job Name                 | Job display name (Azure DevOps)                             |
+| `eventName`                          | Event Name               | Trigger event                                               |
+| `runNumber`                          | Run Number               | Sequential run number                                       |
+| `runAttempt`                         | Run Attempt              | Retry attempt number                                        |
+| `retryCount`                         | Retry Count              | Number of retries (`attempt − 1`)                           |
+| `triggeredBy`                        | Triggered By             | Actor who triggered the run                                 |
+| `exitCode`                           | Exit Code                | Process exit code                                           |
+| `duration`                           | Duration                 | Wall-clock run time                                         |
+| `startedAt`                          | Started At               | Run start timestamp (UTC)                                   |
+| `runnerOs`                           | Runner OS                | Operating system                                            |
+| `runnerArch`                         | Runner Arch              | CPU architecture                                            |
+| `runnerType`                         | Runner Type              | `github-hosted` / `self-hosted`                             |
+| `runnerEnvironment`                  | Runner Environment       | `github-hosted` / `self-hosted` (from `RUNNER_ENVIRONMENT`) |
+| `runnerDebug`                        | Runner Debug             | `true` if debug logging was enabled                         |
+| `runnerName`                         | Agent Name               | Runner or agent display name                                |
+| `runnerTemp`                         | Runner Temp              | Temporary directory                                         |
+| `runnerToolCache`                    | Runner Tool Cache        | Tool cache path                                             |
+| `runnerWorkspace`                    | Runner Workspace         | Workspace directory                                         |
+| `workspace`                          | Workspace                | Working directory                                           |
+| `jobStatus`                          | Job Status               | `success`, `failure`, or `cancelled`                        |
+| `jobContainer`                       | Job Container            | Container details                                           |
+| `jobServices`                        | Job Services             | Service container details                                   |
+| `strategyIndex`                      | Matrix Index             | `strategy.job-index` value                                  |
+| `strategyTotal`                      | Matrix Total             | `strategy.job-total` value                                  |
+| `refType`                            | Ref Type                 | `branch` or `tag`                                           |
+| `refProtected`                       | Ref Protected            | Whether branch protection applies                           |
+| `workflowRef`                        | Workflow Ref             | Full workflow file path                                     |
+| `workflowSha`                        | Workflow SHA             | Commit SHA of the workflow file                             |
+| `retentionDays`                      | Log Retention            | Days logs are retained                                      |
+| `baseRef`                            | Base Ref                 | PR target branch                                            |
+| `headRef`                            | Head Ref                 | PR source branch                                            |
+| `action`                             | Action                   | Action name                                                 |
+| `actionPath`                         | Action Path              | Action filesystem path                                      |
+| `actionRepository`                   | Action Repo              | Action repository                                           |
+| `actionRef`                          | Action Ref               | Action git reference                                        |
+| `actionStatus`                       | Action Status            | Action execution status                                     |
+| `repositoryGitUrl`                   | Repo Git URL             | Git clone URL                                               |
+| `secretSource`                       | Secret Source            | GitHub secret source                                        |
+| `apiUrl`                             | API URL                  | REST API URL                                                |
+| `graphqlUrl`                         | GraphQL URL              | GraphQL API URL                                             |
+| `eventPayload`                       | Event Payload            | `Included (JSON)` if present                                |
+| `teamProject`                        | Team Project             | ADO team project                                            |
+| `agentPool`                          | Agent Pool               | ADO agent pool                                              |
+| `buildNumber`                        | Build Number             | ADO build number                                            |
+| `buildUri`                           | Build URI                | ADO build URI                                               |
+| `reason`                             | Build Reason             | ADO build trigger reason                                    |
+| `requestedFor`                       | Requested For            | ADO: build requestor name                                   |
+| `requestedForEmail`                  | Requester Email          | ADO: build requestor email                                  |
+| `sourceBranchName`                   | Source Branch Name       | ADO: short branch name                                      |
+| `fullSourceBranch`                   | Source Branch (full ref) | ADO: full `refs/heads/…` ref                                |
+| `sourceVersionMessage`               | Commit Message           | ADO: `Build.SourceVersionMessage`                           |
+| `repositoryClean`                    | Repo Clean               | ADO: `Build.Repository.Clean`                               |
+| `repositoryGitSubmoduleCheckout`     | Git Submodule Checkout   | ADO: submodule checkout mode                                |
+| `agentId`                            | Agent ID                 | ADO agent ID                                                |
+| `agentMachineName`                   | Agent Machine            | ADO agent hostname                                          |
+| `agentJobStatus`                     | Agent Job Status         | ADO: `Agent.JobStatus`                                      |
+| `agentBuildDirectory`                | Agent Build Dir          | ADO agent build directory                                   |
+| `agentHomeDirectory`                 | Agent Home Dir           | ADO agent install directory                                 |
+| `agentTempDirectory`                 | Agent Temp Dir           | ADO agent temp directory                                    |
+| `agentToolsDirectory`                | Agent Tools Dir          | ADO agent tools directory                                   |
+| `agentWorkFolder`                    | Agent Work Folder        | ADO agent work folder                                       |
+| `agentContainerMapping`              | Container Mapping        | ADO container mapping JSON                                  |
+| `agentReleaseDirectory`              | Release Dir              | ADO release artifacts directory                             |
+| `agentRootDirectory`                 | Agent Root               | ADO agent root directory                                    |
+| `pipelineWorkspace`                  | Pipeline Workspace       | ADO pipeline workspace                                      |
+| `systemDebug`                        | System Debug             | ADO: `System.Debug`                                         |
+| `systemDefaultWorkingDirectory`      | Default Working Dir      | ADO: default working directory                              |
+| `systemCollectionUri`                | Collection URI           | ADO organization URL                                        |
+| `systemTeamFoundationCollectionUri`  | TF Collection URI        | ADO TFS collection URL                                      |
+| `systemJobDisplayName`               | Job Display Name         | ADO: `System.JobDisplayName`                                |
+| `systemJobId`                        | Job ID                   | ADO: `System.JobId`                                         |
+| `systemJobName`                      | System Job Name          | ADO: `System.JobName`                                       |
+| `systemPhaseAttempt`                 | Phase Attempt            | ADO phase retry count                                       |
+| `systemPhaseDisplayName`             | Phase Display Name       | ADO phase display name                                      |
+| `systemPhaseName`                    | Phase Name               | ADO phase system name                                       |
+| `systemPlanId`                       | System Plan ID           | ADO plan ID                                                 |
+| `systemStageAttempt`                 | Stage Attempt            | ADO stage retry count                                       |
+| `systemStageDisplayName`             | Stage Display Name       | ADO stage display name                                      |
+| `systemStageName`                    | Stage Name               | ADO stage system name                                       |
+| `systemWorkFolder`                   | System Work Folder       | ADO system work folder                                      |
+| `systemHostType`                     | System Host Type         | `build` or `release`                                        |
+| `systemCollectionId`                 | System Collection ID     | ADO collection GUID                                         |
+| `systemTimelineId`                   | System Timeline ID       | ADO timeline ID                                             |
+| `tfBuild`                            | TF Build                 | `True` in all ADO jobs                                      |
+| `checksStageAttempt`                 | Checks Stage Attempt     | ADO checks gate attempt                                     |
+| `strategyName`                       | Strategy Name            | ADO deployment strategy name                                |
+| `strategyCycleName`                  | Strategy Cycle Name      | ADO strategy cycle name                                     |
+| `cronScheduleDisplayName`            | Cron Display Name        | ADO cron schedule name                                      |
+| `releaseId`                          | Release ID               | ADO release ID                                              |
+| `releaseName`                        | Release Name             | ADO release name                                            |
+| `releaseUri`                         | Release URI              | ADO release URL                                             |
+| `releaseDescription`                 | Release Description      | ADO release description                                     |
+| `releaseDefinitionId`                | Release Def ID           | ADO release definition ID                                   |
+| `releaseDefinitionName`              | Release Def Name         | ADO release definition name                                 |
+| `releaseDefinitionEnvironmentId`     | Release Def Env ID       | ADO release definition environment ID                       |
+| `releaseEnvironmentId`               | Release Env ID           | ADO release environment ID                                  |
+| `releaseEnvironmentName`             | Release Env Name         | ADO release environment name                                |
+| `releasePrimaryArtifactSourceAlias`  | Primary Artifact Alias   | ADO primary artifact source alias                           |
+| `releaseDeploymentId`                | Release Deployment ID    | ADO deployment ID                                           |
+| `releaseDeploymentRequestedFor`      | Release Requested For    | ADO deployment requestor name                               |
+| `releaseDeploymentRequestedForEmail` | Release Requester Email  | ADO deployment requestor email                              |
+| `triggeredByDefinitionName`          | Triggered By Pipeline    | ADO: name of upstream pipeline                              |
+| `triggeredByBuildNumber`             | Triggered By Build #     | ADO: upstream build number                                  |
+| `triggeredByDefinitionId`            | Triggered By Def ID      | ADO: upstream definition ID                                 |
+| `triggeredByBuildId`                 | Triggered By Build ID    | ADO: upstream build ID                                      |
+| `environmentResourceName`            | Env Resource Name        | ADO deployment environment resource                         |
+| `environmentId`                      | Environment ID           | ADO deployment environment ID                               |
+| `prIsFork`                           | PR Is Fork               | ADO: whether PR is from a fork                              |
+| `prId`                               | PR ID                    | ADO: pull request ID                                        |
+| `prNumber`                           | PR Number                | ADO: pull request number                                    |
+| `prTargetBranchName`                 | PR Target Branch         | ADO: PR target branch name                                  |
+| `prSourceBranch`                     | PR Source Branch         | ADO: PR source branch                                       |
+| `prSourceCommitId`                   | PR Source Commit         | ADO: PR source commit SHA                                   |
+| `prSourceRepoUri`                    | PR Source Repo URI       | ADO: PR source repository URI (forks)                       |
+| `prTargetBranch`                     | PR Target Branch (full)  | ADO: full PR target branch ref                              |
+| `stageRequestedBy`                   | Stage Requested By       | ADO: user who triggered the stage                           |
+| `stageRequestedForId`                | Stage Requester ID       | ADO: GUID of stage trigger user                             |
+| `sourceTfvcShelveset`                | TFVC Shelveset           | ADO: TFVC shelveset name                                    |
+| `definitionId`                       | Definition ID            | ADO build definition ID                                     |
+| `definitionVersion`                  | Definition Version       | ADO build definition version                                |
+| `containerId`                        | Container ID             | ADO artifact container ID                                   |
+| `repositoryId`                       | Repository ID            | Repository ID                                               |
+| `repositoryProvider`                 | Repo Provider            | Repository provider type                                    |
+| `repositoryUri`                      | Repo URI                 | Repository URL                                              |
+| `repositoryLocalPath`                | Repo Local Path          | Local checkout path                                         |
+| `sourcesDirectory`                   | Sources Dir              | Source code directory                                       |
+| `binariesDirectory`                  | Binaries Dir             | Compiled output directory                                   |
+| `artifactStagingDirectory`           | Artifact Staging Dir     | Artifact staging directory                                  |
+| `stagingDirectory`                   | Staging Dir              | Staging directory                                           |
+| `testResultsDirectory`               | Test Results Dir         | Test results directory                                      |
+| `requestedFor`                       | Requested For            | Build requestor display name                                |
+| `requestedForEmail`                  | Requester Email          | Build requestor email                                       |
+| `requestedForId`                     | Requester ID             | Build requestor GUID                                        |
+| `queuedBy`                           | Queued By                | Queue entity display name                                   |
+| `queuedById`                         | Queued By ID             | Queue entity GUID                                           |
+| `bitbucketBuildNumber`               | Bitbucket Build Number   | Bitbucket monotonic build number                            |
+| `bitbucketCloneDir`                  | Bitbucket Clone Dir      | Runner build directory path                                 |
+| `bitbucketCommit`                    | Bitbucket Commit         | Commit SHA                                                  |
+| `bitbucketWorkspace`                 | Bitbucket Workspace      | Workspace slug                                              |
+| `bitbucketWorkspaceUuid`             | Bitbucket Workspace UUID | Canonical UUID of workspace                                 |
+| `bitbucketRepoOwner`                 | Bitbucket Repo Owner     | Repository owner name                                       |
+| `bitbucketRepoOwnerUuid`             | Bitbucket Repo Owner UUID| Canonical UUID of repo owner                                |
+| `bitbucketRepoSlug`                  | Bitbucket Repo Slug      | Repository URL slug                                         |
+| `bitbucketRepoUuid`                  | Bitbucket Repo UUID      | Canonical UUID of repository                                |
+| `bitbucketRepoFullName`              | Bitbucket Repo Full Name | Full repository path (`workspace/slug`)                      |
+| `bitbucketRepoIsPrivate`             | Bitbucket Repo Is Private| Whether repository is private                               |
+| `bitbucketBranch`                    | Bitbucket Branch         | Branch name                                                 |
+| `bitbucketTag`                       | Bitbucket Tag            | Tag name                                                    |
+| `bitbucketBookmark`                  | Bitbucket Bookmark       | Bookmark name                                               |
+| `bitbucketParallelStep`              | Bitbucket Parallel Step  | Step index in parallel group                                |
+| `bitbucketParallelStepCount`         | Bitbucket Parallel Steps Total | Total steps in parallel group                         |
+| `bitbucketPrId`                      | Bitbucket PR ID          | Pull request ID                                             |
+| `bitbucketPrDestinationBranch`       | Bitbucket PR Dest Branch | Target branch of PR                                         |
+| `bitbucketPrDestinationCommit`       | Bitbucket PR Dest Commit | Target branch commit SHA                                    |
+| `bitbucketMergeQueuePrIds`           | Bitbucket Merge Queue PRs| PR IDs in merge queue                                       |
+| `bitbucketGitHttpOrigin`             | Bitbucket Git HTTP Origin| HTTP git origin URL                                         |
+| `bitbucketGitSshOrigin`              | Bitbucket Git SSH Origin | SSH git origin URL                                          |
+| `bitbucketExitCode`                  | Bitbucket Exit Code      | Step execution exit code                                    |
+| `bitbucketStepUuid`                  | Bitbucket Step UUID      | Canonical UUID of step execution                            |
+| `bitbucketPipelineUuid`              | Bitbucket Pipeline UUID  | Canonical UUID of pipeline execution                        |
+| `bitbucketDeploymentEnvironment`     | Bitbucket Deployment Env | Deployment environment name                                 |
+| `bitbucketDeploymentEnvironmentUuid` | Bitbucket Deployment Env UUID | Canonical UUID of deployment environment               |
+| `bitbucketProjectKey`                | Bitbucket Project Key    | Bitbucket project key                                       |
+| `bitbucketProjectUuid`               | Bitbucket Project UUID   | Canonical UUID of Bitbucket project                         |
+| `bitbucketStepTriggererUuid`         | Bitbucket Step Triggerer UUID | UUID of user who triggered step                        |
+| `bitbucketStepRunNumber`             | Bitbucket Step Run Number| Step run attempt number                                     |
+| `bitbucketPackagesUsername`          | Bitbucket Packages Username | Registry auth username                                   |
+| `bitbucketDockerHost`                | Bitbucket Docker Host    | Docker daemon host socket or IP                             |
 
 ---
 

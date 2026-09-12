@@ -26,6 +26,8 @@ export type ParsedLog = z.infer<typeof ParsedLogSchema>;
 export const LogFormatSchema = z.enum([
   "github-actions",
   "azure-devops",
+  "gitlab",
+  "bitbucket",
   "terraform",
   "kubernetes",
   "docker",

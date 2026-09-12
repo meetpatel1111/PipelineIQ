@@ -130,14 +130,23 @@ test:
 <summary><b>Bitbucket Pipelines (<code>bitbucket-pipelines.yml</code>)</b></summary>
 
 ```yaml
+image: node:20
+
 pipelines:
   default:
     - step:
         name: Build & Test
-        image: node:20
         script:
           - npx -y pipelineiq exec -- npm test
+        variables:
+          JIRA_URL: $JIRA_URL
+          JIRA_EMAIL: $JIRA_EMAIL
+          JIRA_TOKEN: $JIRA_TOKEN
+          JIRA_PROJECT: "DEVOPS"
+          GEMINI_API_KEY: $GEMINI_API_KEY
 ```
+> [!NOTE]
+> Bitbucket Cloud runs natively pair with Jira Cloud and Data Center. PipelineIQ automatically captures all 48 Bitbucket predefined variables (`BITBUCKET_BUILD_NUMBER`, `BITBUCKET_STEP_UUID`, `BITBUCKET_PR_ID`, etc.), masks access tokens (`bpat-*`), registers clickable Jira Remote Links, and uses the specialized `parseBitbucket` runner log parser.
 </details>
 
 <details>
@@ -303,7 +312,7 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 ## Log Parsing
 
-- **Format Support**: GitHub Actions, Azure DevOps, Terraform, Kubernetes, Docker, JUnit
+- **Format Support**: GitHub Actions, Azure DevOps, GitLab CI, Bitbucket Pipelines, Terraform, Kubernetes, Docker, JUnit
 - **Smart Extraction**: Error messages, stack traces, exit codes, failed commands
 - **Security Focus**: Dynamic runtime secret masking and security issue detection
 - **Performance Insights**: Timeout detection, performance issue identification

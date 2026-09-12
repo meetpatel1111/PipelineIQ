@@ -231,8 +231,13 @@ pipelineiq/
 
 ## CI/CD Platforms
 
-* [GitHub Actions](https://github.com/features/actions?utm_source=chatgpt.com)
-* [Azure DevOps Pipelines](https://azure.microsoft.com/en-us/products/devops/pipelines/?utm_source=chatgpt.com)
+* [GitHub Actions](https://github.com/features/actions)
+* [Azure DevOps Pipelines](https://azure.microsoft.com/en-us/products/devops/pipelines/)
+* [GitLab CI/CD](https://about.gitlab.com/stages-devops-lifecycle/continuous-integration/)
+* [Bitbucket Cloud Pipelines](https://bitbucket.org/product/features/pipelines)
+* [CircleCI](https://circleci.com/)
+* [Jenkins](https://www.jenkins.io/)
+* Local Git / CLI Environments
 
 ## Ticketing
 

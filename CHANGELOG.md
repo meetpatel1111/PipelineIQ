@@ -4,6 +4,40 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.26.0] - 2026-09-13
+
+### Added
+- **Full Native Bitbucket Cloud Predefined Variables Ingestion**: Expanded CLI preset detection, failure event model (`PipelineSchema`), and Jira ticket renderer with full-fidelity support for 48 Bitbucket Cloud predefined variables:
+  - **Build & Execution**: `BITBUCKET_BUILD_NUMBER`, `BITBUCKET_CLONE_DIR`, `BITBUCKET_STEP_RUN_NUMBER`, `BITBUCKET_STEP_UUID`, `BITBUCKET_PIPELINE_UUID`, `BITBUCKET_EXIT_CODE`, `BITBUCKET_STEP_TRIGGERER_UUID`, `BITBUCKET_DOCKER_HOST`.
+  - **Workspace & Repository**: `BITBUCKET_WORKSPACE`, `BITBUCKET_WORKSPACE_UUID`, `BITBUCKET_REPO_OWNER`, `BITBUCKET_REPO_OWNER_UUID`, `BITBUCKET_REPO_SLUG`, `BITBUCKET_REPO_UUID`, `BITBUCKET_REPO_FULL_NAME`, `BITBUCKET_REPO_IS_PRIVATE`, `BITBUCKET_PROJECT_KEY`, `BITBUCKET_PROJECT_UUID`, `BITBUCKET_GIT_HTTP_ORIGIN`, `BITBUCKET_GIT_SSH_ORIGIN`.
+  - **Branch, Tag & Commit**: `BITBUCKET_BRANCH`, `BITBUCKET_TAG`, `BITBUCKET_BOOKMARK`, `BITBUCKET_COMMIT`.
+  - **Pull Requests & Merge Queues**: `BITBUCKET_PR_ID`, `BITBUCKET_PR_DESTINATION_BRANCH`, `BITBUCKET_PR_DESTINATION_COMMIT`, `BITBUCKET_MERGE_QUEUE_PR_IDS`.
+  - **Parallel Steps**: `BITBUCKET_PARALLEL_STEP`, `BITBUCKET_PARALLEL_STEP_COUNT`.
+  - **Deployments**: `BITBUCKET_DEPLOYMENT_ENVIRONMENT`, `BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID`.
+  - **Pipeline Triggers & Artifacts**: `BITBUCKET_TRIGGER_PIPELINE_UUID`, `BITBUCKET_TRIGGER_PIPELINE_RUN_UUID`, `BITBUCKET_TRIGGER_STEP_UUID`, `BITBUCKET_TRIGGER_PIPELINE_SELECTOR_TYPE`, `BITBUCKET_TRIGGER_PIPELINE_SELECTOR_PATTERN`, `BITBUCKET_TRIGGER_PIPELINE_STATUS`, `BITBUCKET_TRIGGER_DEPLOYMENT_UUID`, `BITBUCKET_TRIGGER_DEPLOYMENT_STATUS`, `BITBUCKET_TRIGGER_DEPLOYMENT_ENVIRONMENT_NAME`, `BITBUCKET_TRIGGER_PACKAGES_PACKAGE_TYPE`, `BITBUCKET_TRIGGER_PACKAGES_PACKAGE_NAME`, `BITBUCKET_TRIGGER_PACKAGES_ARTIFACT_NAME`, `BITBUCKET_PACKAGES_USERNAME`.
+  - **Flaky Tests & Test Automation**: `BITBUCKET_TRIGGER_FIX_FLAKY_TEST_TARGET_BRANCH`, `BITBUCKET_TRIGGER_FIX_FLAKY_TEST_SOURCE_BRANCH`, `BITBUCKET_TRIGGER_TEST_CASE_FQDN`, `BITBUCKET_TRIGGER_TEST_CASE_UUID`.
+- **Dedicated Bitbucket Pipelines Log Parser (`parseBitbucket`)**: Added high-performance runner log parser for Bitbucket Cloud that normalizes terminal ANSI color codes and carriage returns, parses step command executions (`+ <cmd>`) into structured metadata, extracts exit codes, and surfaces test failure diagnostics.
+- **Bitbucket Token Secret Masking Firewall**: Added high-entropy token masking rules into `src/core/secret-mask.ts` for Bitbucket Personal Access Tokens, Workspace Access Tokens, and Repository Access Tokens (`bpat-` and `bbpat-`), redacting them into `[REDACTED_BITBUCKET_TOKEN]`.
+- **First-Party Atlassian Jira Integration**: Formats clickable Bitbucket Cloud pipeline links (`https://bitbucket.org/<workspace>/<repo>/pipelines/results/<build>`), pull request links (`https://bitbucket.org/<workspace>/<repo>/pull-requests/<id>`), and commit diff links (`https://bitbucket.org/<workspace>/<repo>/commits/<sha>`), and renders all Bitbucket operational metadata directly in Jira issue descriptions and Jira Remote Links.
+
+---
+
+## [0.25.0] - 2026-09-13
+
+### Added
+- **Full Native GitLab CI Predefined Variables Ingestion**: Expanded CLI preset detection, failure event model (`PipelineSchema`), and Jira ticket renderer with full-fidelity support for 40+ GitLab CI predefined variables:
+  - **Project & Repository**: `CI_PROJECT_PATH`, `CI_PROJECT_ID`, `CI_PROJECT_URL`, `CI_PROJECT_TITLE`, `CI_PROJECT_DESCRIPTION`, `CI_PROJECT_VISIBILITY`, `CI_PROJECT_NAMESPACE`, `CI_PROJECT_ROOT_NAMESPACE`, `CI_REPOSITORY_URL`, `CI_PROJECT_DIR`.
+  - **Pipeline & Execution**: `CI_PIPELINE_ID`, `CI_PIPELINE_IID`, `CI_PIPELINE_URL`, `CI_PIPELINE_NAME`, `CI_PIPELINE_SOURCE`, `CI_PIPELINE_CREATED_AT`.
+  - **Job & Runner**: `CI_JOB_ID`, `CI_JOB_NAME`, `CI_JOB_STAGE`, `CI_JOB_STATUS`, `CI_JOB_STARTED_AT`, `CI_JOB_IMAGE`, `CI_JOB_TIMEOUT`, `CI_JOB_TAGS`, `CI_JOB_URL`, `CI_JOB_RETRY_COUNT` (normalized to 1-based `runAttempt`), `CI_RUNNER_ID`, `CI_RUNNER_DESCRIPTION`, `CI_RUNNER_TAGS`, `CI_RUNNER_VERSION`, `CI_RUNNER_EXECUTABLE_ARCH`.
+  - **Commit & Branch**: `CI_COMMIT_SHA`, `CI_COMMIT_BEFORE_SHA`, `CI_COMMIT_REF_NAME`, `CI_COMMIT_BRANCH`, `CI_COMMIT_TAG`, `CI_COMMIT_MESSAGE`, `CI_COMMIT_TITLE`, `CI_COMMIT_DESCRIPTION`, `CI_COMMIT_AUTHOR`, `CI_COMMIT_TIMESTAMP`, `CI_COMMIT_REF_PROTECTED`.
+  - **Merge Requests**: `CI_MERGE_REQUEST_IID`, `CI_MERGE_REQUEST_ID`, `CI_MERGE_REQUEST_TITLE`, `CI_MERGE_REQUEST_EVENT_TYPE`, `CI_MERGE_REQUEST_SOURCE_BRANCH_NAME`, `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`, `CI_MERGE_REQUEST_SOURCE_BRANCH_SHA`, `CI_MERGE_REQUEST_PROJECT_URL`, `CI_MERGE_REQUEST_ASSIGNEES`, `CI_MERGE_REQUEST_LABELS`, `CI_MERGE_REQUEST_MILESTONE`.
+  - **Environments & Server**: `CI_ENVIRONMENT_NAME`, `CI_ENVIRONMENT_TIER`, `CI_ENVIRONMENT_URL`, `CI_ENVIRONMENT_ACTION`, `CI_SERVER_URL`, `CI_SERVER_VERSION`, `CI_API_V4_URL`, `CI_API_GRAPHQL_URL`, `GITLAB_USER_LOGIN`, `GITLAB_USER_NAME`, `GITLAB_USER_EMAIL`, `GITLAB_USER_ID`.
+- **Dedicated GitLab CI Log Parser (`parseGitLab`)**: Added high-performance parser that normalizes GitLab runner output by stripping terminal section markers (`section_start:<epoch>:<name>` and `section_end:<epoch>:<name>`), strips GitLab ANSI sequences, parses epoch and ISO timestamps, maps step sections as metadata, and extracts exit codes and failure diagnostics.
+- **GitLab Token Secret Masking Firewall**: Added high-entropy token masking rules into `src/core/secret-mask.ts` for Personal Access Tokens (`glpat-`), CI/CD Job Tokens (`glcbt-`), Deploy Tokens (`gldt-`), and Pipeline Trigger Tokens (`glptt-`), ensuring credentials never leak into Jira descriptions or remote comments.
+- **Rich Jira Incident Diagnostics for GitLab**: GitLab MR links, pipeline URLs, job stages, environment tiers, and runner details are now formatted into clickable Markdown and registered as Jira Remote Links and incident diagnostic tables.
+
+---
+
 ## [0.24.0] - 2026-09-13
 
 ### Added

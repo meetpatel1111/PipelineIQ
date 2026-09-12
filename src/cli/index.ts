@@ -890,31 +890,99 @@ export function applyCIPreset(rawOptions: any = {}): any {
     if (!options.format || options.format === "generic") {
       options.format = "gitlab";
     }
+    options.gitlabToken ??= process.env.GITLAB_TOKEN || process.env.CI_JOB_TOKEN;
     options.repository ??= process.env.CI_PROJECT_PATH;
-    options.branch ??= process.env.CI_COMMIT_REF_NAME;
+    options.repositoryOwner ??= process.env.CI_PROJECT_ROOT_NAMESPACE || process.env.CI_PROJECT_NAMESPACE;
+    options.repositoryGitUrl ??= process.env.CI_REPOSITORY_URL;
+    options.branch ??= process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME || process.env.CI_COMMIT_BRANCH || process.env.CI_COMMIT_REF_NAME;
     options.commit ??= process.env.CI_COMMIT_SHA;
-    options.pipeline ??= process.env.CI_JOB_NAME || process.env.CI_PIPELINE_ID;
+    options.pipeline ??= process.env.CI_PIPELINE_NAME || (process.env.CI_JOB_STAGE && process.env.CI_JOB_NAME ? `${process.env.CI_JOB_STAGE} / ${process.env.CI_JOB_NAME}` : undefined) || process.env.CI_JOB_NAME || process.env.CI_PIPELINE_ID;
     options.runId ??= process.env.CI_PIPELINE_ID;
-    options.runNumber ??= process.env.CI_PIPELINE_IID;
+    options.runNumber ??= process.env.CI_PIPELINE_IID || process.env.CI_PIPELINE_ID;
     options.actor ??= process.env.GITLAB_USER_LOGIN || process.env.GITLAB_USER_NAME || process.env.GITLAB_USER_EMAIL;
+    options.actorId ??= process.env.GITLAB_USER_ID;
     options.jobName ??= process.env.CI_JOB_NAME;
+    options.stage ??= process.env.CI_JOB_STAGE;
+    options.jobStatus ??= process.env.CI_JOB_STATUS;
+    options.eventName ??= process.env.CI_PIPELINE_SOURCE;
+    options.runAttempt ??= process.env.CI_JOB_RETRY_COUNT ? String(parseInt(process.env.CI_JOB_RETRY_COUNT, 10) + 1) : undefined;
     options.environment ??= process.env.CI_ENVIRONMENT_NAME || process.env.CI_COMMIT_REF_NAME;
+    options.environmentId ??= process.env.CI_ENVIRONMENT_ID;
+    options.environmentTier ??= process.env.CI_ENVIRONMENT_TIER;
+    options.environmentUrl ??= process.env.CI_ENVIRONMENT_URL;
+    options.environmentAction ??= process.env.CI_ENVIRONMENT_ACTION;
     options.runUrl ??= process.env.CI_JOB_URL || process.env.CI_PIPELINE_URL;
+    options.apiUrl ??= process.env.CI_API_V4_URL;
+    options.graphqlUrl ??= process.env.CI_API_GRAPHQL_URL;
+    options.workspace ??= process.env.CI_PROJECT_DIR;
+    options.refProtected ??= process.env.CI_COMMIT_REF_PROTECTED === "true";
+    if (process.env.CI_RUNNER_EXECUTABLE_ARCH) {
+      const parts = process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/");
+      options.runnerOs ??= parts[0];
+      options.runnerArch ??= parts[1];
+    }
+    options.runnerName ??= process.env.CI_RUNNER_DESCRIPTION;
+    options.runnerId ??= process.env.CI_RUNNER_ID;
+    options.runnerTags ??= process.env.CI_RUNNER_TAGS;
+    options.runnerVersion ??= process.env.CI_RUNNER_VERSION;
+    options.jobContainer ??= process.env.CI_JOB_IMAGE;
+
+    // Merge Request specific predefined variables
+    if (process.env.CI_MERGE_REQUEST_IID) {
+      options.prNumber ??= process.env.CI_MERGE_REQUEST_IID;
+      options.prId ??= process.env.CI_MERGE_REQUEST_ID;
+      options.prTitle ??= process.env.CI_MERGE_REQUEST_TITLE;
+      options.prSourceBranch ??= process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+      options.prTargetBranchName ??= process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
+      options.prSourceCommitId ??= process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_SHA;
+      options.prSourceRepoUri ??= process.env.CI_MERGE_REQUEST_PROJECT_URL;
+      options.headRef ??= process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+      options.baseRef ??= process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
+    }
   } else if (isBitbucket) {
     options.source ??= "bitbucket";
     if (!options.format || options.format === "generic") {
       options.format = "bitbucket";
     }
-    options.repository ??= process.env.BITBUCKET_REPO_FULL_NAME;
-    options.branch ??= process.env.BITBUCKET_BRANCH;
+    const repoFullName = process.env.BITBUCKET_REPO_FULL_NAME || (process.env.BITBUCKET_WORKSPACE && process.env.BITBUCKET_REPO_SLUG ? `${process.env.BITBUCKET_WORKSPACE}/${process.env.BITBUCKET_REPO_SLUG}` : undefined);
+    options.repository ??= repoFullName;
+    options.repositoryOwner ??= process.env.BITBUCKET_WORKSPACE || process.env.BITBUCKET_REPO_OWNER;
+    options.repositoryGitUrl ??= process.env.BITBUCKET_GIT_HTTP_ORIGIN || process.env.BITBUCKET_GIT_SSH_ORIGIN;
+    options.branch ??= process.env.BITBUCKET_BRANCH || process.env.BITBUCKET_TAG || process.env.BITBUCKET_BOOKMARK;
     options.commit ??= process.env.BITBUCKET_COMMIT;
-    options.pipeline ??= process.env.BITBUCKET_STEP_TRIGGER || "Bitbucket Pipeline";
-    options.runId ??= process.env.BITBUCKET_BUILD_NUMBER;
+    options.pipeline ??= process.env.BITBUCKET_STEP_TRIGGER || (process.env.BITBUCKET_REPO_SLUG && process.env.BITBUCKET_BUILD_NUMBER ? `${process.env.BITBUCKET_REPO_SLUG} #${process.env.BITBUCKET_BUILD_NUMBER}` : undefined) || "Bitbucket Pipeline";
+    options.runId ??= process.env.BITBUCKET_BUILD_NUMBER || process.env.BITBUCKET_PIPELINE_UUID;
     options.runNumber ??= process.env.BITBUCKET_BUILD_NUMBER;
     options.actor ??= process.env.BITBUCKET_STEP_TRIGGERER_UUID;
-    options.runUrl ??= (process.env.BITBUCKET_GIT_HTTP_ORIGIN && process.env.BITBUCKET_REPO_FULL_NAME && process.env.BITBUCKET_BUILD_NUMBER)
-      ? `${process.env.BITBUCKET_GIT_HTTP_ORIGIN}/${process.env.BITBUCKET_REPO_FULL_NAME}/addon/pipelines/home#!/results/${process.env.BITBUCKET_BUILD_NUMBER}`
-      : undefined;
+    options.actorId ??= process.env.BITBUCKET_STEP_TRIGGERER_UUID;
+    options.environment ??= process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT || process.env.BITBUCKET_BRANCH;
+    options.environmentId ??= process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID;
+    options.project ??= process.env.BITBUCKET_PROJECT_KEY;
+    options.workspace ??= process.env.BITBUCKET_CLONE_DIR;
+    options.stepRunNumber ??= process.env.BITBUCKET_STEP_RUN_NUMBER;
+    options.stepUuid ??= process.env.BITBUCKET_STEP_UUID;
+    options.pipelineUuid ??= process.env.BITBUCKET_PIPELINE_UUID;
+    options.parallelStep ??= process.env.BITBUCKET_PARALLEL_STEP;
+    options.parallelStepCount ??= process.env.BITBUCKET_PARALLEL_STEP_COUNT;
+
+    // Pull request variables
+    if (process.env.BITBUCKET_PR_ID) {
+      options.prNumber ??= process.env.BITBUCKET_PR_ID;
+      options.prTargetBranchName ??= process.env.BITBUCKET_PR_DESTINATION_BRANCH;
+      options.prSourceBranch ??= process.env.BITBUCKET_BRANCH;
+      options.prSourceCommitId ??= process.env.BITBUCKET_COMMIT;
+      options.prDestinationCommit ??= process.env.BITBUCKET_PR_DESTINATION_COMMIT;
+      options.headRef ??= process.env.BITBUCKET_BRANCH;
+      options.baseRef ??= process.env.BITBUCKET_PR_DESTINATION_BRANCH;
+    }
+
+    if (repoFullName && process.env.BITBUCKET_BUILD_NUMBER) {
+      if (process.env.BITBUCKET_GIT_HTTP_ORIGIN && !process.env.BITBUCKET_GIT_HTTP_ORIGIN.includes(".git") && !process.env.BITBUCKET_GIT_HTTP_ORIGIN.includes(repoFullName)) {
+        options.runUrl ??= `${process.env.BITBUCKET_GIT_HTTP_ORIGIN.replace(/\/$/, "")}/${repoFullName}/addon/pipelines/home#!/results/${process.env.BITBUCKET_BUILD_NUMBER}`;
+      } else {
+        options.runUrl ??= `https://bitbucket.org/${repoFullName}/pipelines/results/${process.env.BITBUCKET_BUILD_NUMBER}`;
+      }
+    }
   } else if (isCircleCI) {
     options.source ??= "circleci";
     if (!options.format || options.format === "generic") {
@@ -1373,53 +1441,163 @@ async function createFailureEvent(
   const adoPrSourceBranch = process.env.SYSTEM_PULLREQUEST_SOURCEBRANCH;
   const adoPrSourceCommit = process.env.SYSTEM_PULLREQUEST_SOURCECOMMITID;
   const adoPrSourceRepoUri = process.env.SYSTEM_PULLREQUEST_SOURCEREPOSITORYURI;
+
+  // GitLab CI built-in variables
+  const glServerUrl = process.env.CI_SERVER_URL;
+  const glServerVersion = process.env.CI_SERVER_VERSION;
+  const glProjectPath = process.env.CI_PROJECT_PATH;
+  const glProjectId = process.env.CI_PROJECT_ID;
+  const glProjectUrl = process.env.CI_PROJECT_URL;
+  const glProjectTitle = process.env.CI_PROJECT_TITLE;
+  const glProjectDescription = process.env.CI_PROJECT_DESCRIPTION;
+  const glProjectVisibility = process.env.CI_PROJECT_VISIBILITY;
+  const glProjectNamespace = process.env.CI_PROJECT_NAMESPACE;
+  const glProjectRootNamespace = process.env.CI_PROJECT_ROOT_NAMESPACE;
+  const glPipelineId = process.env.CI_PIPELINE_ID;
+  const glPipelineIid = process.env.CI_PIPELINE_IID;
+  const glPipelineUrl = process.env.CI_PIPELINE_URL;
+  const glPipelineSource = process.env.CI_PIPELINE_SOURCE;
+  const glPipelineName = process.env.CI_PIPELINE_NAME;
+  const glPipelineCreatedAt = process.env.CI_PIPELINE_CREATED_AT;
+  const glJobId = process.env.CI_JOB_ID;
+  const glJobName = process.env.CI_JOB_NAME;
+  const glJobStage = process.env.CI_JOB_STAGE;
+  const glJobStatus = process.env.CI_JOB_STATUS;
+  const glJobStartedAt = process.env.CI_JOB_STARTED_AT;
+  const glJobImage = process.env.CI_JOB_IMAGE;
+  const glJobTimeout = process.env.CI_JOB_TIMEOUT;
+  const glJobTags = process.env.CI_JOB_TAGS;
+  const glJobUrl = process.env.CI_JOB_URL;
+  const glCommitSha = process.env.CI_COMMIT_SHA;
+  const glCommitBeforeSha = process.env.CI_COMMIT_BEFORE_SHA;
+  const glCommitRefName = process.env.CI_COMMIT_REF_NAME;
+  const glCommitBranch = process.env.CI_COMMIT_BRANCH;
+  const glCommitMessage = process.env.CI_COMMIT_MESSAGE;
+  const glCommitTitle = process.env.CI_COMMIT_TITLE;
+  const glCommitDescription = process.env.CI_COMMIT_DESCRIPTION;
+  const glCommitAuthor = process.env.CI_COMMIT_AUTHOR;
+  const glCommitTimestamp = process.env.CI_COMMIT_TIMESTAMP;
+  const glEnvironmentTier = process.env.CI_ENVIRONMENT_TIER;
+  const glEnvironmentUrl = process.env.CI_ENVIRONMENT_URL;
+  const glEnvironmentAction = process.env.CI_ENVIRONMENT_ACTION;
+  const glMrIid = process.env.CI_MERGE_REQUEST_IID;
+  const glMrId = process.env.CI_MERGE_REQUEST_ID;
+  const glMrTitle = process.env.CI_MERGE_REQUEST_TITLE;
+  const glMrEvent = process.env.CI_MERGE_REQUEST_EVENT_TYPE;
+  const glMrSourceBranch = process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+  const glMrTargetBranch = process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
+  const glMrAssignees = process.env.CI_MERGE_REQUEST_ASSIGNEES;
+  const glMrLabels = process.env.CI_MERGE_REQUEST_LABELS;
+  const glMrMilestone = process.env.CI_MERGE_REQUEST_MILESTONE;
+  const glRunnerId = process.env.CI_RUNNER_ID;
+  const glRunnerDesc = process.env.CI_RUNNER_DESCRIPTION;
+  const glRunnerTags = process.env.CI_RUNNER_TAGS;
+  const glRunnerVersion = process.env.CI_RUNNER_VERSION;
+  const glUserLogin = process.env.GITLAB_USER_LOGIN;
+  const glUserName = process.env.GITLAB_USER_NAME;
+  const glUserEmail = process.env.GITLAB_USER_EMAIL;
+  const glUserId = process.env.GITLAB_USER_ID;
+
+  // Bitbucket Pipelines built-in variables
+  const bbBuildNumber = process.env.BITBUCKET_BUILD_NUMBER;
+  const bbCloneDir = process.env.BITBUCKET_CLONE_DIR;
+  const bbCommit = process.env.BITBUCKET_COMMIT;
+  const bbWorkspace = process.env.BITBUCKET_WORKSPACE;
+  const bbWorkspaceUuid = process.env.BITBUCKET_WORKSPACE_UUID;
+  const bbRepoOwner = process.env.BITBUCKET_REPO_OWNER;
+  const bbRepoOwnerUuid = process.env.BITBUCKET_REPO_OWNER_UUID;
+  const bbRepoSlug = process.env.BITBUCKET_REPO_SLUG;
+  const bbRepoUuid = process.env.BITBUCKET_REPO_UUID;
+  const bbRepoFullName = process.env.BITBUCKET_REPO_FULL_NAME || (bbWorkspace && bbRepoSlug ? `${bbWorkspace}/${bbRepoSlug}` : undefined);
+  const bbRepoIsPrivate = process.env.BITBUCKET_REPO_IS_PRIVATE !== undefined ? process.env.BITBUCKET_REPO_IS_PRIVATE === "true" : undefined;
+  const bbBranch = process.env.BITBUCKET_BRANCH;
+  const bbTag = process.env.BITBUCKET_TAG;
+  const bbBookmark = process.env.BITBUCKET_BOOKMARK;
+  const bbParallelStep = process.env.BITBUCKET_PARALLEL_STEP !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP, 10) : undefined;
+  const bbParallelStepCount = process.env.BITBUCKET_PARALLEL_STEP_COUNT !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP_COUNT, 10) : undefined;
+  const bbPrId = process.env.BITBUCKET_PR_ID;
+  const bbPrDestinationBranch = process.env.BITBUCKET_PR_DESTINATION_BRANCH;
+  const bbPrDestinationCommit = process.env.BITBUCKET_PR_DESTINATION_COMMIT;
+  const bbMergeQueuePrIds = process.env.BITBUCKET_MERGE_QUEUE_PR_IDS;
+  const bbGitHttpOrigin = process.env.BITBUCKET_GIT_HTTP_ORIGIN;
+  const bbGitSshOrigin = process.env.BITBUCKET_GIT_SSH_ORIGIN;
+  const bbExitCode = process.env.BITBUCKET_EXIT_CODE !== undefined ? parseInt(process.env.BITBUCKET_EXIT_CODE, 10) : undefined;
+  const bbStepUuid = process.env.BITBUCKET_STEP_UUID;
+  const bbPipelineUuid = process.env.BITBUCKET_PIPELINE_UUID;
+  const bbDeploymentEnvironment = process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT;
+  const bbDeploymentEnvironmentUuid = process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID;
+  const bbProjectKey = process.env.BITBUCKET_PROJECT_KEY;
+  const bbProjectUuid = process.env.BITBUCKET_PROJECT_UUID;
+  const bbStepTriggererUuid = process.env.BITBUCKET_STEP_TRIGGERER_UUID;
+  const bbStepRunNumber = process.env.BITBUCKET_STEP_RUN_NUMBER !== undefined ? parseInt(process.env.BITBUCKET_STEP_RUN_NUMBER, 10) : undefined;
+  const bbPackagesUsername = process.env.BITBUCKET_PACKAGES_USERNAME;
+  const bbDockerHost = process.env.DOCKER_HOST;
+  const bbTriggerPipelineUuid = process.env.BITBUCKET_TRIGGER_PIPELINE_UUID;
+  const bbTriggerPipelineRunUuid = process.env.BITBUCKET_TRIGGER_PIPELINE_RUN_UUID;
+  const bbTriggerStepUuid = process.env.BITBUCKET_TRIGGER_STEP_UUID;
+  const bbTriggerPipelineSelectorType = process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_TYPE;
+  const bbTriggerPipelineSelectorPattern = process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_PATTERN;
+  const bbTriggerPipelineStatus = process.env.BITBUCKET_TRIGGER_PIPELINE_STATUS;
+  const bbTriggerDeploymentUuid = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_UUID;
+  const bbTriggerDeploymentStatus = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_STATUS;
+  const bbTriggerDeploymentEnvironmentName = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_ENVIRONMENT_NAME;
+  const bbTriggerPackagesPackageType = process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_TYPE;
+  const bbTriggerPackagesPackageName = process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_NAME;
+  const bbTriggerPackagesArtifactName = process.env.BITBUCKET_TRIGGER_PACKAGES_ARTIFACT_NAME;
+  const bbTriggerFixFlakyTestTargetBranch = process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_TARGET_BRANCH;
+  const bbTriggerFixFlakyTestSourceBranch = process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_SOURCE_BRANCH;
+  const bbTriggerTestCaseFqdn = process.env.BITBUCKET_TRIGGER_TEST_CASE_FQDN;
+  const bbTriggerTestCaseUuid = process.env.BITBUCKET_TRIGGER_TEST_CASE_UUID;
   
   // Use environment variables if available, otherwise use CLI options
-  const repository = githubRepo || adoRepo || options.repository;
-  const branch = githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || options.branch;
-  const commit = githubSha || adoSourceVersion || options.commit;
-  const pipeline = githubWorkflow || adoPipeline || options.pipeline;
-  const runId = githubRunId || adoBuildId || options.runId;
-  const runNumber = githubRunNumber || adoBuildNumber || options.runId;
-  const triggeredBy = githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || process.env.BUILD_QUEUEDBY || "cli-user";
+  const repository = githubRepo || adoRepo || glProjectPath || bbRepoFullName || options.repository;
+  const branch = githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark || options.branch;
+  const commit = githubSha || adoSourceVersion || glCommitSha || bbCommit || options.commit;
+  const pipeline = githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined) || options.pipeline;
+  const runId = githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber || options.runId;
+  const runNumber = githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber || options.runId;
+  const triggeredBy = githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || process.env.BUILD_QUEUEDBY || "cli-user";
   
   // Pull request information
-  const pullRequestNumber = githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId;
-  const isPullRequest = !!(githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber);
-  const pullRequestBranch = adoPrSourceBranch?.replace('refs/heads/', '');
+  const pullRequestNumber = githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId || options.prNumber;
+  const isPullRequest = !!(githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId || options.prNumber);
+  const pullRequestBranch = adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch || options.prSourceBranch;
   
-  // Rich data mapping for Azure DevOps
+  // Rich data mapping for Azure DevOps and GitLab CI
   const adoJobName = process.env.SYSTEM_JOBNAME || process.env.SYSTEM_PHASENAME || process.env.SYSTEM_STAGENAME || adoAgentJobName;
   const adoJobAttempt = process.env.SYSTEM_JOBATTEMPT;
   const adoPhaseAttempt = process.env.SYSTEM_PHASEATTEMPT;
   const adoRunAttempt = adoJobAttempt || adoPhaseAttempt || process.env.SYSTEM_STAGEATTEMPT;
   const adoApiUrl = process.env.SYSTEM_COLLECTIONURI;
+  const glRunAttempt = process.env.CI_JOB_RETRY_COUNT ? String(parseInt(process.env.CI_JOB_RETRY_COUNT, 10) + 1) : undefined;
   
-  const finalJobName = options.jobName || githubJob || adoJobName;
-  const finalRunAttempt = githubRunAttempt || adoRunAttempt || options.runAttempt;
-  const finalEventName = githubEventName || adoBuildReason || options.eventName;
-  const finalApiUrl = githubApiUrl || adoCollectionUri || options.apiUrl;
+  const finalJobName = options.jobName || githubJob || adoJobName || glJobName;
+  const finalRunAttempt = options.runAttempt || githubRunAttempt || adoRunAttempt || glRunAttempt;
+  const finalEventName = options.eventName || githubEventName || adoBuildReason || glPipelineSource;
+  const finalApiUrl = options.apiUrl || githubApiUrl || adoCollectionUri || process.env.CI_API_V4_URL;
   const finalDefinitionId = adoSystemDefinitionId;
   const finalDefinitionVersion = adoDefinitionVersion;
-  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace;
+  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace || process.env.CI_PROJECT_DIR || bbCloneDir;
   const finalBinariesDirectory = adoBinariesDirectory;
   const finalArtifactStagingDirectory = adoArtifactStagingDirectory;
   const finalContainerId = adoContainerId;
-  const finalRepositoryLocalPath = adoRepositoryLocalPath;
+  const finalRepositoryLocalPath = adoRepositoryLocalPath || process.env.CI_PROJECT_DIR || bbCloneDir;
   const finalRetentionDays = githubRetentionDays ? parseInt(githubRetentionDays) : undefined;
   const finalRunnerEnvironment = runnerEnvironment;
   const finalRunnerDebug = runnerDebug === "1";
   const finalWorkflowRef = githubWorkflowRef;
   const finalWorkflowSha = githubWorkflowSha;
-  const finalActorId = githubActorId;
-  const finalTriggeringActor = githubTriggeringActor;
-  const finalRefType = githubRefType;
-  const finalRefProtected = githubRefProtected === "true";
+  const finalActorId = githubActorId || glUserId;
+  const finalTriggeringActor = githubTriggeringActor || glUserLogin || glUserName || bbStepTriggererUuid;
+  const finalRefType = githubRefType || (process.env.CI_COMMIT_TAG || bbTag ? "tag" : (process.env.CI_COMMIT_BRANCH || bbBranch ? "branch" : undefined));
+  const finalRefProtected = githubRefProtected === "true" || process.env.CI_COMMIT_REF_PROTECTED === "true";
   const finalPrNumber = pullRequestNumber;
-  const finalRepoOwner = githubRepositoryOwner;
-  const finalRunnerOs = runnerOs || adoAgentOs || options.runnerOs;
-  const finalRunnerArch = runnerArch || adoAgentArch || options.runnerArch;
-  const finalRunnerName = runnerName || adoAgentName || options.runnerName;
+  const finalRepoOwner = githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner;
+  const glRunnerOs = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[0] : undefined;
+  const glRunnerArch = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[1] : undefined;
+  const finalRunnerOs = options.runnerOs || runnerOs || adoAgentOs || glRunnerOs;
+  const finalRunnerArch = options.runnerArch || runnerArch || adoAgentArch || glRunnerArch;
+  const finalRunnerName = options.runnerName || runnerName || adoAgentName || glRunnerDesc;
   const finalAgentMachineName = adoAgentMachineName || options.agentMachineName;
   const finalAgentId = adoAgentId || options.agentId;
   const finalAgentBuildDirectory = adoAgentBuildDirectory || options.agentBuildDirectory;
@@ -1546,12 +1724,24 @@ async function createFailureEvent(
     if (adoBuildId || runId) {
       executionUrl = executionUrl || `${cleanUri}/${adoTeamProject}/_build/results?buildId=${adoBuildId || runId}`;
     }
+  } else if (glJobUrl || glPipelineUrl || glProjectUrl) {
+    executionUrl = executionUrl || glJobUrl || glPipelineUrl || (glProjectUrl && glPipelineId ? `${glProjectUrl}/-/pipelines/${glPipelineId}` : undefined);
+    definitionUrl = glPipelineUrl || (glProjectUrl ? `${glProjectUrl}/-/pipelines` : "https://gitlab.com");
+  } else if (bbRepoFullName && bbBuildNumber) {
+    executionUrl = executionUrl || `https://bitbucket.org/${bbRepoFullName}/pipelines/results/${bbBuildNumber}`;
+    definitionUrl = `https://bitbucket.org/${bbRepoFullName}/pipelines`;
   }
 
   // Repository URL logic
   let repositoryUrl = options.repository ? (githubServerUrl ? `${githubServerUrl}/${repository}` : `https://github.com/${repository}`) : "https://github.com/cli-user/unknown-repo";
   if (adoRepositoryUri && !githubServerUrl) {
     repositoryUrl = adoRepositoryUri;
+  } else if (glProjectUrl) {
+    repositoryUrl = glProjectUrl;
+  } else if (bbRepoFullName) {
+    repositoryUrl = `https://bitbucket.org/${bbRepoFullName}`;
+  } else if (options.repositoryGitUrl) {
+    repositoryUrl = options.repositoryGitUrl;
   }
 
   // Use CLI options if provided, otherwise use environment variables
@@ -1602,8 +1792,8 @@ async function createFailureEvent(
         runnerToolCache: options.runnerToolCache,
         runnerWorkspace: options.runnerWorkspace,
         workspace: options.workspace,
-        jobStatus: options.jobStatus,
-        jobContainer: options.jobContainer,
+        jobStatus: options.jobStatus || glJobStatus,
+        jobContainer: options.jobContainer || glJobImage || bbDockerHost,
         jobServices: options.jobServices,
         strategyJobIndex: options.strategyJobIndex ? parseInt(options.strategyJobIndex as string, 10) : undefined,
         strategyJobTotal: options.strategyJobTotal ? parseInt(options.strategyJobTotal as string, 10) : undefined,
@@ -1642,23 +1832,23 @@ async function createFailureEvent(
         systemHostType: adoSystemHostType,
         systemJobDisplayName: adoSystemJobDisplayName,
         prIsFork: adoPrIsFork !== undefined ? String(adoPrIsFork === "True") : undefined,
-        prId: adoPrId,
+        prId: adoPrId || glMrId || bbPrId || options.prId,
         systemWorkFolder: adoSystemWorkFolder,
         tfBuild: adoTfBuild,
         checksStageAttempt: adoChecksStageAttempt,
         strategyName: adoStrategyName,
         strategyCycleName: adoStrategyCycleName,
         cronScheduleDisplayName: adoCronScheduleDisplayName,
-        requestedFor: adoRequestedFor,
-        requestedForEmail: adoRequestedForEmail,
-        requestedForId: adoRequestedForId,
+        requestedFor: adoRequestedFor || glUserName || glUserLogin || bbStepTriggererUuid,
+        requestedForEmail: adoRequestedForEmail || glUserEmail,
+        requestedForId: adoRequestedForId || glUserId || bbStepTriggererUuid,
         queuedBy: adoQueuedBy,
         queuedById: adoQueuedById,
-        sourceBranchName: adoSourceBranchName,
-        sourceVersionMessage: adoSourceVersionMessage,
-        repositoryId: adoRepositoryId,
-        repositoryProvider: adoRepositoryProvider,
-        repositoryUri: adoRepositoryUri,
+        sourceBranchName: adoSourceBranchName || glMrSourceBranch || glCommitBranch || bbBranch,
+        sourceVersionMessage: adoSourceVersionMessage || glCommitMessage || glCommitTitle,
+        repositoryId: adoRepositoryId || glProjectId || bbRepoUuid,
+        repositoryProvider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (githubServerUrl ? "github" : undefined))),
+        repositoryUri: adoRepositoryUri || glProjectUrl || (bbRepoFullName ? `https://bitbucket.org/${bbRepoFullName}` : undefined),
         ...(adoStageRequestedBy ? { stageRequestedBy: adoStageRequestedBy } : {}),
         ...(adoStageRequestedForId ? { stageRequestedForId: adoStageRequestedForId } : {}),
         ...(adoSourceTfvcShelveset ? { sourceTfvcShelveset: adoSourceTfvcShelveset } : {}),
@@ -1677,22 +1867,129 @@ async function createFailureEvent(
         releaseName: finalReleaseName,
         releaseUri: finalReleaseUri,
         releaseArtifacts: Object.keys(adoReleaseArtifacts).length > 0 ? adoReleaseArtifacts : undefined,
+        // GitLab CI predefined variables mapping
+        gitlabProjectId: glProjectId,
+        gitlabProjectUrl: glProjectUrl,
+        gitlabProjectTitle: glProjectTitle,
+        gitlabProjectDescription: glProjectDescription,
+        gitlabProjectVisibility: glProjectVisibility,
+        gitlabProjectNamespace: glProjectNamespace,
+        gitlabProjectRootNamespace: glProjectRootNamespace,
+        gitlabPipelineId: glPipelineId,
+        gitlabPipelineIid: glPipelineIid,
+        gitlabPipelineUrl: glPipelineUrl,
+        gitlabPipelineSource: glPipelineSource,
+        gitlabPipelineName: glPipelineName,
+        gitlabPipelineCreatedAt: glPipelineCreatedAt,
+        gitlabJobId: glJobId,
+        gitlabJobName: glJobName,
+        gitlabJobStage: glJobStage,
+        gitlabJobStatus: glJobStatus,
+        gitlabJobStartedAt: glJobStartedAt,
+        gitlabJobImage: glJobImage,
+        gitlabJobTimeout: glJobTimeout,
+        gitlabJobTags: glJobTags,
+        gitlabCommitTitle: glCommitTitle,
+        gitlabCommitDescription: glCommitDescription,
+        gitlabCommitAuthor: glCommitAuthor,
+        gitlabCommitTimestamp: glCommitTimestamp,
+        gitlabCommitBeforeSha: glCommitBeforeSha,
+        gitlabEnvironmentTier: glEnvironmentTier || options.environmentTier,
+        gitlabEnvironmentUrl: glEnvironmentUrl || options.environmentUrl,
+        gitlabEnvironmentAction: glEnvironmentAction || options.environmentAction,
+        gitlabMergeRequestIid: glMrIid || options.prNumber,
+        gitlabMergeRequestId: glMrId || options.prId,
+        gitlabMergeRequestTitle: glMrTitle || options.prTitle,
+        gitlabMergeRequestEvent: glMrEvent,
+        gitlabMergeRequestSourceBranch: glMrSourceBranch || options.prSourceBranch,
+        gitlabMergeRequestTargetBranch: glMrTargetBranch || options.prTargetBranchName,
+        gitlabMergeRequestAssignees: glMrAssignees,
+        gitlabMergeRequestLabels: glMrLabels,
+        gitlabMergeRequestMilestone: glMrMilestone,
+        gitlabRunnerId: glRunnerId || options.runnerId,
+        gitlabRunnerDescription: glRunnerDesc || options.runnerName,
+        gitlabRunnerTags: glRunnerTags || options.runnerTags,
+        gitlabRunnerVersion: glRunnerVersion || options.runnerVersion,
+        gitlabUserLogin: glUserLogin,
+        gitlabUserName: glUserName,
+        gitlabUserEmail: glUserEmail,
+        gitlabUserId: glUserId || options.actorId,
+        gitlabServerUrl: glServerUrl,
+        gitlabServerVersion: glServerVersion,
+        // Bitbucket Pipelines predefined variables mapping
+        bitbucketBuildNumber: bbBuildNumber,
+        bitbucketCloneDir: bbCloneDir,
+        bitbucketCommit: bbCommit,
+        bitbucketWorkspace: bbWorkspace,
+        bitbucketWorkspaceUuid: bbWorkspaceUuid,
+        bitbucketRepoOwner: bbRepoOwner,
+        bitbucketRepoOwnerUuid: bbRepoOwnerUuid,
+        bitbucketRepoSlug: bbRepoSlug,
+        bitbucketRepoUuid: bbRepoUuid,
+        bitbucketRepoFullName: bbRepoFullName,
+        bitbucketRepoIsPrivate: bbRepoIsPrivate,
+        bitbucketBranch: bbBranch,
+        bitbucketTag: bbTag,
+        bitbucketBookmark: bbBookmark,
+        bitbucketParallelStep: bbParallelStep,
+        bitbucketParallelStepCount: bbParallelStepCount,
+        bitbucketPrId: bbPrId,
+        bitbucketPrDestinationBranch: bbPrDestinationBranch,
+        bitbucketPrDestinationCommit: bbPrDestinationCommit,
+        bitbucketMergeQueuePrIds: bbMergeQueuePrIds,
+        bitbucketGitHttpOrigin: bbGitHttpOrigin,
+        bitbucketGitSshOrigin: bbGitSshOrigin,
+        bitbucketExitCode: bbExitCode,
+        bitbucketStepUuid: bbStepUuid,
+        bitbucketPipelineUuid: bbPipelineUuid,
+        bitbucketDeploymentEnvironment: bbDeploymentEnvironment,
+        bitbucketDeploymentEnvironmentUuid: bbDeploymentEnvironmentUuid,
+        bitbucketProjectKey: bbProjectKey,
+        bitbucketProjectUuid: bbProjectUuid,
+        bitbucketStepTriggererUuid: bbStepTriggererUuid,
+        bitbucketStepRunNumber: bbStepRunNumber,
+        bitbucketPackagesUsername: bbPackagesUsername,
+        bitbucketDockerHost: bbDockerHost,
+        bitbucketTriggerPipelineUuid: bbTriggerPipelineUuid,
+        bitbucketTriggerPipelineRunUuid: bbTriggerPipelineRunUuid,
+        bitbucketTriggerStepUuid: bbTriggerStepUuid,
+        bitbucketTriggerPipelineSelectorType: bbTriggerPipelineSelectorType,
+        bitbucketTriggerPipelineSelectorPattern: bbTriggerPipelineSelectorPattern,
+        bitbucketTriggerPipelineStatus: bbTriggerPipelineStatus,
+        bitbucketTriggerDeploymentUuid: bbTriggerDeploymentUuid,
+        bitbucketTriggerDeploymentStatus: bbTriggerDeploymentStatus,
+        bitbucketTriggerDeploymentEnvironmentName: bbTriggerDeploymentEnvironmentName,
+        bitbucketTriggerPackagesPackageType: bbTriggerPackagesPackageType,
+        bitbucketTriggerPackagesPackageName: bbTriggerPackagesPackageName,
+        bitbucketTriggerPackagesArtifactName: bbTriggerPackagesArtifactName,
+        bitbucketTriggerFixFlakyTestTargetBranch: bbTriggerFixFlakyTestTargetBranch,
+        bitbucketTriggerFixFlakyTestSourceBranch: bbTriggerFixFlakyTestSourceBranch,
+        bitbucketTriggerTestCaseFqdn: bbTriggerTestCaseFqdn,
+        bitbucketTriggerTestCaseUuid: bbTriggerTestCaseUuid,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || repository || "unknown-repo",
         url: repositoryUrl,
         defaultBranch: "main",
-        id: adoRepositoryId || githubRepositoryId,
-        ownerId: githubRepositoryOwnerId,
-        provider: adoRepositoryProvider || (githubServerUrl ? "github" : undefined),
+        id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
+        ownerId: githubRepositoryOwnerId || bbWorkspaceUuid,
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (githubServerUrl ? "github" : undefined))),
       },
       commit: {
         sha: commit,
-        url: repository && commit ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : "https://github.com/cli-user/unknown-repo/commit/unknown",
-        message: adoSourceVersionMessage || "CLI analysis",
-        author: triggeredBy,
-        authorEmail: adoRequestedForEmail,
+        url: (repository && commit)
+          ? (githubServerUrl
+              ? `${githubServerUrl}/${repository}/commit/${commit}`
+              : (glProjectUrl
+                  ? `${glProjectUrl}/-/commit/${commit}`
+                  : (bbRepoFullName
+                      ? `https://bitbucket.org/${bbRepoFullName}/commits/${commit}`
+                      : repositoryUrl + `/commit/${commit}`)))
+          : "https://github.com/cli-user/unknown-repo/commit/unknown",
+        message: glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
+        author: glCommitAuthor || triggeredBy,
+        authorEmail: glUserEmail || adoRequestedForEmail,
       },
       branch: finalBranch,
       environment: environment,
@@ -1714,9 +2011,27 @@ async function createFailureEvent(
     
     // Add pull request information if available
     if (isPullRequest && pullRequestNumber) {
+      let prUrl: string;
+      if (githubServerUrl && repository) {
+        prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;
+      } else if (glProjectUrl) {
+        prUrl = `${glProjectUrl}/-/merge_requests/${pullRequestNumber}`;
+      } else if (glServerUrl && repository) {
+        prUrl = `${glServerUrl}/${repository}/-/merge_requests/${pullRequestNumber}`;
+      } else if (bbRepoFullName) {
+        prUrl = `https://bitbucket.org/${bbRepoFullName}/pull-requests/${pullRequestNumber}`;
+      } else if (adoCollectionUri || adoTeamProject) {
+        prUrl = `${repositoryUrl}/pullrequest/${pullRequestNumber}`;
+      } else {
+        prUrl = `${repositoryUrl}/pull/${pullRequestNumber}`;
+      }
+
       (event as any).pullRequest = {
         number: parseInt(pullRequestNumber),
-        url: githubServerUrl ? `${githubServerUrl}/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pullrequest/${pullRequestNumber}`,
+        url: prUrl,
+        ...(glMrTitle || options.prTitle ? { title: glMrTitle || options.prTitle } : {}),
+        ...(glMrSourceBranch || bbBranch || options.prSourceBranch ? { sourceBranch: glMrSourceBranch || bbBranch || options.prSourceBranch } : {}),
+        ...(glMrTargetBranch || bbPrDestinationBranch || options.prTargetBranchName ? { targetBranch: glMrTargetBranch || bbPrDestinationBranch || options.prTargetBranchName } : {}),
       };
     }
     
@@ -1797,21 +2112,128 @@ async function createFailureEvent(
         ...(adoStageRequestedForId ? { stageRequestedForId: adoStageRequestedForId } : {}),
         ...(adoSourceTfvcShelveset ? { sourceTfvcShelveset: adoSourceTfvcShelveset } : {}),
         ...(adoSourceBranch ? { fullSourceBranch: adoSourceBranch } : {}),
+        gitlabProjectId: glProjectId,
+        gitlabProjectUrl: glProjectUrl,
+        gitlabProjectTitle: glProjectTitle,
+        gitlabProjectDescription: glProjectDescription,
+        gitlabProjectVisibility: glProjectVisibility,
+        gitlabProjectNamespace: glProjectNamespace,
+        gitlabProjectRootNamespace: glProjectRootNamespace,
+        gitlabPipelineId: glPipelineId,
+        gitlabPipelineIid: glPipelineIid,
+        gitlabPipelineUrl: glPipelineUrl,
+        gitlabPipelineSource: glPipelineSource,
+        gitlabPipelineName: glPipelineName,
+        gitlabPipelineCreatedAt: glPipelineCreatedAt,
+        gitlabJobId: glJobId,
+        gitlabJobName: glJobName,
+        gitlabJobStage: glJobStage,
+        gitlabJobStatus: glJobStatus,
+        gitlabJobStartedAt: glJobStartedAt,
+        gitlabJobImage: glJobImage,
+        gitlabJobTimeout: glJobTimeout,
+        gitlabJobTags: glJobTags,
+        gitlabCommitTitle: glCommitTitle,
+        gitlabCommitDescription: glCommitDescription,
+        gitlabCommitAuthor: glCommitAuthor,
+        gitlabCommitTimestamp: glCommitTimestamp,
+        gitlabCommitBeforeSha: glCommitBeforeSha,
+        gitlabEnvironmentTier: glEnvironmentTier || options.environmentTier,
+        gitlabEnvironmentUrl: glEnvironmentUrl || options.environmentUrl,
+        gitlabEnvironmentAction: glEnvironmentAction || options.environmentAction,
+        gitlabMergeRequestIid: glMrIid || options.prNumber,
+        gitlabMergeRequestId: glMrId || options.prId,
+        gitlabMergeRequestTitle: glMrTitle || options.prTitle,
+        gitlabMergeRequestEvent: glMrEvent,
+        gitlabMergeRequestSourceBranch: glMrSourceBranch || options.prSourceBranch,
+        gitlabMergeRequestTargetBranch: glMrTargetBranch || options.prTargetBranchName,
+        gitlabMergeRequestAssignees: glMrAssignees,
+        gitlabMergeRequestLabels: glMrLabels,
+        gitlabMergeRequestMilestone: glMrMilestone,
+        gitlabRunnerId: glRunnerId || options.runnerId,
+        gitlabRunnerDescription: glRunnerDesc || options.runnerName,
+        gitlabRunnerTags: glRunnerTags || options.runnerTags,
+        gitlabRunnerVersion: glRunnerVersion || options.runnerVersion,
+        gitlabUserLogin: glUserLogin,
+        gitlabUserName: glUserName,
+        gitlabUserEmail: glUserEmail,
+        gitlabUserId: glUserId || options.actorId,
+        gitlabServerUrl: glServerUrl,
+        gitlabServerVersion: glServerVersion,
+        // Bitbucket Pipelines predefined variables mapping
+        bitbucketBuildNumber: bbBuildNumber,
+        bitbucketCloneDir: bbCloneDir,
+        bitbucketCommit: bbCommit,
+        bitbucketWorkspace: bbWorkspace,
+        bitbucketWorkspaceUuid: bbWorkspaceUuid,
+        bitbucketRepoOwner: bbRepoOwner,
+        bitbucketRepoOwnerUuid: bbRepoOwnerUuid,
+        bitbucketRepoSlug: bbRepoSlug,
+        bitbucketRepoUuid: bbRepoUuid,
+        bitbucketRepoFullName: bbRepoFullName,
+        bitbucketRepoIsPrivate: bbRepoIsPrivate,
+        bitbucketBranch: bbBranch,
+        bitbucketTag: bbTag,
+        bitbucketBookmark: bbBookmark,
+        bitbucketParallelStep: bbParallelStep,
+        bitbucketParallelStepCount: bbParallelStepCount,
+        bitbucketPrId: bbPrId,
+        bitbucketPrDestinationBranch: bbPrDestinationBranch,
+        bitbucketPrDestinationCommit: bbPrDestinationCommit,
+        bitbucketMergeQueuePrIds: bbMergeQueuePrIds,
+        bitbucketGitHttpOrigin: bbGitHttpOrigin,
+        bitbucketGitSshOrigin: bbGitSshOrigin,
+        bitbucketExitCode: bbExitCode,
+        bitbucketStepUuid: bbStepUuid,
+        bitbucketPipelineUuid: bbPipelineUuid,
+        bitbucketDeploymentEnvironment: bbDeploymentEnvironment,
+        bitbucketDeploymentEnvironmentUuid: bbDeploymentEnvironmentUuid,
+        bitbucketProjectKey: bbProjectKey,
+        bitbucketProjectUuid: bbProjectUuid,
+        bitbucketStepTriggererUuid: bbStepTriggererUuid,
+        bitbucketStepRunNumber: bbStepRunNumber,
+        bitbucketPackagesUsername: bbPackagesUsername,
+        bitbucketDockerHost: bbDockerHost,
+        bitbucketTriggerPipelineUuid: bbTriggerPipelineUuid,
+        bitbucketTriggerPipelineRunUuid: bbTriggerPipelineRunUuid,
+        bitbucketTriggerStepUuid: bbTriggerStepUuid,
+        bitbucketTriggerPipelineSelectorType: bbTriggerPipelineSelectorType,
+        bitbucketTriggerPipelineSelectorPattern: bbTriggerPipelineSelectorPattern,
+        bitbucketTriggerPipelineStatus: bbTriggerPipelineStatus,
+        bitbucketTriggerDeploymentUuid: bbTriggerDeploymentUuid,
+        bitbucketTriggerDeploymentStatus: bbTriggerDeploymentStatus,
+        bitbucketTriggerDeploymentEnvironmentName: bbTriggerDeploymentEnvironmentName,
+        bitbucketTriggerPackagesPackageType: bbTriggerPackagesPackageType,
+        bitbucketTriggerPackagesPackageName: bbTriggerPackagesPackageName,
+        bitbucketTriggerPackagesArtifactName: bbTriggerPackagesArtifactName,
+        bitbucketTriggerFixFlakyTestTargetBranch: bbTriggerFixFlakyTestTargetBranch,
+        bitbucketTriggerFixFlakyTestSourceBranch: bbTriggerFixFlakyTestSourceBranch,
+        bitbucketTriggerTestCaseFqdn: bbTriggerTestCaseFqdn,
+        bitbucketTriggerTestCaseUuid: bbTriggerTestCaseUuid,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || answers.repositoryName,
         url: repositoryUrl,
         defaultBranch: "main",
-        id: adoRepositoryId || githubRepositoryId,
-        ownerId: githubRepositoryOwnerId,
-        provider: adoRepositoryProvider || (githubServerUrl ? "github" : undefined),
+        id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
+        ownerId: githubRepositoryOwnerId || bbRepoOwnerUuid || bbWorkspaceUuid,
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (githubServerUrl ? "github" : undefined))),
       },
     commit: {
       sha: commit || answers.commitSha,
-      url: (repository && commit) ? (githubServerUrl ? `${githubServerUrl}/${repository}/commit/${commit}` : repositoryUrl + `/commit/${commit}`) : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
-      message: adoSourceVersionMessage || "CLI analysis",
-      author: triggeredBy,
+      url: (repository && commit)
+        ? (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)
+            ? `https://bitbucket.org/${bbRepoFullName || repository}/commits/${commit}`
+            : (githubServerUrl
+                ? `${githubServerUrl}/${repository}/commit/${commit}`
+                : (glProjectUrl
+                    ? `${glProjectUrl}/-/commit/${commit}`
+                    : repositoryUrl + `/commit/${commit}`)))
+        : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
+      message: glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
+      author: glCommitAuthor || triggeredBy,
+      authorEmail: glUserEmail || adoRequestedForEmail,
     },
     branch: finalBranch || answers.branch,
     environment: environment || answers.environment,
@@ -1831,12 +2253,30 @@ async function createFailureEvent(
   
   // Add pull request information if available
   if (isPullRequest && pullRequestNumber) {
+    let prUrl: string;
+    if (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)) {
+      prUrl = `https://bitbucket.org/${bbRepoFullName || repository}/pull-requests/${pullRequestNumber}`;
+    } else if (githubServerUrl && repository) {
+      prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;
+    } else if (glProjectUrl) {
+      prUrl = `${glProjectUrl}/-/merge_requests/${pullRequestNumber}`;
+    } else if (glServerUrl && repository) {
+      prUrl = `${glServerUrl}/${repository}/-/merge_requests/${pullRequestNumber}`;
+    } else if (adoCollectionUri || adoTeamProject) {
+      prUrl = `${repositoryUrl}/pullrequest/${pullRequestNumber}`;
+    } else {
+      prUrl = `${repositoryUrl}/pull/${pullRequestNumber}`;
+    }
+
     (event as any).pullRequest = {
       number: parseInt(pullRequestNumber),
-      url: githubServerUrl ? `${githubServerUrl}/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pullrequest/${pullRequestNumber}`,
+      url: prUrl,
+      ...(glMrTitle || options.prTitle ? { title: glMrTitle || options.prTitle } : {}),
+      ...(glMrSourceBranch || options.prSourceBranch ? { sourceBranch: glMrSourceBranch || options.prSourceBranch } : {}),
+      ...(glMrTargetBranch || options.prTargetBranchName ? { targetBranch: glMrTargetBranch || options.prTargetBranchName } : {}),
     };
   }
-  
+
   return event;
 }
 

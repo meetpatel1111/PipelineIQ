@@ -230,14 +230,18 @@ sequenceDiagram
 ## 5. Core Components
 
 ### CLI Engine (`src/cli/`)
-The primary interface for local analysis and the entry point for platform adapters. It features:
+The primary interface for local analysis and universal CI/CD execution everywhere. It features:
 - `pipelineiq init`: Interactive setup wizard for Jira Cloud/Server, AI providers, and automation policies.
-- `pipelineiq analyze`: Failure analysis, Jira dispatch, and self-healing orchestration.
+- `pipelineiq exec`: Transparent command execution wrapper with live streaming, failure capture, and auto-resolution.
+- `pipelineiq analyze`: Failure analysis, Jira dispatch, stdin streaming (`--stdin`), and self-healing orchestration.
 - `pipelineiq resolve`: Standalone resolution command to transition open Jira issues on pipeline success.
 - `pipelineiq test`: Proactive connectivity diagnostic for Jira and AI providers.
+- `applyCIPreset`: Universal multi-CI environment sensor with native, full-fidelity support for GitHub Actions, Azure DevOps, GitLab CI, Bitbucket Cloud, CircleCI, and Jenkins.
 
-### CI/CD Adapters (`src/github-action/`, `src/azure-devops/`)
+### CI/CD Adapters & Dedicated Log Parsers (`src/core/log-parser/`)
 Platform-specific layers that translate execution contexts into unified `FailureEvent` models.
+- **Log Parsers**: High-performance runners for GitHub Actions, Azure DevOps, GitLab CI (`parseGitLab`), and Bitbucket Pipelines (`parseBitbucket`), stripping ANSI escapes, normalizing CRLF, mapping shell steps (`+ <cmd>`), and identifying test assertion diagnostics.
+- **First-Party Atlassian Ecosystem**: Bitbucket Cloud pipelines natively link with Jira Cloud & Data Center, formatting direct clickable pipeline runs (`/pipelines/results/<num>`), pull requests (`/pull-requests/<id>`), and commit diffs (`/commits/<sha>`), and capturing 48 Bitbucket predefined variables.
 - **GitHub Action (`src/github-action/index.ts`)**: Supports PR sticky comment updates with collapsible diagnostics, rich run execution step summaries, and automatic resolution when `jobStatus === "success"`.
 - **Azure DevOps Task (`src/azure-devops/index.ts`)**: Full feature parity with inputs for auto-resolution (`autoResolveOnSuccess`, `resolveTransition`) and self-healing configuration in `task.json`.
 

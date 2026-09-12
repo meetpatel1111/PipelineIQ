@@ -22,6 +22,10 @@ function getParser(format: LogFormat) {
       return parseGitHubActions;
     case "azure-devops":
       return parseAzureDevOps;
+    case "gitlab":
+      return parseGitLab;
+    case "bitbucket":
+      return parseBitbucket;
     case "terraform":
       return parseTerraform;
     case "kubernetes":
@@ -115,6 +119,152 @@ function parseAzureDevOps(rawLogs: string, options: ParseOptions): ParsedLog {
     entries,
     relevantEntries,
     options,
+    rawLogs,
+  });
+}
+
+/**
+ * GitLab CI log parser
+ * Handles GitLab runner step section markers, commands, and error output
+ */
+export function parseGitLab(rawLogs: string, options: Partial<ParseOptions> = {}): ParsedLog {
+  const parsedOptions = ParseOptionsSchema.parse({ ...options, format: "gitlab" });
+  const lines = rawLogs.split("\n");
+  const entries: LogEntry[] = [];
+  const relevantEntries: LogEntry[] = [];
+
+  for (const rawLine of lines) {
+    // Strip carriage returns and GitLab ANSI escape sequences
+    let line = rawLine
+      .replace(/\r\x1b\[0K/g, "")
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+      .trimEnd();
+
+    // Detect GitLab section markers: section_start:1644342200:step_name[collapsed=true]
+    const sectionStartMatch = line.match(/section_start:(\d+):([a-zA-Z0-9_\-]+)(?:\[(.*)\])?/);
+    const sectionEndMatch = line.match(/section_end:(\d+):([a-zA-Z0-9_\-]+)/);
+
+    let timestamp: string | undefined;
+    if (sectionStartMatch?.[1]) {
+      const epochSeconds = parseInt(sectionStartMatch[1], 10);
+      if (!isNaN(epochSeconds)) {
+        timestamp = new Date(epochSeconds * 1000).toISOString();
+      }
+      line = line.replace(/section_start:\d+:[a-zA-Z0-9_\-]+(?:\[.*?\])?/, "").trim();
+    } else if (sectionEndMatch?.[1]) {
+      const epochSeconds = parseInt(sectionEndMatch[1], 10);
+      if (!isNaN(epochSeconds)) {
+        timestamp = new Date(epochSeconds * 1000).toISOString();
+      }
+      line = line.replace(/section_end:\d+:[a-zA-Z0-9_\-]+/, "").trim();
+    } else {
+      const isoMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+      if (isoMatch) {
+        timestamp = isoMatch[1];
+      }
+    }
+
+    if (!line) continue;
+
+    let level: LogEntry["level"] = "info";
+    const lower = line.toLowerCase();
+    if (lower.includes("error:") || lower.includes("fail") || lower.includes("fatal:") || lower.includes("job failed")) {
+      level = "error";
+    } else if (lower.includes("warning:") || lower.includes("warn:")) {
+      level = "warn";
+    } else if (lower.includes("debug:")) {
+      level = "debug";
+    }
+
+    const metadata: Record<string, any> = {};
+    if (sectionStartMatch) {
+      metadata.section = sectionStartMatch[2];
+      metadata.sectionAction = "start";
+    } else if (sectionEndMatch) {
+      metadata.section = sectionEndMatch[2];
+      metadata.sectionAction = "end";
+    }
+
+    const entry: LogEntry = {
+      timestamp,
+      level,
+      message: line,
+      source: "gitlab",
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+
+    entries.push(entry);
+
+    if (isRelevantEntry(line, parsedOptions.relevantKeywords)) {
+      relevantEntries.push(entry);
+    }
+  }
+
+  return extractStructuredData({
+    entries,
+    relevantEntries,
+    options: parsedOptions,
+    rawLogs,
+  });
+}
+
+/**
+ * Bitbucket Pipelines log parser
+ * Handles Bitbucket runner shell step executions (+ <cmd>), exit codes, and test diagnostics
+ */
+export function parseBitbucket(rawLogs: string, options: Partial<ParseOptions> = {}): ParsedLog {
+  const parsedOptions = ParseOptionsSchema.parse({ ...options, format: "bitbucket" });
+  const lines = rawLogs.split("\n");
+  const entries: LogEntry[] = [];
+  const relevantEntries: LogEntry[] = [];
+
+  for (const rawLine of lines) {
+    // Strip terminal ANSI escape sequences and carriage returns
+    const line = rawLine
+      .replace(/\r/g, "")
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+      .trimEnd();
+
+    if (!line) continue;
+
+    // Detect timestamps if present (ISO format)
+    const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+    const timestamp = timestampMatch?.[1];
+
+    let level: LogEntry["level"] = "info";
+    const lower = line.toLowerCase();
+    if (lower.includes("error:") || lower.includes("fail") || lower.includes("fatal:") || lower.includes("exit code") || lower.includes("assertionerror")) {
+      level = "error";
+    } else if (lower.includes("warning:") || lower.includes("warn:")) {
+      level = "warn";
+    } else if (lower.includes("debug:")) {
+      level = "debug";
+    }
+
+    const metadata: Record<string, any> = {};
+    if (line.startsWith("+ ")) {
+      metadata.command = line.substring(2).trim();
+    }
+
+    const entry: LogEntry = {
+      timestamp,
+      level,
+      message: line,
+      source: "bitbucket",
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+
+    entries.push(entry);
+
+    if (isRelevantEntry(line, parsedOptions.relevantKeywords)) {
+      relevantEntries.push(entry);
+    }
+  }
+
+  return extractStructuredData({
+    entries,
+    relevantEntries,
+    options: parsedOptions,
     rawLogs,
   });
 }
