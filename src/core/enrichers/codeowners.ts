@@ -102,9 +102,31 @@ export const codeOwnerEnricher: Enricher = {
       const newLabels = ownersArray.map(o => `owner:${o.replace(/^@/, '')}`);
       setField(ctx, "labels", Array.from(new Set([...currentLabels, ...newLabels])), "deterministic", true);
 
-      const emailOwner = ownersArray.find(o => o.includes("@") && !o.startsWith("@"));
-      if (emailOwner && !ctx.fields.assignee) {
-        setField(ctx, "assignee", emailOwner, "deterministic");
+      // Resolve Jira assignee
+      if (!ctx.fields.assignee) {
+        const userMapping = ctx.config.userMapping ?? {};
+        let resolvedAssignee: string | undefined;
+
+        for (const owner of ownersArray) {
+          const cleanOwner = owner.replace(/^@/, "");
+          if (userMapping[cleanOwner]) {
+            resolvedAssignee = userMapping[cleanOwner];
+            break;
+          }
+          if (userMapping[owner]) {
+            resolvedAssignee = userMapping[owner];
+            break;
+          }
+        }
+
+        if (resolvedAssignee) {
+          setField(ctx, "assignee", resolvedAssignee, "deterministic");
+        } else {
+          const emailOwner = ownersArray.find(o => o.includes("@") && !o.startsWith("@"));
+          if (emailOwner) {
+            setField(ctx, "assignee", emailOwner, "deterministic");
+          }
+        }
       }
     }
   },

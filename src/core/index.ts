@@ -1,5 +1,6 @@
 export { processFailureEvent } from "./pipeline.js";
 export type { ProcessResult, ProcessOptions } from "./pipeline.js";
+export { resolvePipelineSuccess, type ResolveResult, type ResolveOptions } from "./resolve.js";
 export type { Enricher, EnrichmentContext } from "./enrichers/types.js";
 export { setField } from "./enrichers/types.js";
 export { deterministicEnricher } from "./enrichers/deterministic.js";

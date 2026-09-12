@@ -24,10 +24,12 @@ PipelineIQ bridges the "Intelligence Gap" between automated CI/CD pipelines (Git
 - Integration with GitHub Actions and Azure DevOps.
 - Support for Jira Cloud and Jira Server/Data Center.
 - Deterministic and AI-driven enrichment.
-
-- Autonomous remediation (Self-healing pipelines).
-- Reliability analytics dashboard.
-- Deployment risk scoring and SRE intelligence.
+- Two-way Jira lifecycle synchronization (auto-resolution on pipeline retry / success).
+- Flaky test intelligence & scoring across pipeline executions.
+- Autonomous remediation (Self-healing pipelines with Historical Resolution RAG).
+- Dynamic secret masking firewall with runtime environment discovery.
+- Rich CI/CD reporting: PR sticky commenting and job step summaries.
+- SRE intelligence and deployment risk scoring.
 
 ---
 
@@ -59,22 +61,26 @@ graph TD
         In[Ingestion Adapter]
         Norm[Normalization Layer]
         EP[Enrichment Pipeline]
+        Res[Auto-Resolution Engine]
         
         subgraph "Enrichment Pipeline"
             Det[Deterministic Enricher]
-            Comp[Computed Enricher]
-            AI[AI Enricher]
+            Comp[Computed Enricher & Flaky Scoring]
+            AI[AI Enricher & Prompt Factory]
+            RAG[Historical Resolution RAG]
         end
         
         SL[(Signature Library)]
         AE[AI Engine]
-        DB[(State / Dedup Cache)]
+        SH[Self-Healing Orchestrator]
+        DB[(Jira State / Dedup Cache)]
     end
 
     subgraph "External Integrations"
-        Jira[Jira Cloud / Server]
-        Notify[Slack / Teams]
-        LLM[AI Providers: Gemini / OpenAI]
+        Jira[Jira Cloud / Server DC]
+        Notify[Slack / Teams / Discord]
+        LLM[AI Providers: Gemini / OpenAI / Anthropic / Ollama]
+        GitPR[GitHub / Azure DevOps PRs]
     end
 
     GHA --> In
@@ -82,13 +88,19 @@ graph TD
     CLI --> In
     In --> Norm
     Norm --> EP
+    In -->|Status = Success| Res
     
     EP --> SL
     EP --> AE
     AE --> LLM
+    EP --> RAG
+    RAG <--> Jira
     
     EP --> Jira
     EP --> Notify
+    EP --> SH
+    SH --> GitPR
+    Res -->|Transition & Comment| Jira
 ```
 
 ---
@@ -107,9 +119,7 @@ For a more granular view of the system's structural design and operational logic
 > All three diagrams are kept in sync with the current implementation. They include "Deep Dive" logic for the **AI Prompt Factory** (`ai-engine.ts`), **Fingerprint Stabilizer** (`dedup.ts`), and **Multi-Platform Renderer** (`enhanced-client.ts`).
 
 > [!IMPORTANT]
-> The Deployment & Security Topology diagram explicitly shows that **raw secrets never leave the runner environment**. The `secret-mask.ts` firewall runs before any data is dispatched to Jira or AI providers.
-
----
+> The Deployment & Security Topology diagram explicitly shows that **raw secrets never leave the runner environment**. The `secret-mask.ts` dynamic firewall runs before any data is dispatched to Jira or AI providers.
 
 ---
 
@@ -120,11 +130,21 @@ For a more granular view of the system's structural design and operational logic
 2. **Collection**: The PipelineIQ Adapter (Action/Task) is triggered on `failure()`.
 3. **Normalization**: Raw logs and environment variables are mapped to the `FailureEvent` schema.
 4. **Enrichment**:
-    - **Deterministic**: Context discovery (Repo, Branch, Commit).
-    - **Computed**: Signature matching (Regex) and Dedup Signature calculation.
-    - **AI**: (Optional) LLM-driven RCA and Remediation generation.
+    - **Deterministic**: Context discovery (Repo, Branch, Commit, CODEOWNERS mapped via `userMapping`).
+    - **Computed**: Signature matching (Regex), Flaky score computation, and Dedup Signature calculation using tail log slicing.
+    - **AI**: (Optional) LLM-driven RCA, Remediation, and Historical Resolution RAG.
 5. **Deduplication**: Search Jira for existing issues with the same signature.
 6. **Reporting**: Create or update a Jira issue with rich Markdown/ADF content.
+7. **Self-Healing**: Triggered on new tickets or on recurrent deduplication hits if `healOnRecurrence: true`. Generates and verifies code patches, then creates Draft PRs.
+8. **CI/CD Feedback**: Updates PR sticky comments and generates rich GitHub Actions Step Summaries.
+
+### Pipeline Success & Auto-Resolution Lifecycle
+When a pipeline job succeeds (e.g. following a retry, fix commit, or subsequent run) and `dedup.autoResolveOnSuccess` is enabled:
+1. **Trigger**: PipelineIQ runs with `status: success` (e.g., via GitHub Action `if: always()`, Azure DevOps `condition: always()`, or `pipelineiq resolve`).
+2. **Signature Computation**: Reconstructs the deterministic pipeline signature (`repo + workflow + step + category`).
+3. **Issue Discovery**: Queries Jira for open issues matching `labels = "piq-sig:<sig>"`.
+4. **Lifecycle Transition**: Adds an informative resolution comment with commit/run details, tags the issue with `piq-resolved-by-retry`, and executes the Jira workflow transition to `Done` or `Resolved`.
+5. **Flaky Intelligence**: Tracks the retry-resolution event, updating historical flakiness analytics for subsequent runs.
 
 ### Sequence Diagram
 ```mermaid
@@ -132,31 +152,59 @@ sequenceDiagram
     participant CI as CI/CD Platform
     participant Core as PipelineIQ Core
     participant AE as AI Engine
+    participant SH as Self-Healing
     participant Jira as Jira Cloud/Server
 
-    CI->>Core: Failure Event + Logs
-    Core->>Core: Normalize into FailureEvent
-    Core->>Core: Deterministic Enrichment (Metadata)
-    Core->>Core: Computed Enrichment (Signatures/Heuristics)
-    
-    alt AI Enabled
-        Core->>AE: Failure Context + Log Excerpts
-        AE->>AE: Generate AI Insights
-        AE-->>Core: Summary, RCA, Remediation
-    else AI Disabled / Low Confidence
-        Core->>Core: Deterministic Fallback (Category-based)
+    alt Job Status == Failure
+        CI->>Core: Failure Event + Logs
+        Core->>Core: Dynamic Secret Masking (Firewall)
+        Core->>Core: Normalize into FailureEvent
+        Core->>Core: Deterministic Enrichment (Metadata, CODEOWNERS)
+        Core->>Core: Computed Enrichment (Tail Log Slicing, Flaky Scoring)
+        
+        alt AI Enabled
+            Core->>Jira: Query Past Incidents for Historical RAG
+            Jira-->>Core: Prior PR Links, Sandbox Commands, Comments
+            Core->>AE: Failure Context + Log Excerpts + Historical Context
+            AE->>AE: Generate AI Insights (RCA, Remediation, Patch Hints)
+            AE-->>Core: Summary, RCA, Remediation
+        else AI Disabled / Low Confidence
+            Core->>Core: Deterministic Fallback (Category-based)
+        end
+        
+        Core->>Core: Compute Dedup Signature
+        Core->>Jira: Search for Existing Issue
+        
+        alt Issue Exists (Dedup Hit)
+            Core->>Jira: Add Comment + Update Status
+            opt Heal on Recurrence Enabled
+                Core->>SH: Trigger Self-Healing Patch Generator
+                SH->>CI: Open Draft Pull Request
+                SH->>Jira: Link Draft PR
+            end
+        else New Issue
+            Core->>Jira: Create Issue (ADF/Markdown)
+            opt Self-Healing Enabled
+                Core->>SH: Trigger Self-Healing Patch Generator
+                SH->>CI: Open Draft Pull Request
+                SH->>Jira: Link Draft PR
+            end
+        end
+        
+        Core->>CI: Update PR Sticky Comment & Step Summary
+        Core-->>CI: Process Result (Success/Failure)
+
+    else Job Status == Success (Auto-Resolution)
+        CI->>Core: Success Event
+        Core->>Core: Compute Dedup Signature
+        Core->>Jira: Query Open Issues with Matching Signature
+        alt Open Issues Found
+            Core->>Jira: Post Auto-Resolution Comment & Add Tag (piq-resolved-by-retry)
+            Core->>Jira: Transition Issue to Done / Resolved
+        end
+        Core->>CI: Render Success Step Summary
+        Core-->>CI: Resolution Result
     end
-    
-    Core->>Core: Compute Dedup Signature
-    Core->>Jira: Search for Existing Issue
-    
-    alt Issue Exists
-        Core->>Jira: Add Comment + Update Status
-    else New Issue
-        Core->>Jira: Create Issue (ADF/Markdown)
-    end
-    
-    Core-->>CI: Process Result (Success/Failure)
 ```
 
 ---
@@ -164,28 +212,38 @@ sequenceDiagram
 ## 5. Core Components
 
 ### CLI Engine (`src/cli/`)
-The primary interface for local analysis and the entry point for platform adapters. It handles configuration merging, interactive setup, and orchestration of the core pipeline.
+The primary interface for local analysis and the entry point for platform adapters. It features:
+- `pipelineiq init`: Interactive setup wizard for Jira Cloud/Server, AI providers, and automation policies.
+- `pipelineiq analyze`: Failure analysis, Jira dispatch, and self-healing orchestration.
+- `pipelineiq resolve`: Standalone resolution command to transition open Jira issues on pipeline success.
+- `pipelineiq test`: Proactive connectivity diagnostic for Jira and AI providers.
 
 ### CI/CD Adapters (`src/github-action/`, `src/azure-devops/`)
-Platform-specific layers that interact with the CI/CD environment. They translate platform-specific contexts (e.g., `GhContext`, `Agent.JobName`) into the unified `FailureEvent` model.
+Platform-specific layers that translate execution contexts into unified `FailureEvent` models.
+- **GitHub Action (`src/github-action/index.ts`)**: Supports PR sticky comment updates with collapsible diagnostics, rich run execution step summaries, and automatic resolution when `jobStatus === "success"`.
+- **Azure DevOps Task (`src/azure-devops/index.ts`)**: Full feature parity with inputs for auto-resolution (`autoResolveOnSuccess`, `resolveTransition`) and self-healing configuration in `task.json`.
 
-### Log Processing Engine (`src/core/log-parser/`)
-Parses raw log streams to extract relevant excerpts, strip ANSI color codes, and identify error boundaries. It supports multi-format parsing (JUnit, Terraform, Docker, etc.).
+### Auto-Resolution Engine (`src/core/resolve.ts`)
+Orchestrates two-way lifecycle synchronization between CI/CD runs and Jira. It matches open tickets by signature label (`piq-sig:<sig>`), posts context-rich resolution comments, executes transition steps (defaulting to "Done" or "Resolved"), and marks tickets with `piq-resolved-by-retry`.
 
-### Metadata Engine (`src/core/enrichers/deterministic.ts`)
-Derives 50+ data points from the environment, including repository ownership, branch protections, commit ancestry, and environment tiers (Dev/Prod).
+### Deduplication & Fingerprint Stabilizer (`src/core/dedup.ts`)
+Calculates deterministic MD5 hashes across repository, workflow, step, and failure signature.
+- **Tail-Log Slicing**: Normalizes CRLF and ANSI escape codes and slices the trailing 3,000 characters of execution logs (extracting a 500-char excerpt) when error messages are empty, eliminating false-positive runner initialization collisions.
 
-### Failure Analysis Engine (`src/core/signatures.ts`)
-A heuristic engine that matches log patterns against a library of known failure signatures. It provides the initial classification (e.g., "Dependency Conflict", "Infrastructure Timeout") and deterministic remediation steps.
+### Secret Masking Firewall (`src/core/secret-mask.ts`)
+A multi-layered redaction engine that executes before any log data leaves the runner:
+- **Dynamic Runtime Secret Discovery (`getRuntimeEnvironmentSecrets()`)**: Inspects `process.env` dynamically for sensitive values, tokens, and keys matching known patterns (`TOKEN`, `KEY`, `SECRET`, `PASSWORD`, `CREDENTIAL`).
+- **Static Pattern Matching**: Redacts AWS/GCP/Azure credentials, JWTs, Bearer tokens, private keys, and connection strings.
 
-### AI Analysis Engine (`src/core/ai/`)
-An LLM-agnostic layer that constructs high-fidelity prompts from the normalized failure context. It utilizes "Confidence Scoring" to ensure AI-generated data is only used when it meets quality thresholds.
+### Flaky Test Intelligence (`src/core/jira/history.ts`, `src/core/enrichers/history.ts`)
+Analyzes historical incident patterns across runs:
+- Tracks total occurrences, previous resolution status, and retry-resolved counts.
+- Computes dynamic flakiness percentage scores (`flakinessScore = (retryResolvedCount / occurrences) * 100`).
+- Renders flaky indicators and metrics in Jira descriptions and CI/CD step summaries.
 
-### Jira Integration Layer (`src/core/jira/`)
-Abstracts the complexities of Jira Cloud and Server. It handles:
-- **ADF Rendering**: Converting Markdown to Atlassian Document Format.
-- **Field Mapping**: Synchronizing 80+ fields to Jira custom fields.
-- **Attachment Management**: Uploading logs and diagnostic artifacts.
+### Local & Historical Context Engine (`src/core/enrichers/codeowners.ts`, `src/core/self-healing/engine.ts`)
+- **CODEOWNERS Identity Mapping (`userMapping`)**: Maps GitHub/GitLab usernames directly to Jira account IDs or user names.
+- **Historical Resolution RAG (`buildHistoricalRAGContext`)**: Queries Jira for previously resolved tickets with the same signature, extracting past fix PR links, sandbox verification commands, and resolution comments to prime the AI Fix Generator.
 
 ---
 
@@ -201,12 +259,16 @@ pipelineiq/
 │   ├── cli/              # Commander-based CLI
 │   ├── core/             # Central Processing Engine
 │   │   ├── ai/           # LLM Providers and Engine
-│   │   ├── enrichers/    # Pipeline Stages (Det/Comp/AI)
-│   │   ├── jira/         # Jira Client Abstractions
+│   │   ├── enrichers/    # Pipeline Stages (Det/Comp/AI/CODEOWNERS/Flaky)
+│   │   ├── jira/         # Jira Client Abstractions & History
 │   │   ├── log-parser/   # Diagnostic extractors
+│   │   ├── self-healing/ # Autonomous patch generation & RAG
 │   │   ├── types/        # Zod Schemas and Domain Types
+│   │   ├── dedup.ts      # Fingerprint Stabilizer & Tail Slicing
+│   │   ├── resolve.ts    # Two-Way Jira Lifecycle Sync
+│   │   ├── secret-mask.ts# Dynamic Secret Masking Firewall
 │   │   └── index.ts      # Core Engine Exports
-│   ├── github-action/    # GitHub Actions adapter
+│   ├── github-action/    # GitHub Actions adapter (Sticky Comments & Summaries)
 │   └── index.ts          # Main Package Entry
 ├── action.yml            # GitHub Action Metadata
 ├── task.json             # Azure DevOps Extension Metadata
@@ -219,9 +281,9 @@ pipelineiq/
 
 ### AI Providers
 PipelineIQ uses a provider-interface pattern to support multiple LLMs:
-- **Google Gemini**: Default provider for high-speed, cost-effective analysis.
-- **OpenAI / Anthropic**: Supported for high-reasoning tasks.
-- **LocalAI**: Supported for air-gapped or sensitive enterprise environments.
+- **Google Gemini**: Default provider for high-speed, cost-effective analysis (v1.5, v2.0, v2.5 Flash).
+- **OpenAI / Anthropic**: Supported for high-reasoning tasks (GPT-4o, Claude 3.5/3.7).
+- **LocalAI / Ollama**: Supported for air-gapped or sensitive enterprise environments.
 
 ---
 
@@ -229,10 +291,11 @@ PipelineIQ uses a provider-interface pattern to support multiple LLMs:
 
 ### AI Workflow
 1. **Context Clipping**: Logs are truncated to fit token limits (default 4k-8k).
-2. **Prompt Construction**: Injecting deterministic analysis as "Chain of Thought" hints.
-3. **Generation**: LLM generates JSON-structured insights.
-4. **Validation**: Zod validation of AI response.
-5. **Confidence Scoring**: If confidence < 0.6, discard and use deterministic fallback.
+2. **Historical RAG Retrieval**: Past Jira resolution context is retrieved and formatted as few-shot guidance.
+3. **Prompt Construction**: Injecting deterministic analysis, source code context, and historical RAG hints.
+4. **Generation**: LLM generates JSON-structured insights and surgical code patches.
+5. **Validation**: Zod schema validation of AI response.
+6. **Confidence Gating**: If confidence < 0.6 (or configurable threshold), discard and use deterministic fallback.
 
 ### Fallback Mechanisms
 Every AI field has a deterministic producer:
@@ -256,10 +319,10 @@ First-match regex library for common DevOps failures:
 ## 10. Jira Ticket Architecture
 
 ### Enrichment Model
-Most integrations provide ~10 fields. PipelineIQ provides **80-120 operational fields**:
+PipelineIQ provides **80-120 operational fields**:
 - **System**: Agent OS, Runner Version, Node Version.
-- **Context**: Branch, Commit, PR ID, Workflow URL.
-- **Intelligence**: Root Cause, Remediation Steps, Dedup Signature.
+- **Context**: Branch, Commit, PR ID, Workflow URL, CODEOWNERS mapping.
+- **Intelligence**: Root Cause, Remediation Steps, Dedup Signature, Flakiness Score.
 - **Provenance**: AI Provider, Confidence, Ingestion Source.
 
 ---
@@ -269,38 +332,41 @@ Most integrations provide ~10 fields. PipelineIQ provides **80-120 operational f
 ### The Self-Healing Engine (`src/core/self-healing/`)
 PipelineIQ features a fully autonomous self-healing orchestrator that transforms diagnostic metadata and source code into surgical pull requests.
 
-1. **Local Workspace Context**: Instead of guessing based on logs, the engine extracts file paths from the stack trace and uses Node's `fs` to read the exact source code of the failing files directly from the runner's checked-out workspace.
-2. **AI Fix Generator**: A specialized prompt constrains the AI to output precise, snippet-level JSON patches instead of sweeping refactors.
-3. **Guardrails** (**on by default** — disable with `selfHealing.enableGuardrails: false` / `--no-self-heal-guardrails` to allow wider fixes):
-   - **Confidence Gating**: Requires a minimum AI confidence (default: 0.8).
-   - **Scope Limits**: Restricts fixes to a maximum of 10 files and 200 lines (broadened from 3 files and 50 lines in v0.18.0).
-   - **Category Allow-list**: Restricts auto-fixing to configured failure categories.
-   - **Path Blocking**: Blocks sensitive paths (`.env`, `*.key`, `*secret*`, `.github/workflows/*`, …) to prevent security risks.
-4. **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files. If precise target matching fails, the engine safely appends the proposed changes to the target file as a safe fallback instead of raising a pipeline error.
-5. **Git Provider Abstraction**: Supports both GitHub (Octokit + Git Trees API) and Azure DevOps (REST API). It fetches the original file content, applies the AI's snippet patch locally, and pushes the fully mutated file in an atomic commit.
-6. **Draft Pull Requests**: Fixes are always isolated on a new branch (`pipelineiq/fix/*`) and submitted as Draft PRs for human-in-the-loop review.
+1. **Local Workspace Context**: Reads failing source files directly from the runner's workspace.
+2. **Historical Resolution RAG**: Queries Jira for previous similar incidents, extracting past auto-fix PR links, sandbox verification commands, and remediation notes to guide the LLM.
+3. **AI Fix Generator**: Generates concise, snippet-level JSON patches instead of sweeping refactors.
+4. **Heal on Recurrence**: Automatically triggers self-healing on recurrent deduplication hits when enabled (`healOnRecurrence: true`).
+5. **Local Sandbox Verification**: Executes syntax checks and automated test runs with an agentic feedback loop to verify fixes before pushing.
+6. **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files.
+7. **Git Provider Abstraction**: Commits and creates Draft PRs in GitHub or Azure DevOps with comprehensive audit summaries and cross-links to Jira.
 
 ---
 
 ## 12. Security Architecture
 
-### Secret Masking (`secret-mask.ts`)
-A heuristic-based defense-in-depth layer that redacts:
-- AWS/GCP/Azure Keys
-- GitHub/ADO Tokens
-- JWTs and Bearer tokens
-- Passwords and Connection Strings
+### Secret Masking Firewall (`secret-mask.ts`)
+A defense-in-depth security layer that redacts secrets before data leaves the runner:
+- **Dynamic Runtime Environment Secret Discovery**: Automatically iterates over all environment variables at runtime, identifying and redacting credentials, tokens, and keys.
+- **Heuristic Pattern Redaction**: Strips AWS/GCP/Azure keys, GitHub/ADO tokens, Bearer tokens, private keys, passwords, and connection strings.
 
 ---
 
-## 12. Scalability Considerations
+## 13. Two-Way Lifecycle Synchronization & Flaky Intelligence
+
+- **Automatic Ticket Closure**: Automatically transitions open Jira incidents to `Done` or `Resolved` when subsequent retries or commits succeed.
+- **Flakiness Tracking**: Analyzes resolution patterns to identify intermittent, flaky tests versus persistent bugs, computing a 0–100% flakiness score.
+- **Audit Logging**: Resolution comments reference the succeeding run ID, commit SHA, and triggering actor, and apply the `piq-resolved-by-retry` label.
+
+---
+
+## 14. Scalability Considerations
 
 - **Stateless Execution**: The engine does not require a persistent database for core analysis, enabling easy scaling in serverless environments.
 - **Memory Efficient**: Log streaming and line-by-line parsing prevent memory exhaustion for multi-GB log files.
 
 ---
 
-## 13. Deployment Models
+## 15. Deployment Models
 
 - **Current**: 
   - `npm` package for standard Node environments.
@@ -311,7 +377,7 @@ A heuristic-based defense-in-depth layer that redacts:
 
 ---
 
-## 14. Engineering Decisions & Tradeoffs
+## 16. Engineering Decisions & Tradeoffs
 
 - **Why TypeScript?**: Native support in GitHub Actions and the vast Node.js ecosystem for Azure DevOps.
 - **Why ESM-First?**: Alignment with modern Node.js standards and future-proofing.
@@ -319,24 +385,25 @@ A heuristic-based defense-in-depth layer that redacts:
 
 ---
 
-## 15. Future Roadmap Architecture
+## 17. Future Roadmap Architecture
 
 ### Phase 1: Foundation (Complete)
 - Robust multi-platform ingestion.
 - High-fidelity Jira reporting.
 
-### Phase 2: Autonomy (Current)
+### Phase 2: Autonomy & Lifecycle Sync (Current)
 - Automated PR creation for known dependency/config fixes via the Self-Healing Engine.
-- Local Workspace Context reading for complex logic bugs.
+- Historical Resolution RAG for self-healing.
+- Two-way Jira lifecycle synchronization.
+- Flaky test scoring.
 
 ### Phase 3: Intelligence (Future)
-- Historical failure correlation.
-- Team-level reliability scoring.
+- Team-level reliability scoring dashboard.
 - Slack-based interactive incident management.
 
 ---
 
-## 16. Appendix
+## 18. Appendix
 
 ### Data Payloads
 PipelineIQ uses the **FailureEvent** schema as the source of truth for all internal communications.
@@ -349,3 +416,4 @@ PipelineIQ uses the **FailureEvent** schema as the source of truth for all inter
   "repository": { "name": "app-api", "owner": "acme-corp" }
 }
 ```
+

@@ -127,3 +127,56 @@ describe("HistoryService.getMetrics()", () => {
     expect(metrics.mttrHours).toBeUndefined();
   });
 });
+
+describe("HistoryService.getHistory() - Flaky Test Intelligence", () => {
+  it("returns zero score and not flaky when no issues found", async () => {
+    const service = new HistoryService(makeJira([]), "PIQ");
+    const history = await service.getHistory("sig-test-1");
+
+    expect(history.similarCount).toBe(0);
+    expect(history.isFlaky).toBe(false);
+    expect(history.flakinessScore).toBe(0);
+    expect(history.retryResolvedCount).toBe(0);
+  });
+
+  it("calculates high flakiness score when issues were resolved by retry", async () => {
+    const issues = [
+      {
+        key: "PROJ-1",
+        fields: {
+          created: new Date().toISOString(),
+          status: { name: "Done" },
+          resolution: { name: "Done" },
+          labels: ["piq-sig:sig-1", "piq-resolved-by-retry"],
+        },
+      },
+      {
+        key: "PROJ-2",
+        fields: {
+          created: new Date().toISOString(),
+          status: { name: "Done" },
+          resolution: { name: "Done" },
+          labels: ["piq-sig:sig-1", "piq-resolved-by-retry"],
+        },
+      },
+      {
+        key: "PROJ-3",
+        fields: {
+          created: new Date().toISOString(),
+          status: { name: "Open" },
+          resolution: null,
+          labels: ["piq-sig:sig-1"],
+        },
+      },
+    ];
+
+    const service = new HistoryService(makeJira(issues), "PIQ");
+    const history = await service.getHistory("sig-1");
+
+    expect(history.similarCount).toBe(3);
+    expect(history.retryResolvedCount).toBe(2);
+    expect(history.flakinessScore).toBeGreaterThanOrEqual(0.5);
+    expect(history.isFlaky).toBe(true);
+    expect(history.previousIncidentKeys).toEqual(["PROJ-1", "PROJ-2", "PROJ-3"]);
+  });
+});

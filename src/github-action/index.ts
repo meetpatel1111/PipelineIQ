@@ -3,6 +3,7 @@ import * as github from "@actions/github";
 import { Octokit } from "@octokit/rest";
 import {
   processFailureEvent,
+  resolvePipelineSuccess,
   PipelineIQConfigSchema,
   aiEnricher,
   type PipelineIQConfig,
@@ -73,6 +74,35 @@ async function run(): Promise<void> {
     };
 
     const event = await mapGithubContext(ghCtx, octokit, environment);
+
+    // If job/workflow succeeded, auto-resolve any matching open incidents if enabled
+    const jobStatus = core.getInput("job-status") || ghCtx.jobStatus;
+    if (jobStatus === "success") {
+      core.info("PipelineIQ: Pipeline execution succeeded — checking for open incident tickets to auto-resolve...");
+      const resolveResult = await resolvePipelineSuccess(event, config);
+      core.setOutput("action-taken", resolveResult.action);
+      core.setOutput("jira-issue-key", resolveResult.resolvedKeys.join(",") || "");
+      core.info(`PipelineIQ: ${resolveResult.message}`);
+
+      try {
+        let summary = core.summary.addHeading("✅ PipelineIQ: Pipeline Execution Succeeded", 2);
+        if (resolveResult.action === "resolved" && resolveResult.resolvedKeys.length > 0) {
+          const links = resolveResult.resolvedKeys
+            .map((k) => `[${k}](${config.jira.baseUrl}/browse/${k})`)
+            .join(", ");
+          summary = summary.addRaw(`Successfully auto-resolved **${resolveResult.resolvedKeys.length}** open Jira incident(s): ${links}<br>`);
+          summary = summary.addRaw(`🏷️ Tagged with \`piq-resolved-by-retry\` for flakiness tracking.<br>`);
+        } else {
+          summary = summary.addRaw(`Pipeline completed cleanly. No unresolved Jira incident tickets required auto-closure.<br>`);
+        }
+        await summary.write();
+      } catch (sumErr) {
+        core.warning(`Failed to write step summary: ${sumErr}`);
+      }
+
+      return;
+    }
+
     const result = await processFailureEvent(event, config, {
       extraEnrichers: [aiEnricher],
     });
@@ -106,45 +136,184 @@ async function run(): Promise<void> {
         for (const change of fix.changes) {
           core.info(`  - [${change.action.toUpperCase()}] ${change.filePath}: ${change.changeDescription}`);
         }
+      }
+    }
 
-        // Generate GitHub Step Summary for rich visual feedback
-        try {
-          let summary = core.summary.addHeading("🤖 PipelineIQ Self-Healing Fix Summary", 2);
+    // Generate comprehensive GitHub Step Summary for rich visual feedback on the run summary page
+    try {
+      let summary = core.summary.addHeading("🚨 PipelineIQ Incident Diagnostic", 2);
 
-          if (result.selfHealing.success && result.selfHealing.prUrl) {
-            summary = summary.addRaw(`✅ **PR Created:** [${result.selfHealing.prUrl}](${result.selfHealing.prUrl})<br>`);
-            summary = summary.addRaw(`🌿 **Branch:** \`${result.selfHealing.branchName}\`<br>`);
-          } else if (result.selfHealing.dryRun) {
-            summary = summary.addRaw(`🧪 **Dry Run Mode — No PR created**<br>`);
-          } else {
-            summary = summary.addRaw(`❌ **Self-Healing Failed:** ${result.selfHealing.reason}<br>`);
+      const actionBadge = result.action === "created" ? "🆕 **Ticket Created**"
+        : result.action === "updated" ? "🔄 **Existing Incident Updated (Dedup)**"
+        : "⏸️ **Skipped**";
+      const jiraLink = issueKey
+        ? `[**${issueKey}**](${config.jira.baseUrl}/browse/${issueKey})`
+        : "(No ticket)";
+
+      summary = summary.addRaw(`**Status:** ${actionBadge} | **Jira Issue:** ${jiraLink}<br><br>`);
+
+      const tableHeaders = [
+        { data: "Property", header: true },
+        { data: "Value", header: true },
+      ];
+      const tableRows: string[][] = [
+        ["Pipeline", `\`${event.pipeline.name}\``],
+        ["Branch", `\`${event.branch}\``],
+        ["Commit", `\`${event.commit.sha.slice(0, 7)}\``],
+      ];
+      if (event.pipeline.step) tableRows.push(["Failed Step", `\`${event.pipeline.step}\``]);
+      if (event.failure.exitCode !== undefined) tableRows.push(["Exit Code", `\`${event.failure.exitCode}\``]);
+      if (result.spec?.category) tableRows.push(["Classification", `**${result.spec.category}**`]);
+      if (result.spec?.priority) tableRows.push(["Severity / Priority", `**${result.spec.priority}**`]);
+      if (result.spec?.assignee) tableRows.push(["Assignee", `\`${result.spec.assignee}\``]);
+
+      summary = summary.addTable([tableHeaders, ...tableRows]);
+
+      if (result.spec?.rca) {
+        summary = summary.addHeading("Root Cause Analysis", 3)
+          .addQuote(result.spec.rca);
+      }
+
+      if (result.spec?.remediationSteps && result.spec.remediationSteps.length > 0) {
+        summary = summary.addHeading("Suggested Remediation", 3)
+          .addList(result.spec.remediationSteps);
+      }
+
+      if (result.selfHealing) {
+        summary = summary.addHeading("🤖 Autonomous Self-Healing", 3);
+        if (result.selfHealing.success && result.selfHealing.prUrl) {
+          summary = summary.addRaw(`✅ **Auto-Fix PR Created:** [${result.selfHealing.prUrl}](${result.selfHealing.prUrl}) (Branch: \`${result.selfHealing.branchName}\`)<br>`);
+          if (result.selfHealing.verifiedCommand) {
+            summary = summary.addRaw(`🔬 **Verification Proof:** Sandbox test passed with \`${result.selfHealing.verifiedCommand}\`<br>`);
           }
+        } else if (result.selfHealing.dryRun) {
+          summary = summary.addRaw(`🧪 **Dry Run:** Code patch generated without creating PR.<br>`);
+        } else if (result.selfHealing.attempted) {
+          summary = summary.addRaw(`⚠️ **Self-Healing Failed:** ${result.selfHealing.reason}<br>`);
+        }
 
-          summary = summary.addRaw(`🎯 **Confidence:** ${Math.round(fix.confidence * 100)}% | ⚡ **Risk Level:** ${fix.riskLevel}<br><br>`)
-            .addHeading("Proposed File Changes", 3);
-
-          const tableHeaders = [
+        if (result.selfHealing.fix?.changes && result.selfHealing.fix.changes.length > 0) {
+          const changeHeaders = [
             { data: "File Path", header: true },
             { data: "Action", header: true },
             { data: "Description", header: true },
           ];
-          const tableRows = fix.changes.map((c) => [
+          const changeRows = result.selfHealing.fix.changes.map((c) => [
             `\`${c.filePath}\``,
             `**${c.action.toUpperCase()}**`,
             c.changeDescription,
           ]);
-
-          await summary.addTable([tableHeaders, ...tableRows]).write();
-        } catch (sumErr) {
-          core.warning(`Failed to write step summary: ${sumErr}`);
+          summary = summary.addTable([changeHeaders, ...changeRows]);
         }
       }
+
+      await summary.write();
+    } catch (sumErr) {
+      core.warning(`Failed to write step summary: ${sumErr}`);
+    }
+
+    // Post or update sticky comment on Pull Request if running in PR context
+    if (core.getInput("comment-pr") !== "false") {
+      await maybePostPRStickyComment(octokit, ghCtx, result, event, issueKey, config.jira.baseUrl);
     }
 
     core.info(`PipelineIQ: ${result.action} ${issueKey || "(no issue)"}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     core.setFailed(`PipelineIQ failed: ${message}`);
+  }
+}
+
+async function maybePostPRStickyComment(
+  octokit: Octokit,
+  ghCtx: GhContext,
+  result: any,
+  event: any,
+  issueKey: string,
+  jiraBaseUrl: string,
+): Promise<void> {
+  const prNumber =
+    ghCtx.payload?.pull_request?.number ||
+    (ghCtx.payload as any)?.issue?.number;
+  if (!prNumber) return;
+
+  const marker = "<!-- pipelineiq-sticky-comment -->";
+  const step = event.pipeline.step || event.failure.failedStep || "Unknown step";
+  const exitCode = event.failure.exitCode !== undefined ? `Exit code ${event.failure.exitCode}` : "";
+  const category = result.spec?.category || "General Failure";
+  const rca = result.spec?.rca;
+  const remediation = result.spec?.remediationSteps;
+
+  const jiraLink = issueKey
+    ? `🎫 **Jira Issue:** [${issueKey}](${jiraBaseUrl}/browse/${issueKey}) (${result.action})`
+    : "";
+
+  let selfHealingSection = "";
+  if (result.selfHealing) {
+    if (result.selfHealing.prUrl) {
+      selfHealingSection = `\n### 🤖 Autonomous Self-Healing PR\n✅ **Fix PR Opened:** [${result.selfHealing.prUrl}](${result.selfHealing.prUrl})\nBranch: \`${result.selfHealing.branchName}\`\n`;
+    } else if (result.selfHealing.dryRun) {
+      selfHealingSection = `\n### 🤖 Autonomous Self-Healing\n🧪 **Dry Run:** Proposed patch generated successfully without pushing a remote branch.\n`;
+    } else if (result.selfHealing.attempted) {
+      selfHealingSection = `\n### 🤖 Autonomous Self-Healing\n⚠️ **Self-Healing Note:** ${result.selfHealing.reason || "Autonomous remediation could not be generated"}\n`;
+    }
+    if (result.selfHealing.fix?.changes) {
+      const changesList = result.selfHealing.fix.changes
+        .map((c: any) => `- \`${c.filePath}\` (**${c.action.toUpperCase()}**): ${c.changeDescription}`)
+        .join("\n");
+      selfHealingSection += `\n**Proposed File Changes:**\n${changesList}\n`;
+    }
+  }
+
+  const commentBody = [
+    marker,
+    `## 🚨 PipelineIQ Failure Intelligence`,
+    `> **Pipeline:** \`${event.pipeline.name}\` | **Step:** \`${step}\`${exitCode ? ` (\`${exitCode}\`)` : ""} | **Classification:** \`${category}\``,
+    "",
+    jiraLink,
+    "",
+    `<details open>`,
+    `<summary><b>🔍 Failure Analysis & Remediation</b></summary>`,
+    "",
+    rca ? `**Root Cause:**\n${rca}\n` : "",
+    Array.isArray(remediation) && remediation.length > 0
+      ? `**Suggested Remediation:**\n${remediation.map((s: string, i: number) => `${i + 1}. ${s}`).join("\n")}\n`
+      : "",
+    `</details>`,
+    selfHealingSection,
+    "",
+    `---`,
+    `*Automated operational intelligence by [PipelineIQ](https://github.com/meetpatel1111/PipelineIQ)*`,
+  ].filter(Boolean).join("\n");
+
+  try {
+    const { data: comments } = await octokit.issues.listComments({
+      owner: ghCtx.repo.owner,
+      repo: ghCtx.repo.repo,
+      issue_number: prNumber,
+      per_page: 50,
+    });
+
+    const existing = comments.find((c) => c.body && c.body.includes(marker));
+    if (existing) {
+      await octokit.issues.updateComment({
+        owner: ghCtx.repo.owner,
+        repo: ghCtx.repo.repo,
+        comment_id: existing.id,
+        body: commentBody,
+      });
+      core.info(`PipelineIQ: Updated sticky comment on Pull Request #${prNumber}`);
+    } else {
+      await octokit.issues.createComment({
+        owner: ghCtx.repo.owner,
+        repo: ghCtx.repo.repo,
+        issue_number: prNumber,
+        body: commentBody,
+      });
+      core.info(`PipelineIQ: Created sticky comment on Pull Request #${prNumber}`);
+    }
+  } catch (commentErr) {
+    core.debug(`PipelineIQ: Could not post PR sticky comment (likely missing pull-requests:write permission): ${commentErr}`);
   }
 }
 
@@ -168,6 +337,17 @@ function readConfig(): PipelineIQConfig {
     issueType: core.getInput("issue-type") || "Bug",
     ...(core.getInput("default-assignee")
       ? { defaultAssignee: core.getInput("default-assignee") }
+      : {}),
+    ...(core.getInput("user-mapping")
+      ? {
+          userMapping: (() => {
+            try {
+              return JSON.parse(core.getInput("user-mapping"));
+            } catch {
+              return undefined;
+            }
+          })(),
+        }
       : {}),
     ai: {
       mode: aiMode,

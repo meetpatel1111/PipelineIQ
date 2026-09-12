@@ -4,6 +4,26 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.22.0] - 2026-09-13
+
+### Added
+- **Two-Way Jira Lifecycle Sync (Auto-Resolution)**: Added `resolvePipelineSuccess()` and CLI command `pipelineiq resolve` (and `--status <failed|success>`) to search for open incident tickets matching candidate deduplication signatures (`labels = "piq-sig:<sig>"`). Automatically transitions tickets to "Done" / "Resolved", adds audit comments, and labels them with `piq-resolved-by-retry`.
+- **Historical Resolution RAG for Self-Healing**: Enhanced `SelfHealingEngine` with `buildHistoricalRAGContext()` to query Jira memory for previous similar incidents, extracting previous auto-fix PR links, sandbox verification commands, and remediation notes to guide the LLM.
+- **Flaky Test Intelligence & Scoring**: Enhanced `HistoryService.getHistory()` to compute `flakinessScore` (0.0 to 1.0) and `retryResolvedCount` based on retry-resolution history, surfacing flakiness percentage directly in Jira tickets.
+- **Pull Request Sticky Comments**: Added `maybePostPRStickyComment()` in GitHub Actions to post/update a single persistent sticky comment (`<!-- pipelineiq-sticky-comment -->`) with collapsible diagnostics, AI root cause analysis, and self-healing PR links.
+- **Comprehensive GitHub Actions Step Summaries**: Enhanced `core.summary` generation on both failure runs (incident tables, root cause quotes, remediation lists, self-healing diff tables) and success runs (auto-resolved tickets list).
+- **Interactive Setup Wizard**: Added dedicated top-level `pipelineiq init` command with a guided interactive wizard supporting Jira Cloud / Server PATs, AI providers, self-healing, and auto-resolution flags.
+- **Cross-Platform Jira Connectivity Diagnostics**: Updated `pipelineiq test --jira` to use `jira.checkConnection()` and `jira.getServerInfo()`, verifying both Jira Cloud and self-hosted Jira Data Center instances.
+- **Dynamic Runtime Secret Masking Firewall**: Added `getRuntimeEnvironmentSecrets()` in `src/core/secret-mask.ts` to automatically discover and redact active runner tokens (`JIRA_TOKEN`, `GITHUB_TOKEN`, `SYSTEM_ACCESSTOKEN`) and custom secrets.
+- **CODEOWNERS User Identity Mapping**: Added `userMapping?: Record<string, string>` in `PipelineIQConfigSchema` to resolve GitHub usernames (`@username`) to Jira account IDs or emails.
+- **Recurrent Self-Healing on Deduplication Hits**: Added `healOnRecurrence: true` to trigger self-healing and post fix PR details even when a failure matches an existing Jira ticket.
+- **Azure DevOps Two-Way Sync**: Added `autoResolveOnSuccess` and `resolveTransition` inputs to `task.json` and auto-resolution execution in `src/azure-devops/index.ts`.
+
+### Fixed
+- **Deduplication Tail-Log Slicing & Normalization**: Fixed false collision bug in `src/core/dedup.ts` where `logs.slice(0, 2000)` caused distinct failures to collide due to identical runner setup headers. Now uses `getFailureExcerpt()` to select the failure tail (`logs.slice(-3000)`) and cleans ANSI codes and CRLF line breaks.
+
+---
+
 ## [0.21.0] - 2026-05-19
 
 ### Added

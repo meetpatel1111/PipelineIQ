@@ -100,4 +100,16 @@ describe("renderDescription — metrics section", () => {
     expect(pipelineCount).toBe(1);
     expect(repoCount).toBe(1);
   });
+
+  it("renders flakiness warning and percentage score when detected as flaky", () => {
+    const flakyHistory = {
+      similarCount: 5,
+      isFlaky: true,
+      flakinessScore: 0.8,
+      previousIncidentKeys: ["PROJ-1"],
+      relatedKeys: [],
+    };
+    const desc = renderDescription(minEvent, {}, 10, false, undefined, flakyHistory, undefined);
+    expect(desc).toContain("⚠️ **Detected as Flaky** (80% flakiness score)");
+  });
 });

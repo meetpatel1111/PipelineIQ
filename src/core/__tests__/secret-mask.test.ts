@@ -53,4 +53,26 @@ describe("Secret Masking Module (maskSecrets)", () => {
     const tokenLog = "token: 9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d";
     expect(maskSecrets(tokenLog)).toContain("[REDACTED_UUID]");
   });
+
+  it("masks custom dynamic secrets passed as parameters", () => {
+    const input = "Connecting to internal proxy with secret-corp-token-xyz987!";
+    const masked = maskSecrets(input, ["secret-corp-token-xyz987!"]);
+    expect(masked).toBe("Connecting to internal proxy with [REDACTED_SECRET]");
+  });
+
+  it("masks environment variables matching sensitive token keywords", () => {
+    const originalEnv = process.env.CUSTOM_CORP_API_KEY;
+    try {
+      process.env.CUSTOM_CORP_API_KEY = "super-secret-corporate-vault-key-999";
+      const input = "Using key super-secret-corporate-vault-key-999 for authentication";
+      const masked = maskSecrets(input);
+      expect(masked).toBe("Using key [REDACTED_SECRET] for authentication");
+    } finally {
+      if (originalEnv !== undefined) {
+        process.env.CUSTOM_CORP_API_KEY = originalEnv;
+      } else {
+        delete process.env.CUSTOM_CORP_API_KEY;
+      }
+    }
+  });
 });

@@ -21,7 +21,7 @@ export function computeDedupSignature(
     event.pipeline.name,
     event.pipeline.step ?? event.failure.failedStep ?? "",
     category,
-    fingerprint(event.failure.errorMessage ?? event.failure.logs.slice(0, 2000)),
+    fingerprint(getFailureExcerpt(event)),
   ].join("|");
 
   return createHash("sha1").update(parts).digest("hex").slice(0, 16);
@@ -42,19 +42,32 @@ export function computeFailureFingerprint(
 ): string {
   const parts = [
     category,
-    fingerprint(event.failure.errorMessage ?? event.failure.logs.slice(0, 2000)),
+    fingerprint(getFailureExcerpt(event)),
   ].join("|");
 
   return createHash("sha1").update(parts).digest("hex").slice(0, 16);
 }
 
+function getFailureExcerpt(event: FailureEvent): string {
+  if (event.failure.errorMessage && event.failure.errorMessage.trim().length > 0) {
+    return event.failure.errorMessage;
+  }
+  const logs = event.failure.logs ?? "";
+  // In CI logs, error diagnostics and stack traces are positioned at the tail of execution
+  return logs.length > 3000 ? logs.slice(-3000) : logs;
+}
+
 function fingerprint(text: string): string {
-  return text
+  const clean = text
+    .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, "") // strip terminal ANSI escape codes
+    .replace(/\r\n/g, "\n")
     .replace(/\b[0-9a-f]{8,}\b/gi, "X") // hex IDs / UUIDs
     .replace(/\b\d+\b/g, "N") // raw numbers
     .replace(/(\/[\w.\-]+)+/g, "/PATH") // file paths
     .replace(/\d{4}-\d{2}-\d{2}T[\d:.Z+\-]+/g, "TIMESTAMP")
     .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 500);
+    .trim();
+
+  // For long logs/excerpts, the critical failure reason/stack is at the tail
+  return clean.length > 500 ? clean.slice(-500) : clean;
 }

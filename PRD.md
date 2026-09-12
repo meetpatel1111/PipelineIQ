@@ -274,7 +274,7 @@ pipelineiq/
 
 ---
 
-# 12. Core Features (75 Features)
+# 12. Core Features (98 Features)
 
 # A. Failure Detection
 
@@ -423,15 +423,45 @@ pipelineiq/
 
 # K. Autonomous Self-Healing Features
 
-| #  | Feature                        |
-| -- | ------------------------------ |
-| 76 | AI patch generation            |
-| 77 | Atomic git patching            |
-| 78 | Local workspace context engine |
-| 79 | Automated draft PR creation    |
+| #  | Feature                             |
+| -- | ----------------------------------- |
+| 76 | AI patch generation                 |
+| 77 | Atomic git patching                 |
+| 78 | Local workspace context engine      |
+| 79 | Automated draft PR creation         |
 | 80 | Safety guardrails (dry run, limits) |
-| 81 | Resilient Snippet Patching     |
-| 82 | Broadened Scope Limits (10 files / 200 lines) |
+| 81 | Resilient Snippet Patching          |
+| 82 | Broadened Scope Limits              |
+| 83 | Historical Resolution RAG           |
+| 84 | Local Sandbox Verification          |
+| 85 | Heal on Recurrent Dedup Hits        |
+
+---
+
+# L. Two-Way Lifecycle Sync & Auto-Resolution
+
+| #  | Feature                                 |
+| -- | --------------------------------------- |
+| 86 | Auto-resolve open tickets on success    |
+| 87 | Jira workflow transitions (Done/Resolved)|
+| 88 | Resolution audit trail comments         |
+| 89 | Retry-resolved labeling (`piq-resolved`)|
+| 90 | Dynamic flakiness percentage scoring    |
+
+---
+
+# M. CI/CD In-Run Reporting & Developer Experience
+
+| #  | Feature                                    |
+| -- | ------------------------------------------ |
+| 91 | PR sticky commenting (`pipelineiq-sticky`) |
+| 92 | Collapsible diagnostics & diff viewer      |
+| 93 | GitHub Actions Step Summary dashboard      |
+| 94 | Dynamic runtime secret discovery firewall  |
+| 95 | Interactive setup wizard (`pipelineiq init`)|
+| 96 | Standalone resolution CLI (`pipelineiq resolve`)|
+| 97 | Proactive connection checks (`test --jira`)|
+| 98 | CODEOWNERS user mapping (`userMapping`)    |
 
 ---
 
@@ -917,10 +947,15 @@ A failure is duplicate if:
 * same category
 * within configurable time window
 
-Then:
+### Fingerprint Stabilization & Tail Slicing
+* When `errorMessage` is empty, extracts a normalized 500-char excerpt from the trailing 3,000 characters of logs (`logs.slice(-3000)`), stripping ANSI codes and CRLF line breaks to eliminate runner initialization false positives.
 
-* update existing Jira issue
-  instead of creating new one.
+### Actions on Dedup Hit
+* Update existing Jira issue with a new failure occurrence comment and timestamp.
+* If `healOnRecurrence` is enabled (`true`), trigger the autonomous self-healing patch generator to produce a fresh Draft PR.
+
+### Actions on Recovery (Two-Way Lifecycle Sync)
+* If `autoResolveOnSuccess` is enabled (`true`), pipeline success transitions open tickets matching the signature to `Done`/`Resolved` and tags them with `piq-resolved-by-retry`.
 
 ---
 
@@ -949,11 +984,12 @@ Then:
 
 | Requirement        | Description           |
 | ------------------ | --------------------- |
-| Secret masking     | Remove sensitive data |
+| Secret masking     | Dynamic runtime environment discovery (`getRuntimeEnvironmentSecrets()`) + regex redaction |
+| Pre-egress guarantee| Raw secrets and sensitive tokens never leave the runner environment |
 | OAuth support      | Secure integrations   |
-| PAT support        | Token auth            |
-| Audit logging      | Traceability          |
-| Encryption         | Secret storage        |
+| PAT support        | Token auth (Jira Cloud API tokens and Jira Server PATs) |
+| Audit logging      | Traceability for all Jira comments, transitions, and generated PRs |
+| Encryption         | Secret storage in CI/CD secrets store |
 | Webhook validation | Event verification    |
 | RBAC               | Access control        |
 | Tenant isolation   | Multi-tenant security |

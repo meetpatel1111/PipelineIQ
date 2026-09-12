@@ -12,7 +12,7 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 21,
+    "Minor": 22,
     "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
@@ -145,6 +145,20 @@
       "type": "string",
       "label": "Dedup window (hours)",
       "defaultValue": "24"
+    },
+    {
+      "name": "autoResolveOnSuccess",
+      "type": "boolean",
+      "label": "Auto-resolve matching open incident tickets on pipeline success",
+      "defaultValue": "true",
+      "required": false
+    },
+    {
+      "name": "resolveTransition",
+      "type": "string",
+      "label": "Jira workflow transition name for auto-resolution (e.g. Done, Resolved)",
+      "defaultValue": "Done",
+      "required": false
     },
     {
       "name": "buildId",

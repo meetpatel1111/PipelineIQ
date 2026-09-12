@@ -39,8 +39,59 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/(password|passwd|pwd|secret|api[_-]?key|token)\s*[:=]\s*["']?(?!\[REDACTED)[^\s"']{6,}/gi, "$1=[REDACTED]"],
 ];
 
-export function maskSecrets(input: string): string {
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const SENSITIVE_KEY_SUBSTRINGS = [
+  "TOKEN", "SECRET", "PASSWORD", "PASSWD", "API_KEY", "APIKEY", "AUTH", "CREDENTIAL", "PRIVATE_KEY"
+];
+
+const IGNORED_SECRET_VALUES = new Set([
+  "true", "false", "null", "undefined", "none", "0", "1", "default", "development", "production", "test"
+]);
+
+/**
+ * Automatically inspects process.env for sensitive tokens and keys.
+ */
+export function getRuntimeEnvironmentSecrets(): string[] {
+  const secrets: string[] = [];
+  if (typeof process === "undefined" || !process.env) {
+    return secrets;
+  }
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (!value || typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length < 5) continue;
+    if (IGNORED_SECRET_VALUES.has(trimmed.toLowerCase())) continue;
+
+    const upperKey = key.toUpperCase();
+    if (SENSITIVE_KEY_SUBSTRINGS.some((s) => upperKey.includes(s))) {
+      secrets.push(trimmed);
+    }
+  }
+
+  return Array.from(new Set(secrets));
+}
+
+export function maskSecrets(input: string, extraSecrets: string[] = []): string {
+  if (!input) return input;
   let out = input;
+
+  const dynamicSecrets = Array.from(
+    new Set([
+      ...extraSecrets.filter((s) => s && s.trim().length >= 4),
+      ...getRuntimeEnvironmentSecrets(),
+    ]),
+  ).sort((a, b) => b.length - a.length);
+
+  for (const secret of dynamicSecrets) {
+    const escaped = escapeRegExp(secret);
+    const regex = new RegExp(escaped, "g");
+    out = out.replace(regex, "[REDACTED_SECRET]");
+  }
+
   for (const [pattern, replacement] of PATTERNS) {
     out = out.replace(pattern, replacement);
   }

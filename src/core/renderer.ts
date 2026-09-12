@@ -36,6 +36,8 @@ export function renderDescription(
   history?: {
     similarCount: number;
     isFlaky: boolean;
+    flakinessScore?: number | undefined;
+    retryResolvedCount?: number | undefined;
     previousIncidentKeys: string[];
     trend?: "improving" | "worsening" | "stable" | undefined;
     relatedKeys: string[];
@@ -100,7 +102,9 @@ export function renderDescription(
     if (history.trend === "worsening") trendIcon = "📈";
     if (history.trend === "improving") trendIcon = "📉";
 
-    const flakyMsg = history.isFlaky ? " ⚠️ **Detected as Flaky**" : "";
+    const flakyMsg = history.isFlaky
+      ? ` ⚠️ **Detected as Flaky**${history.flakinessScore !== undefined && history.flakinessScore > 0 ? ` (${Math.round(history.flakinessScore * 100)}% flakiness score)` : ""}`
+      : "";
     
     out.push(`- **Frequency:** ${history.similarCount} occurrences in last 30 days${flakyMsg}`);
     if (history.trend) {

@@ -4,7 +4,7 @@ import { execSync } from "node:child_process";
 import type { FailureEvent, SelfHealingConfig, SelfHealingResult, CodeFix } from "../types/index.js";
 import type { AIEngineConfig } from "../ai/types.js";
 import type { GitProvider } from "./types.js";
-import type { JiraClient } from "../jira/client.js";
+import type { JiraClient, FoundIssue } from "../jira/client.js";
 import { FixGenerator } from "./fix-generator.js";
 import { GitHubProvider } from "./github-provider.js";
 import { AzureDevOpsProvider } from "./azure-provider.js";
@@ -84,7 +84,7 @@ export class SelfHealingEngine {
         const signature = computeDedupSignature(event, category as any);
         const pastIssue = await this.jiraClient.findBySignature(projectKey, signature, 30 * 24);
         if (pastIssue && pastIssue.key !== issueKey) {
-          historicalContext = `Previous similar Jira ticket ${pastIssue.key} ("${pastIssue.summary}") was encountered and resolved.`;
+          historicalContext = await this.buildHistoricalRAGContext(pastIssue);
           console.log(`[PipelineIQ] Loaded historical resolution context from Jira issue ${pastIssue.key}`);
         }
       } catch {
@@ -948,7 +948,70 @@ export class SelfHealingEngine {
     return [];
   }
 
+  /**
+   * Builds rich historical RAG context from a past similar Jira issue.
+   * Retrieves issue details, comments (specifically looking for previous auto-fix PRs,
+   * verification proofs, or manual resolution steps), and resolution status to guide the AI fix generator.
+   */
+  async buildHistoricalRAGContext(pastIssue: FoundIssue): Promise<string> {
+    const lines: string[] = [
+      `- Past Incident Ticket: ${pastIssue.key} ("${pastIssue.summary}") [Status: ${pastIssue.status}]`,
+    ];
 
+    if (!this.jiraClient) {
+      return lines.join("\n");
+    }
+
+    try {
+      const fullIssue = await this.jiraClient.getIssue(pastIssue.key);
+      const fields = fullIssue?.fields;
+
+      if (fields?.resolution?.name) {
+        lines.push(`- Past Resolution: ${fields.resolution.name}`);
+      }
+
+      // Extract comments that contain PR links, remediation steps, or verification results
+      const rawComments = fields?.comment?.comments ?? [];
+      const relevantComments: string[] = [];
+
+      for (const comment of rawComments) {
+        let body = "";
+        if (typeof comment.body === "string") {
+          body = comment.body;
+        } else if (comment.body?.content) {
+          try {
+            body = JSON.stringify(comment.body);
+          } catch {
+            body = "";
+          }
+        }
+
+        // Look for PR links, verification notes, or manual resolution hints
+        if (
+          body.includes("Pull Request") ||
+          body.includes("Self-Healing") ||
+          body.includes("Verification") ||
+          body.includes("github.com") ||
+          body.includes("dev.azure.com") ||
+          body.includes("Auto-Fix")
+        ) {
+          const cleaned = body
+            .replace(/\{code[^}]*\}([\s\S]*?)\{code\}/g, "$1")
+            .replace(/\[([^|]+)\|([^\]]+)\]/g, "$1 ($2)")
+            .slice(0, 500);
+          relevantComments.push(cleaned);
+        }
+      }
+
+      if (relevantComments.length > 0) {
+        lines.push(`- Historical Remediation & Verification Notes:\n  ${relevantComments.slice(0, 3).join("\n  ")}`);
+      }
+    } catch (err) {
+      console.warn(`[PipelineIQ] Could not fetch detailed comments for past issue ${pastIssue.key}: ${err}`);
+    }
+
+    return lines.join("\n");
+  }
 }
 
 // ── Utility ──────────────────────────────────────────────────────────────────

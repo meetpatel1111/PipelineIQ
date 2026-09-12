@@ -104,6 +104,8 @@ export const SelfHealingConfigSchema = z.object({
   maxVerificationRetries: z.number().default(3).optional(),
   /** Apply fix directly in-place to local files (CLI / IDE mode) instead of opening a remote PR */
   applyInPlace: z.boolean().default(false).optional(),
+  /** Whether to attempt self-healing when deduplication hits an existing incident (default: true) */
+  healOnRecurrence: z.boolean().default(true).optional(),
 });
 export type SelfHealingConfig = z.infer<typeof SelfHealingConfigSchema>;
 

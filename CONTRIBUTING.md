@@ -36,15 +36,18 @@ PipelineIQ follows a unified package architecture:
 pipelineiq/
 ├── src/
 │   ├── core/                 # Main processing engine
-│   │   ├── pipeline/         # Pipeline processing logic
-│   │   ├── jira/             # Jira REST API client
-│   │   ├── ai/               # AI enrichment with fallbacks
-│   │   ├── parser/           # Multi-format log parsing
-│   │   ├── enrichers/        # Deterministic and computed enrichers
-│   │   ├── self-healing/     # Autonomous patch generation and PR orchestration
-│   │   └── signatures/       # Failure pattern library
-│   ├── cli/                  # Command-line interface
-│   ├── github-action/        # GitHub Actions integration
+│   │   ├── pipeline.ts       # Pipeline processing logic
+│   │   ├── resolve.ts        # Two-way Jira lifecycle synchronization
+│   │   ├── dedup.ts          # Fingerprint stabilization and tail log slicing
+│   │   ├── secret-mask.ts    # Dynamic runtime secret masking firewall
+│   │   ├── jira/             # Jira REST API client and history analytics
+│   │   ├── ai/               # AI enrichment with fallbacks and Prompt Factory
+│   │   ├── log-parser/       # Multi-format log parsing & smart excerpts
+│   │   ├── enrichers/        # Deterministic, computed, CODEOWNERS, and flaky enrichers
+│   │   ├── self-healing/     # Autonomous patch generation, RAG, and PR orchestration
+│   │   └── signatures.ts     # Failure pattern library
+│   ├── cli/                  # Command-line interface (init, analyze, resolve, test)
+│   ├── github-action/        # GitHub Actions integration (sticky comments & summaries)
 │   ├── azure-devops/         # Azure DevOps integration
 │   └── index.ts              # Main entry point
 ├── bin/pipelineiq           # CLI executable
@@ -91,10 +94,11 @@ Examples:
 
 ### Core Engine
 
+- **Two-Way Lifecycle Sync**: Enhance auto-resolution transitions and comments in `src/core/resolve.ts`
+- **Deduplication**: Improve signature matching algorithms and tail-log slicing in `src/core/dedup.ts`
+- **Secret Firewall**: Enhance dynamic environment secret discovery and regex patterns in `src/core/secret-mask.ts`
 - **Signature Library**: Add new failure patterns to `src/core/signatures.ts`
-- **Deduplication**: Improve signature matching algorithms
-- **Enrichment**: Add new deterministic enrichers
-- **Performance**: Optimize processing pipeline
+- **Enrichment**: Add new deterministic enrichers and CODEOWNERS identity mappings
 
 ### AI Engine
 
@@ -105,31 +109,31 @@ Examples:
 
 ### Self-Healing Engine
 
+- **Historical Resolution RAG**: Refine retrieval and priming from past resolved Jira incidents
+- **Sandbox Verification**: Expand local verification runner feedback loop
 - **Git Providers**: Add support for GitLab, Bitbucket, etc.
-- **Safety**: Enhance guardrails and dry-run reporting
-- **Context Engine**: Improve workspace file context gathering
-- **Patch Generation**: Optimize AI prompt for snippet patching
+- **Safety**: Enhance guardrails, path filters, and dry-run reporting
+- **Patch Generation**: Optimize AI prompt for surgical snippet patching
 
 ### Log Parser
 
 - **Formats**: Add support for new log formats
 - **Extractors**: Improve pattern extraction algorithms
 - **Performance**: Optimize large log file processing
-- **Security**: Enhance secret detection patterns
 
-### Jira Client
+### Jira Client & Analytics
 
+- **Flaky Intelligence**: Refine flakiness scoring and retry-resolved metrics in `src/core/jira/history.ts`
 - **ADF Conversion**: Improve markdown to ADF conversion
 - **API Coverage**: Add support for more Jira APIs
-- **Error Handling**: Improve error handling and retries
-- **Custom Fields**: Enhance custom field support
+- **Error Handling**: Improve error handling, retries, and rate limiting
 
 ### Integrations
 
-- **GitHub Action**: Improve GitHub context mapping
-- **Azure DevOps**: Enhance Azure DevOps integration
-- **CLI**: Add new CLI commands and options
-- **Documentation**: Improve usage examples
+- **GitHub Action**: Enhance PR sticky comments and execution step summaries
+- **Azure DevOps**: Enhance Azure DevOps task inputs and pipeline reporting
+- **CLI**: Add new CLI commands, interactive wizard steps, and flags
+- **Documentation**: Keep references in sync with new features
 
 ## 🧪 Testing
 

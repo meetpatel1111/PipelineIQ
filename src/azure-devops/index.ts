@@ -11,6 +11,18 @@ async function run(): Promise<void> {
     const environment = tl.getInput("environment") || undefined;
 
     const event = await mapAzureDevOpsContext(environment);
+
+    const agentJobStatus = tl.getVariable("AGENT_JOBSTATUS") || tl.getInput("jobStatus");
+    if (agentJobStatus === "Succeeded") {
+      console.log("PipelineIQ: Pipeline execution succeeded — checking for open incident tickets to auto-resolve...");
+      const { resolvePipelineSuccess } = await import("../core/index.js");
+      const resolveResult = await resolvePipelineSuccess(event, config);
+      tl.setVariable("PipelineIQ.Action", resolveResult.action);
+      tl.setVariable("PipelineIQ.IssueKey", resolveResult.resolvedKeys.join(",") || "");
+      tl.setResult(tl.TaskResult.Succeeded, `PipelineIQ: ${resolveResult.message}`);
+      return;
+    }
+
     const result = await processFailureEvent(event, config, {
       extraEnrichers: [aiEnricher],
     });
@@ -86,6 +98,8 @@ function readConfig(PipelineIQConfigSchema: { parse: (raw: unknown) => PipelineI
     dedup: {
       enabled: true,
       windowHours: Number.parseInt(tl.getInput("dedupWindowHours") || "24", 10),
+      autoResolveOnSuccess: tl.getBoolInput("autoResolveOnSuccess"),
+      resolveTransition: tl.getInput("resolveTransition") || "Done",
     },
     // Self-healing configuration
     ...(tl.getBoolInput("selfHealing") ? {

@@ -176,6 +176,11 @@ export async function processFailureEvent(
           }
         }
 
+        let selfHealingResult: SelfHealingResult | undefined;
+        if (config.selfHealing?.enabled && config.selfHealing.healOnRecurrence !== false) {
+          selfHealingResult = await maybeRunSelfHealing(existing.key);
+        }
+
         const notifications = await maybeNotify(existing.key, false);
         return {
           action: "updated",
@@ -183,6 +188,7 @@ export async function processFailureEvent(
           spec,
           ...(metrics !== undefined && { metrics }),
           ...(notifications !== undefined && { notifications }),
+          ...(selfHealingResult !== undefined && { selfHealing: selfHealingResult }),
         };
       }
     }
@@ -212,9 +218,21 @@ export async function processFailureEvent(
   }
 
   // ── Self-Healing: attempt autonomous fix ────────────────────────────────
-  let selfHealingResult: SelfHealingResult | undefined;
-  if (config.selfHealing?.enabled) {
-    logger.info({ issueKey: created.key }, "self-healing enabled — attempting fix");
+  const selfHealingResult = await maybeRunSelfHealing(created.key);
+
+  const notifications = await maybeNotify(created.key, true);
+  return {
+    action: "created",
+    issueKey: created.key,
+    spec,
+    ...(metrics !== undefined && { metrics }),
+    ...(notifications !== undefined && { notifications }),
+    ...(selfHealingResult !== undefined && { selfHealing: selfHealingResult }),
+  };
+
+  async function maybeRunSelfHealing(targetIssueKey: string): Promise<SelfHealingResult | undefined> {
+    if (!config.selfHealing?.enabled) return undefined;
+    logger.info({ issueKey: targetIssueKey }, "self-healing enabled — attempting fix");
     try {
       const healEngine = new SelfHealingEngine(
         config.selfHealing,
@@ -240,29 +258,30 @@ export async function processFailureEvent(
         : [];
       const category = (ctx.fields.category as string) ?? "Unknown";
 
-      selfHealingResult = await healEngine.attemptFix(
+      const result = await healEngine.attemptFix(
         event,
         rootCause,
         remediation,
         category,
-        created.key,
+        targetIssueKey,
         ctx.codeowners
       );
 
-      if (selfHealingResult.success && selfHealingResult.prUrl) {
+      if (result.success && result.prUrl) {
         logger.info(
-          { issueKey: created.key, prUrl: selfHealingResult.prUrl },
+          { issueKey: targetIssueKey, prUrl: result.prUrl },
           "self-healing PR created",
         );
-      } else if (selfHealingResult.attempted) {
+      } else if (result.attempted) {
         logger.info(
-          { issueKey: created.key, reason: selfHealingResult.reason },
+          { issueKey: targetIssueKey, reason: result.reason },
           "self-healing attempted but did not produce a PR",
         );
       }
+      return result;
     } catch (error) {
       logger.warn({ err: error }, "self-healing stage failed");
-      selfHealingResult = {
+      return {
         attempted: true,
         success: false,
         reason: `Self-healing engine error: ${error}`,
@@ -270,16 +289,6 @@ export async function processFailureEvent(
       };
     }
   }
-
-  const notifications = await maybeNotify(created.key, true);
-  return {
-    action: "created",
-    issueKey: created.key,
-    spec,
-    ...(metrics !== undefined && { metrics }),
-    ...(notifications !== undefined && { notifications }),
-    ...(selfHealingResult !== undefined && { selfHealing: selfHealingResult }),
-  };
 }
 
 function buildNotificationPayload(

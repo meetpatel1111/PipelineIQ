@@ -8,6 +8,7 @@ import fs from "fs-extra";
 import path from "path";
 import { 
   processFailureEvent, 
+  resolvePipelineSuccess,
   parseLogs, 
   AIEngine, 
   createJiraClient,
@@ -198,6 +199,14 @@ program
     await handleConfig(options);
   });
 
+// Init command
+program
+  .command("init")
+  .description("Interactive setup wizard to initialize pipelineiq.json configuration")
+  .action(async () => {
+    await initConfig();
+  });
+
 // Parse command
 program
   .command("parse")
@@ -223,8 +232,34 @@ program
     await handleTest(options);
   });
 
+// Resolve command
+program
+  .command("resolve")
+  .description("Auto-resolve open Jira incident tickets when a pipeline succeeds")
+  .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
+  .option("-p, --preset <preset>", "CI/CD platform preset (github, azure-devops, auto, none)", "auto")
+  .option("-s, --source <source>", "Pipeline source (github, azure-devops)", "github")
+  .option("--repository <repo>", "Repository name (owner/repo)")
+  .option("--branch <branch>", "Branch name")
+  .option("--commit <sha>", "Commit SHA")
+  .option("--pipeline <name>", "Pipeline/workflow name")
+  .option("--run-id <id>", "Run ID or build number")
+  .option("--run-number <number>", "Run number")
+  .option("--run-url <url>", "Run URL or pipeline URL")
+  .option("--jira-url <url>", "Jira base URL")
+  .option("--jira-email <email>", "Jira user email")
+  .option("--jira-token <token>", "Jira API token")
+  .option("--jira-project <key>", "Jira project key")
+  .action(async (options) => {
+    await handleResolve(options);
+  });
+
 async function handleAnalyze(rawOptions: any) {
   const options = applyCIPreset(rawOptions);
+  if (options.status === "success") {
+    await handleResolve(rawOptions);
+    return;
+  }
   const spinner = ora("Analyzing failure...").start();
 
   try {
@@ -538,10 +573,15 @@ async function handleTest(options: any) {
       const jira = createJiraClient(config.jira);
       
       try {
-        // Test by getting project info
-        await jira.request("GET", `/rest/api/3/project/${config.jiraProject}`);
+        const connected = await jira.checkConnection();
+        if (!connected) {
+          throw new Error(`Failed to authenticate with Jira instance at ${config.jira.baseUrl}`);
+        }
+        const serverInfo = await jira.getServerInfo();
         spinner.succeed();
-        console.log(chalk.green("✓ Jira connectivity test passed"));
+        const serverTitle = serverInfo?.serverTitle || "Jira";
+        const versionStr = serverInfo?.version ? ` v${serverInfo.version}` : "";
+        console.log(chalk.green(`✓ Jira connectivity test passed (${serverTitle}${versionStr})`));
       } catch (error) {
         spinner.fail();
         console.log(chalk.red("✗ Jira connectivity test failed:"));
@@ -570,6 +610,63 @@ async function handleTest(options: any) {
     }
   } catch (error) {
     console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
+    process.exit(1);
+  }
+}
+
+async function handleResolve(rawOptions: any) {
+  const options = applyCIPreset(rawOptions);
+  const spinner = ora("Checking for open incidents to auto-resolve...").start();
+
+  try {
+    const configData = await loadConfig(options.config);
+    if (options.jiraUrl) configData.jira.baseUrl = options.jiraUrl.trim();
+    if (options.jiraEmail) configData.jira.email = options.jiraEmail.trim();
+    if (options.jiraToken) configData.jira.apiToken = options.jiraToken.trim();
+    if (options.jiraProject) configData.jiraProject = options.jiraProject.trim();
+
+    const config = PipelineIQConfigSchema.parse(configData);
+
+    const event: FailureEvent = {
+      source: (options.source || "github") as FailureSource,
+      startedAt: new Date().toISOString(),
+      failedAt: new Date().toISOString(),
+      repository: {
+        owner: options.repository?.split("/")[0] || process.env.GITHUB_REPOSITORY_OWNER || "unknown",
+        name: options.repository?.split("/")[1] || options.repository || "unknown",
+        url: options.repositoryGitUrl || `https://github.com/${options.repository || "unknown"}`,
+        defaultBranch: "main",
+      },
+      branch: options.branch || process.env.GITHUB_REF_NAME || "main",
+      commit: {
+        sha: options.commit || process.env.GITHUB_SHA || "unknown",
+        url: "",
+        message: "",
+      },
+      pipeline: {
+        name: options.pipeline || process.env.GITHUB_WORKFLOW || "pipeline",
+        runId: String(options.runId || process.env.GITHUB_RUN_ID || "1"),
+        runNumber: options.runNumber ? Number.parseInt(options.runNumber, 10) : undefined,
+        url: options.runUrl || process.env.GITHUB_SERVER_URL || "",
+        step: options.step || "Execution",
+      },
+      failure: {
+        logs: "",
+        logsTruncated: false,
+      },
+      environment: options.environment,
+      metadata: {},
+      explicitFields: [],
+    };
+
+    const result = await resolvePipelineSuccess(event, config);
+    if (result.action === "resolved") {
+      spinner.succeed(chalk.green(result.message));
+    } else {
+      spinner.info(chalk.blue(result.message));
+    }
+  } catch (error: any) {
+    spinner.fail(chalk.red(`Auto-resolve failed: ${error.message || error}`));
     process.exit(1);
   }
 }
@@ -746,11 +843,23 @@ async function loadConfig(configPath: string): Promise<any> {
 }
 
 async function initConfig() {
+  console.log(chalk.bold.blue("\n🚀 Welcome to PipelineIQ Setup Wizard\n"));
+
   const questions = [
+    {
+      type: "list",
+      name: "jiraType",
+      message: "Jira deployment type:",
+      choices: [
+        { name: "Jira Cloud (Atlassian Cloud)", value: "cloud" },
+        { name: "Jira Server / Data Center (Self-hosted)", value: "server" },
+      ],
+      default: "cloud",
+    },
     {
       type: "input",
       name: "jiraUrl",
-      message: "Jira base URL:",
+      message: "Jira base URL (e.g. https://your-domain.atlassian.net):",
       validate: (input: string) => {
         if (!input) return "Jira URL is required";
         try {
@@ -764,45 +873,107 @@ async function initConfig() {
     {
       type: "input",
       name: "jiraEmail",
-      message: "Jira email:",
-      validate: (input: string) => input.length > 0 || "Email is required",
+      message: "Jira user email:",
+      when: (answers: any) => answers.jiraType === "cloud",
+      validate: (input: string) => input.length > 0 || "Email is required for Jira Cloud",
     },
     {
       type: "password",
       name: "jiraToken",
       message: "Jira API token:",
-      validate: (input: string) => input.length > 0 || "API token is required",
+      when: (answers: any) => answers.jiraType === "cloud",
+      validate: (input: string) => input.length > 0 || "API token is required for Jira Cloud",
+    },
+    {
+      type: "password",
+      name: "jiraAccessToken",
+      message: "Jira Personal Access Token (PAT):",
+      when: (answers: any) => answers.jiraType === "server",
+      validate: (input: string) => input.length > 0 || "PAT is required for Jira Server / Data Center",
     },
     {
       type: "input",
       name: "jiraProject",
       message: "Jira project key:",
       default: "DEVOPS",
+      validate: (input: string) => /^[A-Z][A-Z0-9_]{0,30}$/i.test(input.trim()) || "Invalid project key",
     },
     {
       type: "list",
       name: "aiMode",
-      message: "AI mode:",
-      choices: ["disabled", "assist", "full"],
-      default: "disabled",
+      message: "AI Intelligence Mode:",
+      choices: [
+        { name: "Assist — AI failure classification, root cause analysis & remediation", value: "assist" },
+        { name: "Full — AI analysis + Autonomous Self-Healing PRs", value: "full" },
+        { name: "Disabled — Fast deterministic rule-based analysis only", value: "disabled" },
+      ],
+      default: "assist",
+    },
+    {
+      type: "list",
+      name: "aiProvider",
+      message: "AI model provider:",
+      when: (answers: any) => answers.aiMode !== "disabled",
+      choices: [
+        { name: "OpenAI (GPT-4o, o3-mini)", value: "openai" },
+        { name: "Anthropic (Claude 3.7 Sonnet)", value: "anthropic" },
+        { name: "Google Gemini (Gemini 2.5 Flash / Pro)", value: "gemini" },
+        { name: "Azure OpenAI", value: "azure-openai" },
+        { name: "Local LLM (Ollama / LocalAI)", value: "local" },
+      ],
+      default: "openai",
+    },
+    {
+      type: "confirm",
+      name: "autoResolveOnSuccess",
+      message: "Automatically resolve incident tickets when a pipeline retry passes?",
+      default: true,
+    },
+    {
+      type: "confirm",
+      name: "enableSelfHealing",
+      message: "Enable autonomous self-healing (generate verified PRs for broken pipelines)?",
+      default: true,
+      when: (answers: any) => answers.aiMode === "full",
     },
   ];
 
   const answers = await inquirer.prompt(questions as any);
   
-  const config = {
+  const config: Record<string, any> = {
     jira: {
-      baseUrl: answers.jiraUrl,
-      email: answers.jiraEmail,
-      apiToken: answers.jiraToken,
+      type: answers.jiraType || "cloud",
+      baseUrl: answers.jiraUrl.trim().replace(/\/+$/, ""),
+      ...(answers.jiraType === "server"
+        ? { accessToken: answers.jiraAccessToken }
+        : { email: answers.jiraEmail.trim(), apiToken: answers.jiraToken.trim() }),
     },
-    jiraProject: answers.jiraProject,
-    ai: { mode: answers.aiMode },
-    dedup: { enabled: true },
+    jiraProject: answers.jiraProject.trim().toUpperCase(),
+    ai: {
+      mode: answers.aiMode,
+      ...(answers.aiProvider ? { provider: answers.aiProvider } : {}),
+    },
+    dedup: {
+      enabled: true,
+      autoResolveOnSuccess: answers.autoResolveOnSuccess ?? true,
+      resolveTransition: "Done",
+    },
+    maskSecrets: true,
   };
 
+  if (answers.enableSelfHealing) {
+    config.selfHealing = {
+      enabled: true,
+      dryRun: false,
+      healOnRecurrence: true,
+      allowedCategories: ["Build", "Test", "Dependency", "Lint"],
+      enableVerification: true,
+    };
+  }
+
   await fs.writeJson("./pipelineiq.json", config, { spaces: 2 });
-  console.log(chalk.green("✓ Configuration saved to ./pipelineiq.json"));
+  console.log(chalk.bold.green("\n✓ Configuration successfully saved to ./pipelineiq.json"));
+  console.log(chalk.gray("Run `pipelineiq test --jira` to verify your Jira connection.\n"));
 }
 
 async function readLogs(logPath: string): Promise<string> {

@@ -38,6 +38,8 @@ export function createHistoryEnricher(jira: EnhancedJiraClient): Enricher {
         ctx.history = {
           similarCount: history?.similarCount ?? 0,
           isFlaky: history?.isFlaky ?? false,
+          flakinessScore: history?.flakinessScore,
+          retryResolvedCount: history?.retryResolvedCount,
           previousIncidentKeys: history?.previousIncidentKeys ?? [],
           trend: history?.trend,
           relatedKeys: relatedKeys.filter((k) => !history?.previousIncidentKeys.includes(k)),

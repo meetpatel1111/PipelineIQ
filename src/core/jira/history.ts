@@ -4,6 +4,8 @@ import type { FailureEvent, FailureCategory, ComputedMetrics } from "../types/in
 export type FailureHistory = {
   similarCount: number;
   isFlaky: boolean;
+  flakinessScore?: number;
+  retryResolvedCount?: number;
   previousIncidentKeys: string[];
   lastOccurred?: Date | undefined;
   trend: "improving" | "worsening" | "stable";
@@ -25,20 +27,40 @@ export class HistoryService {
     
     const result = await this.jira.advancedSearch(jql, {
       maxResults: 50,
-      fields: ["created", "status", "resolution"],
+      fields: ["created", "status", "resolution", "labels"],
     });
 
     const issues = result.issues;
     const keys = issues.map((i: any) => i.key);
     
-    // Simple flakiness heuristic: if it failed, then succeeded (resolved), then failed again.
-    // Since we only have failure events here, we look at the resolution state of past failures.
-    // If many past failures were resolved quickly, it might be a flaky test or transient infra.
+    // Flakiness heuristic:
+    // 1. Incidents tagged with `piq-resolved-by-retry` (auto-resolved when a retry passed).
+    // 2. High turnover: multiple past failures that were resolved and then recurred.
     const resolvedCount = issues.filter((i: any) => i.fields.resolution !== null).length;
-    
+    const retryResolvedCount = issues.filter((i: any) =>
+      Array.isArray(i.fields?.labels) && i.fields.labels.includes("piq-resolved-by-retry")
+    ).length;
+
+    let flakinessScore = 0;
+    if (issues.length > 0) {
+      const retryRatio = retryResolvedCount / issues.length;
+      const resolvedRatio = resolvedCount / issues.length;
+      flakinessScore = Math.min(
+        1,
+        Math.round((retryRatio * 0.7 + (resolvedRatio > 0.5 ? 0.3 : 0)) * 100) / 100
+      );
+      if (retryResolvedCount > 0 && flakinessScore < 0.5) {
+        flakinessScore = 0.5;
+      }
+    }
+
+    const isFlaky = flakinessScore >= 0.5 || (result.total > 2 && (resolvedCount > 0 || retryResolvedCount > 0));
+
     return {
       similarCount: result.total,
-      isFlaky: result.total > 2 && resolvedCount > 0,
+      isFlaky,
+      flakinessScore,
+      retryResolvedCount,
       previousIncidentKeys: keys,
       lastOccurred: issues.length > 0 ? new Date(issues[0].fields.created) : undefined,
       trend: this.calculateTrend(issues),

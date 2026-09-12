@@ -524,4 +524,156 @@ describe("SelfHealingEngine - Gatekeepers & Diagnostics", () => {
     expect(parsed.packageSyncCommand).toBe("forge build");
     expect(parsed.changes[0].filePath).toBe("contracts/Auth.sol");
   });
+
+  it("builds rich historical RAG context from previous Jira issues", async () => {
+    const mockJiraClient = {
+      getIssue: vi.fn().mockResolvedValue({
+        key: "PROJ-88",
+        fields: {
+          summary: "Flaky test in auth module",
+          resolution: { name: "Done" },
+          comment: {
+            comments: [
+              {
+                body: "🤖 PipelineIQ Self-Healing Engine created a Pull Request: https://github.com/org/repo/pull/42\nVerification: Verified in sandbox with npm test",
+              },
+              {
+                body: "Unrelated chatter from engineer",
+              },
+            ],
+          },
+        },
+      }),
+      findBySignature: vi.fn(),
+    };
+
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: false,
+        dryRun: true,
+        minConfidence: 0.6,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["Build"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: false,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "local",
+        apiKey: "dummy",
+        model: "dummy-model",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      },
+      mockJiraClient as any,
+    );
+
+    const ragContext = await engine.buildHistoricalRAGContext({
+      id: "10088",
+      key: "PROJ-88",
+      self: "https://jira/PROJ-88",
+      summary: "Flaky test in auth module",
+      status: "Closed",
+    });
+
+    expect(ragContext).toContain("PROJ-88");
+    expect(ragContext).toContain("Past Resolution: Done");
+    expect(ragContext).toContain("PipelineIQ Self-Healing Engine created a Pull Request");
+    expect(ragContext).not.toContain("Unrelated chatter");
+  });
+
+  it("passes historical RAG context to fixGenerator when past issue exists", async () => {
+    const mockJiraClient = {
+      findBySignature: vi.fn().mockResolvedValue({
+        id: "10050",
+        key: "PROJ-50",
+        self: "https://jira/PROJ-50",
+        summary: "Previous build failure",
+        status: "Done",
+      }),
+      getIssue: vi.fn().mockResolvedValue({
+        key: "PROJ-50",
+        fields: {
+          summary: "Previous build failure",
+          resolution: { name: "Done" },
+          comment: {
+            comments: [
+              {
+                body: "Verification: Verified in sandbox with npm run build",
+              },
+            ],
+          },
+        },
+      }),
+    };
+
+    const engine = new SelfHealingEngine(
+      {
+        enabled: true,
+        enableGuardrails: false,
+        dryRun: true,
+        minConfidence: 0.6,
+        maxFilesChanged: 10,
+        maxLinesChanged: 200,
+        allowedCategories: ["Build"],
+        blockedPaths: [],
+        branchPrefix: "fix",
+        draftPr: true,
+        reviewers: [],
+        prLabels: [],
+        enableVerification: false,
+        verificationCommands: [],
+        autoRegenerateLockfile: true,
+      },
+      {
+        provider: "local",
+        apiKey: "dummy",
+        model: "dummy-model",
+        minConfidence: 0.6,
+        temperature: 0.1,
+        timeout: 30000,
+        maxTokens: 1000,
+        retryAttempts: 3,
+        enableThinking: false,
+        thinkingBudget: 8000,
+      },
+      mockJiraClient as any,
+    );
+
+    const generateFixSpy = vi.fn().mockResolvedValue(dummyFix);
+    (engine as any).fixGenerator = {
+      isAvailable: () => true,
+      generateFix: generateFixSpy,
+    };
+
+    const result = await engine.attemptFix(
+      dummyEvent,
+      "Root cause",
+      ["Step 1"],
+      "Build",
+      "PROJ-99", // current issue key is PROJ-99, different from past PROJ-50
+    );
+
+    expect(result.attempted).toBe(true);
+    expect(generateFixSpy).toHaveBeenCalledWith(
+      dummyEvent,
+      "Root cause",
+      ["Step 1"],
+      "Build",
+      undefined,
+      expect.stringContaining("PROJ-50"),
+    );
+  });
 });

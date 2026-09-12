@@ -11,8 +11,10 @@ Complete reference for the `pipelineiq` command-line interface — covering all 
 - [Commands](#commands)
   - [analyze](#analyze)
   - [config](#config)
+  - [init](#init)
   - [parse](#parse)
   - [test](#test)
+  - [resolve](#resolve)
 - [Config File](#config-file)
 - [analyze — Complete Flag Reference](#analyze--complete-flag-reference)
   - [General Flags](#general-flags)
@@ -97,6 +99,26 @@ pipelineiq config [options]
 
 ---
 
+### init
+
+Interactive setup wizard to initialize your `pipelineiq.json` configuration file.
+
+```
+pipelineiq init
+```
+
+Prompts for:
+- Jira Deployment Type (`cloud` vs `server` / Data Center)
+- Jira base URL
+- Cloud auth (email + API token) or Server auth (Personal Access Token)
+- Jira Project key
+- AI intelligence mode (`assist`, `full`, `disabled`)
+- AI provider (`openai`, `anthropic`, `gemini`, `azure-openai`, `local`)
+- Two-way lifecycle sync (auto-resolve on retry)
+- Autonomous self-healing enablement
+
+---
+
 ### parse
 
 Parse a log file and extract structured failure data without creating a Jira ticket.
@@ -126,11 +148,40 @@ pipelineiq test [options]
 | Flag | Description |
 |---|---|
 | `-c, --config <path>` | Config file path (default: `./pipelineiq.json`) |
-| `--jira` | Test Jira connectivity (fetches the configured project) |
+| `--jira` | Test Jira connectivity across Jira Cloud and Jira Server/Data Center |
 | `--ai` | Test AI provider availability |
 | `--ai-provider <provider>` | Override provider for this test |
 | `--ai-model <model>` | Override model for this test |
 | `--ai-api-key <key>` | Override API key for this test |
+
+---
+
+### resolve
+
+Automatically transitions open Jira incident tickets to "Done" / "Resolved" when a subsequent retry or commit succeeds.
+
+```
+pipelineiq resolve [options]
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-c, --config <path>` | `./pipelineiq.json` | Path to config file |
+| `-p, --preset <preset>` | `auto` | CI platform preset (`github`, `azure-devops`, `auto`, `none`) |
+| `-s, --source <source>` | `github` | Pipeline source (`github`, `azure-devops`) |
+| `--repository <repo>` | — | Repository name (`owner/repo`) |
+| `--branch <branch>` | — | Branch name |
+| `--commit <sha>` | — | Commit SHA of the successful run |
+| `--pipeline <name>` | — | Pipeline or workflow name |
+| `--run-id <id>` | — | Run ID or build number |
+| `--run-number <num>` | — | Run number |
+| `--run-url <url>` | — | Direct pipeline execution URL |
+| `--jira-url <url>` | — | Override Jira instance URL |
+| `--jira-email <email>` | — | Override Jira user email |
+| `--jira-token <token>` | — | Override Jira API token / PAT |
+| `--jira-project <key>` | — | Override Jira project key |
+
+Queries Jira for open tickets matching candidate dedup signatures (`labels = "piq-sig:<sig>"`), adds a resolution audit comment with run metadata, transitions the issue to `resolveTransition` (default: `"Done"`), and appends the `piq-resolved-by-retry` label.
 
 ---
 
@@ -206,6 +257,21 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `ai.minConfidence` | number (0–1) | No | `0.6` | Minimum confidence to accept AI result |
 | `dedup.enabled` | boolean | No | `true` | Enable duplicate issue detection |
 | `dedup.windowHours` | integer | No | `24` | Lookback window in hours |
+| `dedup.autoResolveOnSuccess` | boolean | No | `true` | Auto-transition matching open tickets when a pipeline succeeds |
+| `dedup.resolveTransition` | string | No | `"Done"` | Jira transition name for auto-resolving issues |
+| `userMapping` | Record<string, string> | No | — | Map GitHub usernames (e.g. `meetpatel1111`) to Jira account IDs or emails |
+| `selfHealing.enabled` | boolean | No | `false` | Enable autonomous self-healing code fix generation |
+| `selfHealing.healOnRecurrence` | boolean | No | `true` | Trigger self-healing patch generation on recurring deduplication hits |
+| `selfHealing.enableGuardrails` | boolean | No | `true` | Enforce safety guardrails (confidence gate, scope limits, blocked paths) |
+| `selfHealing.minConfidence` | number (0–1) | No | `0.8` | Minimum AI confidence required to create a fix PR |
+| `selfHealing.maxFiles` | integer | No | `10` | Maximum number of files modified by a single fix |
+| `selfHealing.maxLines` | integer | No | `200` | Maximum total modified lines allowed in a fix |
+| `selfHealing.draft` | boolean | No | `true` | Create generated PRs as drafts for human-in-the-loop review |
+| `selfHealing.reviewers` | string[] | No | — | Usernames to add as reviewers to generated fix PRs |
+| `selfHealing.labels` | string[] | No | `["pipelineiq", "self-healing", "auto-fix"]` | Labels to apply to generated fix PRs |
+| `selfHealing.allowedCategories` | string[] | No | `["Dependency", "Build", "Test", "Configuration"]` | Failure categories eligible for self-healing |
+| `selfHealing.branchPrefix` | string | No | `"pipelineiq/fix"` | Git branch prefix for fix branches |
+| `selfHealing.blockedPaths` | string[] | No | sensitive globs | Glob patterns for paths blocked from self-healing edits |
 | `notifications.enabled` | boolean | No | `true` | Master on/off switch. Set to `false` to silence all channels without removing config |
 | `notifications.slack.webhookUrl` | string | No | — | Slack incoming webhook URL. Presence of this field (with `enabled !== false`) activates Slack notifications |
 | `notifications.slack.channel` | string | No | webhook default | Slack channel override (e.g., `#incidents`) |
@@ -228,6 +294,7 @@ Default path: `./pipelineiq.json`. Override with `--config`.
 | `-f, --format <format>` | `generic` | Log format: `github-actions`, `azure-devops`, `terraform`, `kubernetes`, `docker`, `junit`, `generic` |
 | `-s, --source <source>` | `github` | Platform source: `github` or `azure-devops`. Auto-detected from env if omitted |
 | `-c, --config <path>` | `./pipelineiq.json` | Path to the config file |
+| `--status <status>` | `failed` | Run status (`failed` or `success`). When `success`, triggers auto-resolution |
 | `--dry-run` | `false` | Print the result JSON without calling the Jira API |
 | `--github-token <token>` | `$GITHUB_TOKEN` | GitHub token for Platform API mode (fetching run logs and job data) |
 

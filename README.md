@@ -38,24 +38,27 @@ PipelineIQ is the bridge that transforms CI/CD failures into actionable Jira tic
 
 ## 🚀 Quick Start
 
-
-### CLI
-
-PipelineIQ can be used as a global command or via `npx` for one-off tasks.
-
-#### Option 1: Global Install (Recommended for local use)
-Install globally to use the `pipelineiq` command directly from any terminal:
+### 1. Interactive Setup Wizard
+Generate your `pipelineiq.json` config in seconds with the guided CLI wizard:
 ```bash
-npm install -g pipelineiq
+npx pipelineiq init
+```
+Prompts for your Jira type (Cloud or Server/Data Center PAT), project key, AI provider, and automation preferences.
 
-# Now run directly
-pipelineiq analyze --jira-project "DEVOPS"
+### 2. Run CLI Failure Analysis
+```bash
+# Analyze a failure and create/update Jira incident tickets
+npx pipelineiq analyze --jira-project "DEVOPS"
+
+# Auto-resolve open incidents when a subsequent retry succeeds
+npx pipelineiq resolve --jira-project "DEVOPS"
 ```
 
-#### Option 2: Use with `npx` (Recommended for CI/CD)
-No installation required; `npx` will fetch the latest version and run it:
+#### Option: Global Install
 ```bash
-npx pipelineiq analyze --jira-project "DEVOPS"
+npm install -g pipelineiq
+pipelineiq init
+pipelineiq analyze --jira-project "DEVOPS"
 ```
 
 ## 🏗 How It Works: CI/CD → Jira Integration
@@ -146,19 +149,23 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 ### Core Capabilities
 
 - **Failure Detection**: Automatically detects failed GitHub workflows and Azure DevOps pipelines.
+- **Two-Way Jira Lifecycle Sync**: Automatically transitions open Jira incident tickets to "Done" / "Resolved" when a subsequent retry or commit succeeds (`piq-resolved-by-retry`).
+- **Flaky Test Intelligence & Scoring**: Computes dynamic flakiness percentage scores (0–100%) and tracks retry-resolution frequency across pipeline runs.
 - **Automated Log Fetching**: Natively fetches logs from GitHub/Azure APIs—no log redirection required.
-- **Proactive Validation**: Built-in connectivity checks for Jira and AI providers before analysis starts.
-- **Intelligent Enrichment**: AI-powered analysis with deterministic fallbacks.
-- **Deduplication**: Prevents duplicate tickets with smart signature matching.
+- **Proactive Validation**: Built-in connectivity checks for Jira Cloud and Jira Server/Data Center (`checkConnection`) and AI providers before analysis starts.
+- **Intelligent Enrichment**: AI-powered analysis with deterministic fallbacks and CODEOWNERS identity mapping (`userMapping`).
+- **Deduplication with Tail Slicing**: Normalizes CRLF/ANSI codes and extracts tail execution failure logs to prevent false runner-setup collisions.
+- **Dynamic Secret Masking Firewall**: Automatically scans and strips runtime environment secrets (`GITHUB_TOKEN`, `JIRA_TOKEN`, `SYSTEM_ACCESSTOKEN`) and custom tokens.
 - **Rich Context**: 80-120 operational fields vs typical 5-10.
 - **Multi-Platform**: Native support for GitHub Actions and Azure DevOps.
-- **Autonomous Self-Healing**: Automatically generates and submits Draft Pull Requests to fix pipeline failures, complete with AI-generated code patches and strict safety guardrails.
+- **Autonomous Self-Healing with RAG**: Automatically generates and submits verified Draft Pull Requests to fix pipeline failures, leveraging historical resolution context from prior similar Jira incidents.
 
 ### AI Features
 
 - **Optional AI**: Works fully without AI - deterministic fallbacks always available.
-- **Multi-Provider AI Hub**: Native support for **Google Gemini** (v1.5/2.0), **OpenAI** (GPT-4o), **Anthropic** (Claude 3.5), and **Azure OpenAI**.
+- **Multi-Provider AI Hub**: Native support for **Google Gemini** (v1.5/2.0/2.5), **OpenAI** (GPT-4o, o3-mini), **Anthropic** (Claude 3.5/3.7), **Azure OpenAI**, and **Local LLMs** (Ollama).
 - **AI Prompt Factory**: Advanced context aggregation including log snippets, Git history, and signature heuristics with a Token Limit Guard.
+- **Historical Resolution RAG**: Queries Jira memory for previous similar incidents, extracting past auto-fix PR links, sandbox verification commands, and remediation notes to guide the LLM.
 - **Local Workspace Context**: The AI can dynamically read failing source code files directly from the runner's workspace to fix complex application logic bugs.
 - **Smart Analysis**: Instant Root Cause Analysis (RCA), remediation guidance, and severity prediction.
 - **Confidence Gating**: Threshold-based logic (`>= 0.6`) that discards low-confidence output and triggers deterministic fallbacks.
@@ -166,10 +173,12 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 ### Autonomous Self-Healing
 
-- **AI Code Fixer**: Generates precise snippet-level code patches based on diagnostic context and source code.
-- **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files. If precise target matching fails, the engine safely appends the proposed changes to the target file as a safe fallback instead of raising a pipeline error.
+- **AI Code Fixer**: Generates precise snippet-level code patches based on diagnostic context, source code, and historical incident memory.
+- **Resilient Snippet Patching Engine**: Employs whitespace-normalized and trimmed matching heuristics to locate failure target code snippets inside source files.
+- **Local Sandbox Verification**: Runs automated pre-flight syntax checks and verification commands with an agentic feedback loop that auto-corrects compiler errors before PR creation.
+- **Heal on Recurrence**: Automatically triggers self-healing on recurrent deduplication hits when enabled (`healOnRecurrence: true`).
 - **Atomic Pull Requests**: Automatically creates isolated branches and Draft PRs in GitHub or Azure DevOps.
-- **Safety Guardrails (on by default)**: Enforces a minimum-confidence gate, limits on files changed (default: 10) and lines changed (default: 200), an allowed-category list, and blocked paths (`.env`, `*.key`, `*secret*`, `.github/workflows/*`, …). Disable to allow wider fixes with `--no-self-heal-guardrails` (CLI), `self-healing-guardrails: false` (GitHub Action), `selfHealingGuardrails: false` (Azure DevOps), or `selfHealing.enableGuardrails: false` (config).
+- **Safety Guardrails (on by default)**: Enforces a minimum-confidence gate, limits on files changed (default: 10) and lines changed (default: 200), an allowed-category list, and blocked paths (`.env`, `*.key`, `*secret*`, `.github/workflows/*`, …).
 - **Human-in-the-Loop**: All fixes are submitted as Draft PRs requiring human review before merging.
 - **Jira Integration**: Successfully created fix PRs are automatically cross-linked in the generated Jira incident ticket.
 
@@ -177,7 +186,7 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 - **Format Support**: GitHub Actions, Azure DevOps, Terraform, Kubernetes, Docker, JUnit
 - **Smart Extraction**: Error messages, stack traces, exit codes, failed commands
-- **Security Focus**: Automatic secret masking and security issue detection
+- **Security Focus**: Dynamic runtime secret masking and security issue detection
 - **Performance Insights**: Timeout detection, performance issue identification
 
 ### Jira Integration
@@ -193,13 +202,14 @@ PipelineIQ maintains a "Digital Twin" documentation standard where all technical
 
 ## 📊 CI/CD Platform Integrations & Reporting
 
-### GitHub Actions Step Summary
+### Pull Request Sticky Comments & Step Summaries
 
-PipelineIQ v0.18.0 renders a rich, visual **Step Summary** directly to the GitHub Actions run execution page. On a workflow failure, this summary provides instant, at-a-glance feedback without having to open logs or visit Jira:
-* **Direct Links**: Direct clickable links to the created/updated Jira ticket and generated Self-Healing Pull Requests.
-* **Metadata Overview**: Key pipeline variables (Commit SHA, Triggering Actor, Target Environment, Run Attempt).
-* **AI Confidence & Severity Rating**: Instant risk profiling of the failure.
-* **Changed Files & Action Categories**: A detailed, clean table detailing each changed file, its action type (`ADD`/`MODIFY`/`DELETE`), and the proposed remediation path.
+- **PR Sticky Comments**: Automatically posts and updates a single sticky comment (`<!-- pipelineiq-sticky-comment -->`) on GitHub Pull Requests containing collapsible failure diagnostics, AI root cause analysis, remediation steps, and self-healing PR links.
+- **GitHub Actions Step Summary**: Renders rich, visual markdown reports directly to the GitHub Actions run execution page for both failure events and auto-resolved retry runs:
+  * **Direct Links**: Clickable links to created/updated Jira tickets and generated Self-Healing PRs.
+  * **Diagnostic Overview**: Key pipeline variables (Commit SHA, Branch, Actor, Target Environment, Run Attempt).
+  * **AI Risk & Flakiness Profiling**: Instant confidence rating, flakiness score, and severity classification.
+  * **Changed Files & Action Categories**: Clean table detailing each changed file, its action type (`ADD`/`MODIFY`/`DELETE`), and proposed remediation path.
 
 ### Azure DevOps Self-Healing Config
 

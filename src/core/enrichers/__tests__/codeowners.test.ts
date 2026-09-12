@@ -66,4 +66,19 @@ docs/* @docs-team
 
     expect(mockContext.codeowners).toBeUndefined();
   });
+
+  it("should resolve GitHub username to Jira assignee using userMapping config", async () => {
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue("src/auth/* @meetpatel1111\n");
+
+    mockContext.config.userMapping = {
+      meetpatel1111: "557058:abcdef12-3456-7890-abcd-ef1234567890",
+    };
+
+    await codeOwnerEnricher.enrich(mockContext);
+
+    expect(mockContext.codeowners).toEqual(["@meetpatel1111"]);
+    expect(mockContext.fields.labels).toContain("owner:meetpatel1111");
+    expect(mockContext.fields.assignee).toBe("557058:abcdef12-3456-7890-abcd-ef1234567890");
+  });
 });

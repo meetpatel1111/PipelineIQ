@@ -23,6 +23,8 @@ export const DedupConfigSchema = z.object({
   minSimilarity: z.number().min(0).max(1).default(0.85),
   onClosedHit: z.enum(["reopen", "create-new", "skip"]).default("create-new"),
   reopenTransition: z.string().default("Reopen Issue"),
+  resolveTransition: z.string().default("Done").optional(),
+  autoResolveOnSuccess: z.boolean().default(true).optional(),
   closedStatuses: z.array(z.string()).default(["Done", "Resolved", "Closed"]),
 });
 export type DedupConfig = z.infer<typeof DedupConfigSchema>;
@@ -92,6 +94,8 @@ export const PipelineIQConfigSchema = z.object({
     minSimilarity: 0.85,
     onClosedHit: "create-new",
     reopenTransition: "Reopen Issue",
+    resolveTransition: "Done",
+    autoResolveOnSuccess: true,
     closedStatuses: ["Done", "Resolved", "Closed"],
   }),
   maskSecrets: z.boolean().default(true),
@@ -100,6 +104,7 @@ export const PipelineIQConfigSchema = z.object({
   autoWorklog: z.boolean().default(false),
   notifications: NotificationsConfigSchema.optional(),
   selfHealing: SelfHealingConfigSchema.optional(),
+  userMapping: z.record(z.string(), z.string()).optional(),
 });
 
 export type PipelineIQConfig = z.infer<typeof PipelineIQConfigSchema>;
