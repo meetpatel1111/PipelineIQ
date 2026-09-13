@@ -4,6 +4,18 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.28.0] - 2026-09-13
+
+### Added
+- **Native Jenkins CI/CD Intelligence**: Complete, zero-configuration auto-detection and ingestion for Jenkins Freestyle, Declarative Pipeline, Scripted Pipeline, and Multibranch jobs. Automatically captures over 45 built-in, Git plugin, and Multibranch variables directly into Jira incident tickets.
+- **Dedicated Jenkins Runner Log Parser**: Intelligent parser for Jenkins Pipeline logs that tracks stage blocks (`[Pipeline] { (StageName)`), shell step executions (`[Pipeline] sh`, `+ <cmd>`), exit code signals (`ERROR: script returned exit code \d+`), `hudson.AbortException`, and `Finished: FAILURE` status markers with ANSI escape sequence stripping.
+- **Stage-Aware Smart Log Excerpts**: Automatically detects failing Jenkins pipeline stages and frames clean, focused excerpts in Jira descriptions so on-call engineers know exactly where and why a pipeline failed.
+- **Jenkins Secret Masking**: Proactive redaction of Jenkins User API Tokens (`11...`) and Jenkins Crumb security headers (`Jenkins-Crumb: ...`) to keep sensitive credentials secure from Jira tickets and notifications.
+- **Full CLI Flag Overrides**: Every Jenkins metadata property (including `--jenkins-build-number`, `--jenkins-job-name`, `--jenkins-branch-name`, `--jenkins-change-id`, `--jenkins-stage-name`, `--jenkins-git-url`, etc.) can be explicitly set or overridden via CLI flags, giving teams complete control in edge cases and custom orchestrations.
+- **Direct Jira Ecosystem Linking**: Binds Jenkins Run Display URLs, Job URLs, Multibranch PR links, and Git repository commits directly into Jira issue descriptions and Remote Web Links.
+
+---
+
 ## [0.27.0] - 2026-09-13
 
 ### Added

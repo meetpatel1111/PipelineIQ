@@ -16,6 +16,8 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/\b(?:bpat|bbpat)-[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_BITBUCKET_TOKEN]"],
   [/\bCCIPAT_[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_CIRCLECI_PAT]"],
   [/\b(?:circle-token|Circle-Token)[\s:=]+["']?[A-Za-z0-9_\-]{20,}["']?/gi, "circle-token: [REDACTED_CIRCLECI_TOKEN]"],
+  [/\b11[0-9a-f]{32}\b/g, "[REDACTED_JENKINS_TOKEN]"],
+  [/\b(?:Jenkins-Crumb|jenkins-crumb|\.crumb)[\s:=]+["']?[0-9a-f]{32,64}["']?/gi, "Jenkins-Crumb: [REDACTED_JENKINS_CRUMB]"],
   [/\bsk-ant-api[A-Za-z0-9_\-]{80,}\b/g, "[REDACTED_ANTHROPIC_KEY]"],
   [/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED_OPENAI_KEY]"],
   [/\bhf_[A-Za-z0-9]{34}\b/g, "[REDACTED_HUGGINGFACE_TOKEN]"],

@@ -28,6 +28,8 @@ function getParser(format: LogFormat) {
       return parseBitbucket;
     case "circleci":
       return parseCircleCI;
+    case "jenkins":
+      return parseJenkins;
     case "terraform":
       return parseTerraform;
     case "kubernetes":
@@ -341,6 +343,103 @@ export function parseCircleCI(rawLogs: string, options: Partial<ParseOptions> = 
       level,
       message: line,
       source: "circleci",
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+
+    entries.push(entry);
+
+    if (isRelevantEntry(line, parsedOptions.relevantKeywords)) {
+      relevantEntries.push(entry);
+    }
+  }
+
+  return extractStructuredData({
+    entries,
+    relevantEntries,
+    options: parsedOptions,
+    rawLogs,
+  });
+}
+
+/**
+ * Jenkins log parser
+ * Handles Jenkins Declarative and Scripted Pipeline logs, stage blocks ([Pipeline] { (StageName)),
+ * shell execution steps ([Pipeline] sh, + <cmd>), AbortException, exit codes (e.g. "ERROR: script returned exit code 1"),
+ * and build completion status ("Finished: FAILURE").
+ */
+export function parseJenkins(rawLogs: string, options: Partial<ParseOptions> = {}): ParsedLog {
+  const parsedOptions = ParseOptionsSchema.parse({ ...options, format: "jenkins" });
+  const lines = rawLogs.split("\n");
+  const entries: LogEntry[] = [];
+  const relevantEntries: LogEntry[] = [];
+  let currentStage: string | undefined;
+
+  for (const rawLine of lines) {
+    // Strip terminal ANSI escape sequences and carriage returns
+    const line = rawLine
+      .replace(/\r/g, "")
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+      .trimEnd();
+
+    if (!line) continue;
+
+    // Detect timestamps if present (e.g., Timestamper plugin formats: ISO, "[14:20:05]", or "2026-09-13 14:20:05")
+    const timestampMatch = line.match(/^(?:\[)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?|\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:\])?/);
+    const timestamp = timestampMatch?.[1];
+
+    let level: LogEntry["level"] = "info";
+    const lower = line.toLowerCase();
+    if (
+      lower.includes("error:") ||
+      lower.includes("fail") ||
+      lower.includes("fatal:") ||
+      lower.includes("hudson.abortexception") ||
+      lower.includes("script returned exit code") ||
+      lower.includes("marked build as failure") ||
+      lower.includes("finished: failure") ||
+      lower.includes("finished: aborted") ||
+      lower.includes("assertionerror")
+    ) {
+      level = "error";
+    } else if (lower.includes("warning:") || lower.includes("warn:") || lower.includes("finished: unstable")) {
+      level = "warn";
+    } else if (lower.includes("debug:")) {
+      level = "debug";
+    }
+
+    const metadata: Record<string, any> = {};
+
+    // Track Pipeline stages: [Pipeline] { (Build & Test)
+    const stageMatch = line.match(/\[Pipeline\]\s*\{\s*\(([^)]+)\)/i);
+    if (stageMatch?.[1]) {
+      currentStage = stageMatch[1].trim();
+      metadata.stage = currentStage;
+    } else if (currentStage) {
+      metadata.stage = currentStage;
+    }
+
+    // Step type detection: [Pipeline] sh, [Pipeline] bat, [Pipeline] junit, etc.
+    const stepMatch = line.match(/\[Pipeline\]\s*([a-zA-Z0-9_-]+)/);
+    if (stepMatch?.[1] && stepMatch[1] !== "stage" && stepMatch[1] !== "{") {
+      metadata.step = stepMatch[1];
+    }
+
+    // Shell command execution: + npm test
+    if (line.startsWith("+ ")) {
+      metadata.command = line.substring(2).trim();
+    }
+
+    // Exit code parsing: ERROR: script returned exit code 1
+    const exitCodeMatch = line.match(/(?:ERROR:\s*)?script returned exit code\s*(\d+)/i);
+    if (exitCodeMatch?.[1]) {
+      metadata.exitCode = parseInt(exitCodeMatch[1], 10);
+    }
+
+    const entry: LogEntry = {
+      timestamp,
+      level,
+      message: line,
+      source: "jenkins",
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     };
 

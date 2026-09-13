@@ -97,6 +97,52 @@ program
   .option("--circleci-pull-request <url>", "CircleCI pull request URL")
   .option("--circleci-pull-requests <urls>", "CircleCI pull request URLs")
   .option("--circleci-username <user>", "CircleCI username")
+  .option("--jenkins-build-number <num>", "Jenkins build number")
+  .option("--jenkins-build-id <id>", "Jenkins build ID")
+  .option("--jenkins-build-display-name <name>", "Jenkins build display name")
+  .option("--jenkins-build-tag <tag>", "Jenkins build tag")
+  .option("--jenkins-job-name <name>", "Jenkins job name")
+  .option("--jenkins-job-base-name <name>", "Jenkins job base name")
+  .option("--jenkins-build-url <url>", "Jenkins build URL")
+  .option("--jenkins-job-url <url>", "Jenkins job URL")
+  .option("--jenkins-url <url>", "Jenkins master URL")
+  .option("--jenkins-home <path>", "Jenkins home path")
+  .option("--jenkins-node-name <name>", "Jenkins node/agent name")
+  .option("--jenkins-node-labels <labels>", "Jenkins node labels")
+  .option("--jenkins-executor-number <num>", "Jenkins executor number")
+  .option("--jenkins-workspace <path>", "Jenkins workspace directory")
+  .option("--jenkins-workspace-tmp <path>", "Jenkins temporary workspace")
+  .option("--jenkins-branch-name <name>", "Jenkins multibranch branch name")
+  .option("--jenkins-branch-is-primary <bool>", "Jenkins whether branch is primary")
+  .option("--jenkins-change-id <id>", "Jenkins change ID / PR number")
+  .option("--jenkins-change-url <url>", "Jenkins change / PR URL")
+  .option("--jenkins-change-title <title>", "Jenkins change / PR title")
+  .option("--jenkins-change-author <author>", "Jenkins change / PR author username")
+  .option("--jenkins-change-author-display-name <name>", "Jenkins change author display name")
+  .option("--jenkins-change-author-email <email>", "Jenkins change author email")
+  .option("--jenkins-change-target <target>", "Jenkins change target branch")
+  .option("--jenkins-change-branch <branch>", "Jenkins change source branch")
+  .option("--jenkins-change-fork <fork>", "Jenkins change fork name")
+  .option("--jenkins-tag-name <tag>", "Jenkins tag name")
+  .option("--jenkins-git-commit <sha>", "Jenkins Git commit SHA")
+  .option("--jenkins-git-previous-commit <sha>", "Jenkins Git previous commit SHA")
+  .option("--jenkins-git-previous-successful-commit <sha>", "Jenkins Git previous successful commit SHA")
+  .option("--jenkins-git-branch <branch>", "Jenkins Git branch")
+  .option("--jenkins-git-local-branch <branch>", "Jenkins Git local branch")
+  .option("--jenkins-git-url <url>", "Jenkins Git repository URL")
+  .option("--jenkins-git-author-name <name>", "Jenkins Git author name")
+  .option("--jenkins-git-author-email <email>", "Jenkins Git author email")
+  .option("--jenkins-git-committer-name <name>", "Jenkins Git committer name")
+  .option("--jenkins-git-committer-email <email>", "Jenkins Git committer email")
+  .option("--jenkins-run-display-url <url>", "Jenkins Display URL API run URL")
+  .option("--jenkins-job-display-url <url>", "Jenkins Display URL API job URL")
+  .option("--jenkins-build-cause <cause>", "Jenkins build cause")
+  .option("--jenkins-root-build-cause <cause>", "Jenkins root build cause")
+  .option("--jenkins-build-user <user>", "Jenkins build user")
+  .option("--jenkins-build-user-id <id>", "Jenkins build user ID")
+  .option("--jenkins-build-user-email <email>", "Jenkins build user email")
+  .option("--jenkins-started-by <user>", "Jenkins started by user")
+  .option("--jenkins-stage-name <name>", "Jenkins pipeline stage name")
   .option("--environment-id <id>", "Deployment environment ID")
   .option("--environment-tier <tier>", "Deployment environment tier (dev/staging/production)")
   .option("--environment-url <url>", "Deployment environment URL")
@@ -1080,12 +1126,50 @@ export function applyCIPreset(rawOptions: any = {}): any {
     if (!options.format || options.format === "generic") {
       options.format = "jenkins";
     }
-    options.pipeline ??= process.env.JOB_NAME;
-    options.runId ??= process.env.BUILD_NUMBER;
-    options.runNumber ??= process.env.BUILD_NUMBER;
-    options.branch ??= process.env.GIT_BRANCH || process.env.BRANCH_NAME;
+
+    // Repository extraction from GIT_URL or GIT_URL_1
+    const gitUrl = process.env.GIT_URL || process.env.GIT_URL_1;
+    let repoFromGit: string | undefined;
+    if (gitUrl) {
+      options.repositoryGitUrl ??= gitUrl;
+      const match = gitUrl.match(/[:/]([^/:]+\/[^/:]+?)(?:\.git)?$/);
+      if (match?.[1]) {
+        repoFromGit = match[1];
+      }
+    }
+
+    const jobName = process.env.JOB_NAME;
+    const jobBaseName = process.env.JOB_BASE_NAME;
+    options.repository ??= repoFromGit || (jobBaseName && jobName && jobName.includes("/") ? jobName.split("/")[0] : jobBaseName) || jobName;
+    if (repoFromGit && repoFromGit.includes("/")) {
+      options.repositoryOwner ??= repoFromGit.split("/")[0];
+    }
+
+    // Branch resolution: PR branch or multibranch or local branch or git branch
+    options.branch ??= process.env.CHANGE_BRANCH || process.env.BRANCH_NAME || process.env.GIT_LOCAL_BRANCH || process.env.GIT_BRANCH;
+    options.tag ??= process.env.TAG_NAME;
     options.commit ??= process.env.GIT_COMMIT;
-    options.runUrl ??= process.env.BUILD_URL;
+    options.pipeline ??= jobName || jobBaseName || "Jenkins Pipeline";
+    options.runId ??= process.env.BUILD_NUMBER || process.env.BUILD_ID;
+    options.runNumber ??= process.env.BUILD_NUMBER;
+    options.actor ??= process.env.BUILD_USER || process.env.BUILD_USER_ID || process.env.CHANGE_AUTHOR || process.env.GIT_AUTHOR_NAME || process.env.JENKINS_STARTEDBY || process.env.JENKINS_STARTED_BY;
+    options.runUrl ??= process.env.RUN_DISPLAY_URL || process.env.BUILD_URL;
+    options.jobName ??= jobBaseName || jobName;
+    options.workspace ??= process.env.WORKSPACE;
+    options.stage ??= process.env.STAGE_NAME;
+    options.runnerName ??= process.env.NODE_NAME;
+    options.runnerTags ??= process.env.NODE_LABELS;
+    options.environment ??= process.env.STAGE_NAME || options.branch;
+
+    // Pull Request / Change variables
+    if (process.env.CHANGE_ID) {
+      options.prNumber ??= process.env.CHANGE_ID;
+      options.prUrl ??= process.env.CHANGE_URL;
+      options.prTitle ??= process.env.CHANGE_TITLE;
+      options.prUsername ??= process.env.CHANGE_AUTHOR_DISPLAY_NAME || process.env.CHANGE_AUTHOR;
+      options.prSourceBranch ??= process.env.CHANGE_BRANCH;
+      options.prTargetBranchName ??= process.env.CHANGE_TARGET;
+    }
   }
 
   // Local Git Fallback for any core fields still missing
@@ -1657,19 +1741,91 @@ export async function createFailureEvent(
   const ccOidcTokenV2 = options.circleciOidcTokenV2 || process.env.CIRCLE_OIDC_TOKEN_V2;
   const ccRepoFullName = (ccProjectUsername && ccProjectReponame) ? `${ccProjectUsername}/${ccProjectReponame}` : undefined;
 
+  // Jenkins built-in variables (CLI options override ambient env vars)
+  const jenkinsBuildNumber = options.jenkinsBuildNumber || options.runNumber || process.env.BUILD_NUMBER;
+  const jenkinsBuildId = options.jenkinsBuildId || options.runId || process.env.BUILD_ID;
+  const jenkinsBuildDisplayName = options.jenkinsBuildDisplayName || process.env.BUILD_DISPLAY_NAME;
+  const jenkinsBuildTag = options.jenkinsBuildTag || process.env.BUILD_TAG;
+  const jenkinsJobName = options.jenkinsJobName || options.pipeline || process.env.JOB_NAME;
+  const jenkinsJobBaseName = options.jenkinsJobBaseName || process.env.JOB_BASE_NAME;
+  const jenkinsBuildUrl = options.jenkinsBuildUrl || options.runUrl || process.env.BUILD_URL;
+  const jenkinsJobUrl = options.jenkinsJobUrl || process.env.JOB_URL;
+  const jenkinsUrl = options.jenkinsUrl || process.env.JENKINS_URL;
+  const jenkinsHome = options.jenkinsHome || process.env.JENKINS_HOME;
+  const jenkinsNodeName = options.jenkinsNodeName || options.runnerName || process.env.NODE_NAME;
+  const jenkinsNodeLabels = options.jenkinsNodeLabels || options.runnerTags || process.env.NODE_LABELS;
+  const jenkinsExecutorNumber = options.jenkinsExecutorNumber || process.env.EXECUTOR_NUMBER;
+  const jenkinsWorkspace = options.jenkinsWorkspace || options.workspace || process.env.WORKSPACE;
+  const jenkinsWorkspaceTmp = options.jenkinsWorkspaceTmp || process.env.WORKSPACE_TMP;
+  const jenkinsNodeCookie = options.jenkinsNodeCookie || process.env.JENKINS_NODE_COOKIE;
+  const jenkinsBranchName = options.jenkinsBranchName || options.branch || process.env.BRANCH_NAME;
+  const jenkinsBranchIsPrimary = options.jenkinsBranchIsPrimary !== undefined ? (typeof options.jenkinsBranchIsPrimary === 'boolean' ? options.jenkinsBranchIsPrimary : options.jenkinsBranchIsPrimary === 'true') : (process.env.BRANCH_IS_PRIMARY !== undefined ? process.env.BRANCH_IS_PRIMARY === 'true' : undefined);
+  const jenkinsChangeId = options.jenkinsChangeId || options.prNumber || process.env.CHANGE_ID;
+  const jenkinsChangeUrl = options.jenkinsChangeUrl || options.prUrl || process.env.CHANGE_URL;
+  const jenkinsChangeTitle = options.jenkinsChangeTitle || options.prTitle || process.env.CHANGE_TITLE;
+  const jenkinsChangeAuthor = options.jenkinsChangeAuthor || options.prUsername || process.env.CHANGE_AUTHOR;
+  const jenkinsChangeAuthorDisplayName = options.jenkinsChangeAuthorDisplayName || process.env.CHANGE_AUTHOR_DISPLAY_NAME;
+  const jenkinsChangeAuthorEmail = options.jenkinsChangeAuthorEmail || options.actorEmail || process.env.CHANGE_AUTHOR_EMAIL;
+  const jenkinsChangeTarget = options.jenkinsChangeTarget || options.prTargetBranch || process.env.CHANGE_TARGET;
+  const jenkinsChangeBranch = options.jenkinsChangeBranch || options.prSourceBranch || process.env.CHANGE_BRANCH;
+  const jenkinsChangeFork = options.jenkinsChangeFork || process.env.CHANGE_FORK;
+  const jenkinsTagName = options.jenkinsTagName || options.tag || process.env.TAG_NAME;
+  const jenkinsTagTimestamp = options.jenkinsTagTimestamp || process.env.TAG_TIMESTAMP;
+  const jenkinsTagUnixTime = options.jenkinsTagUnixTime || process.env.TAG_UNIXTIME;
+  const jenkinsTagDate = options.jenkinsTagDate || process.env.TAG_DATE;
+  const jenkinsGitCommit = options.jenkinsGitCommit || options.commit || process.env.GIT_COMMIT;
+  const jenkinsGitPreviousCommit = options.jenkinsGitPreviousCommit || process.env.GIT_PREVIOUS_COMMIT;
+  const jenkinsGitPreviousSuccessfulCommit = options.jenkinsGitPreviousSuccessfulCommit || process.env.GIT_PREVIOUS_SUCCESSFUL_COMMIT;
+  const jenkinsGitBranch = options.jenkinsGitBranch || process.env.GIT_BRANCH;
+  const jenkinsGitLocalBranch = options.jenkinsGitLocalBranch || process.env.GIT_LOCAL_BRANCH;
+  const jenkinsGitUrl = options.jenkinsGitUrl || options.repositoryGitUrl || process.env.GIT_URL || process.env.GIT_URL_1;
+  const jenkinsGitAuthorName = options.jenkinsGitAuthorName || process.env.GIT_AUTHOR_NAME;
+  const jenkinsGitAuthorEmail = options.jenkinsGitAuthorEmail || process.env.GIT_AUTHOR_EMAIL;
+  const jenkinsGitCommitterName = options.jenkinsGitCommitterName || process.env.GIT_COMMITTER_NAME;
+  const jenkinsGitCommitterEmail = options.jenkinsGitCommitterEmail || process.env.GIT_COMMITTER_EMAIL;
+  const jenkinsRunDisplayUrl = options.jenkinsRunDisplayUrl || process.env.RUN_DISPLAY_URL;
+  const jenkinsRunChangesDisplayUrl = options.jenkinsRunChangesDisplayUrl || process.env.RUN_CHANGES_DISPLAY_URL;
+  const jenkinsRunArtifactsDisplayUrl = options.jenkinsRunArtifactsDisplayUrl || process.env.RUN_ARTIFACTS_DISPLAY_URL;
+  const jenkinsRunTestsDisplayUrl = options.jenkinsRunTestsDisplayUrl || process.env.RUN_TESTS_DISPLAY_URL;
+  const jenkinsJobDisplayUrl = options.jenkinsJobDisplayUrl || process.env.JOB_DISPLAY_URL;
+  const jenkinsBuildCause = options.jenkinsBuildCause || process.env.BUILD_CAUSE;
+  const jenkinsRootBuildCause = options.jenkinsRootBuildCause || process.env.ROOT_BUILD_CAUSE;
+  const jenkinsBuildUser = options.jenkinsBuildUser || options.actor || process.env.BUILD_USER;
+  const jenkinsBuildUserId = options.jenkinsBuildUserId || options.actorId || process.env.BUILD_USER_ID;
+  const jenkinsBuildUserEmail = options.jenkinsBuildUserEmail || process.env.BUILD_USER_EMAIL;
+  const jenkinsBuildUserFirstName = options.jenkinsBuildUserFirstName || process.env.BUILD_USER_FIRST_NAME;
+  const jenkinsBuildUserLastName = options.jenkinsBuildUserLastName || process.env.BUILD_USER_LAST_NAME;
+  const jenkinsStartedBy = options.jenkinsStartedBy || process.env.JENKINS_STARTEDBY || process.env.JENKINS_STARTED_BY;
+  const jenkinsStageName = options.jenkinsStageName || options.stage || process.env.STAGE_NAME;
+
+  let jenkinsRepo: string | undefined;
+  if (jenkinsGitUrl) {
+    const match = jenkinsGitUrl.match(/[:/]([^/:]+\/[^/:]+?)(?:\.git)?$/);
+    if (match?.[1]) {
+      jenkinsRepo = match[1];
+    }
+  }
+  if (!jenkinsRepo) {
+    if (jenkinsJobBaseName && jenkinsJobName && jenkinsJobName.includes("/")) {
+      jenkinsRepo = jenkinsJobName.split("/")[0];
+    } else {
+      jenkinsRepo = jenkinsJobBaseName || jenkinsJobName;
+    }
+  }
+
   // CLI options take highest priority over ambient CI environment variables
-  const repository = options.repository || githubRepo || adoRepo || glProjectPath || bbRepoFullName || ccRepoFullName;
-  const branch = options.branch || githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark || ccBranch || ccTag;
-  const commit = options.commit || githubSha || adoSourceVersion || glCommitSha || bbCommit || ccSha1;
-  const pipeline = options.pipeline || githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined) || (ccJob && ccBuildNum ? `${ccJob} #${ccBuildNum}` : undefined) || ccJob;
-  const runId = options.runId || githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber || ccBuildNum || ccPipelineId;
-  const runNumber = options.runNumber || options.runId || githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber || (ccPipelineNumber !== undefined ? String(ccPipelineNumber) : undefined) || ccBuildNum;
-  const triggeredBy = options.actor || githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || ccUsername || process.env.BUILD_QUEUEDBY || "cli-user";
+  const repository = options.repository || githubRepo || adoRepo || glProjectPath || bbRepoFullName || ccRepoFullName || jenkinsRepo;
+  const branch = options.branch || githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark || ccBranch || ccTag || jenkinsChangeBranch || jenkinsBranchName || jenkinsGitLocalBranch || jenkinsGitBranch?.replace(/^origin\//, "");
+  const commit = options.commit || githubSha || adoSourceVersion || glCommitSha || bbCommit || ccSha1 || jenkinsGitCommit;
+  const pipeline = options.pipeline || githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined) || (ccJob && ccBuildNum ? `${ccJob} #${ccBuildNum}` : undefined) || jenkinsJobName || jenkinsJobBaseName || ccJob;
+  const runId = options.runId || githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber || ccBuildNum || ccPipelineId || jenkinsBuildNumber || jenkinsBuildId;
+  const runNumber = options.runNumber || options.runId || githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber || (ccPipelineNumber !== undefined ? String(ccPipelineNumber) : undefined) || ccBuildNum || jenkinsBuildNumber;
+  const triggeredBy = options.actor || githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || ccUsername || jenkinsBuildUser || jenkinsBuildUserId || jenkinsStartedBy || jenkinsChangeAuthor || jenkinsGitAuthorName || process.env.BUILD_QUEUEDBY || "cli-user";
   
   // Pull request information
-  const pullRequestNumber = options.prNumber || options.prId || githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId || (ccPrNumber !== undefined ? String(ccPrNumber) : undefined);
-  const isPullRequest = !!(options.prNumber || options.prId || githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId || ccPrNumber || ccPullRequest);
-  const pullRequestBranch = options.prSourceBranch || adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch || (ccPullRequest ? ccBranch : undefined);
+  const pullRequestNumber = options.prNumber || options.prId || githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId || (ccPrNumber !== undefined ? String(ccPrNumber) : undefined) || jenkinsChangeId;
+  const isPullRequest = !!(options.prNumber || options.prId || githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId || ccPrNumber || ccPullRequest || jenkinsChangeId || jenkinsChangeUrl);
+  const pullRequestBranch = options.prSourceBranch || adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch || (ccPullRequest ? ccBranch : undefined) || jenkinsChangeBranch;
   
   // Rich data mapping for Azure DevOps and GitLab CI
   const adoJobName = process.env.SYSTEM_JOBNAME || process.env.SYSTEM_PHASENAME || process.env.SYSTEM_STAGENAME || adoAgentJobName;
@@ -1679,28 +1835,28 @@ export async function createFailureEvent(
   const adoApiUrl = process.env.SYSTEM_COLLECTIONURI;
   const glRunAttempt = process.env.CI_JOB_RETRY_COUNT ? String(parseInt(process.env.CI_JOB_RETRY_COUNT, 10) + 1) : undefined;
   
-  const finalJobName = options.jobName || githubJob || adoJobName || glJobName || ccJob;
+  const finalJobName = options.jobName || githubJob || adoJobName || glJobName || ccJob || jenkinsJobBaseName || jenkinsJobName;
   const finalRunAttempt = options.runAttempt || githubRunAttempt || adoRunAttempt || glRunAttempt;
-  const finalEventName = options.eventName || githubEventName || adoBuildReason || glPipelineSource;
-  const finalApiUrl = options.apiUrl || githubApiUrl || adoCollectionUri || process.env.CI_API_V4_URL;
+  const finalEventName = options.eventName || githubEventName || adoBuildReason || glPipelineSource || jenkinsBuildCause;
+  const finalApiUrl = options.apiUrl || githubApiUrl || adoCollectionUri || process.env.CI_API_V4_URL || jenkinsUrl;
   const finalDefinitionId = adoSystemDefinitionId;
   const finalDefinitionVersion = adoDefinitionVersion;
-  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory;
+  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory || jenkinsWorkspace;
   const finalBinariesDirectory = adoBinariesDirectory;
   const finalArtifactStagingDirectory = adoArtifactStagingDirectory;
   const finalContainerId = adoContainerId;
-  const finalRepositoryLocalPath = adoRepositoryLocalPath || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory;
+  const finalRepositoryLocalPath = adoRepositoryLocalPath || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory || jenkinsWorkspace;
   const finalRetentionDays = githubRetentionDays ? parseInt(githubRetentionDays) : undefined;
   const finalRunnerEnvironment = runnerEnvironment;
   const finalRunnerDebug = runnerDebug === "1";
   const finalWorkflowRef = githubWorkflowRef;
   const finalWorkflowSha = githubWorkflowSha;
-  const finalActorId = githubActorId || glUserId;
-  const finalTriggeringActor = githubTriggeringActor || glUserLogin || glUserName || bbStepTriggererUuid || ccUsername;
-  const finalRefType = githubRefType || (process.env.CI_COMMIT_TAG || bbTag || ccTag ? "tag" : (process.env.CI_COMMIT_BRANCH || bbBranch || ccBranch ? "branch" : undefined));
+  const finalActorId = githubActorId || glUserId || jenkinsBuildUserId;
+  const finalTriggeringActor = githubTriggeringActor || glUserLogin || glUserName || bbStepTriggererUuid || ccUsername || jenkinsBuildUser || jenkinsStartedBy;
+  const finalRefType = githubRefType || (process.env.CI_COMMIT_TAG || bbTag || ccTag || jenkinsTagName ? "tag" : (process.env.CI_COMMIT_BRANCH || bbBranch || ccBranch || jenkinsBranchName || jenkinsGitBranch ? "branch" : undefined));
   const finalRefProtected = githubRefProtected === "true" || process.env.CI_COMMIT_REF_PROTECTED === "true";
   const finalPrNumber = pullRequestNumber;
-  const finalRepoOwner = githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername;
+  const finalRepoOwner = githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || (jenkinsRepo && jenkinsRepo.includes("/") ? jenkinsRepo.split("/")[0] : undefined);
   const glRunnerOs = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[0] : undefined;
   const glRunnerArch = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[1] : undefined;
   const finalRunnerOs = options.runnerOs || runnerOs || adoAgentOs || glRunnerOs;
@@ -1841,6 +1997,52 @@ export async function createFailureEvent(
   if (options.circleciPullRequest) explicitFields.push("circleciPullRequest");
   if (options.circleciPullRequests) explicitFields.push("circleciPullRequests");
   if (options.circleciUsername) explicitFields.push("circleciUsername");
+  if (options.jenkinsBuildNumber) explicitFields.push("jenkinsBuildNumber");
+  if (options.jenkinsBuildId) explicitFields.push("jenkinsBuildId");
+  if (options.jenkinsBuildDisplayName) explicitFields.push("jenkinsBuildDisplayName");
+  if (options.jenkinsBuildTag) explicitFields.push("jenkinsBuildTag");
+  if (options.jenkinsJobName) explicitFields.push("jenkinsJobName");
+  if (options.jenkinsJobBaseName) explicitFields.push("jenkinsJobBaseName");
+  if (options.jenkinsBuildUrl) explicitFields.push("jenkinsBuildUrl");
+  if (options.jenkinsJobUrl) explicitFields.push("jenkinsJobUrl");
+  if (options.jenkinsUrl) explicitFields.push("jenkinsUrl");
+  if (options.jenkinsHome) explicitFields.push("jenkinsHome");
+  if (options.jenkinsNodeName) explicitFields.push("jenkinsNodeName");
+  if (options.jenkinsNodeLabels) explicitFields.push("jenkinsNodeLabels");
+  if (options.jenkinsExecutorNumber) explicitFields.push("jenkinsExecutorNumber");
+  if (options.jenkinsWorkspace) explicitFields.push("jenkinsWorkspace");
+  if (options.jenkinsWorkspaceTmp) explicitFields.push("jenkinsWorkspaceTmp");
+  if (options.jenkinsBranchName) explicitFields.push("jenkinsBranchName");
+  if (options.jenkinsBranchIsPrimary !== undefined) explicitFields.push("jenkinsBranchIsPrimary");
+  if (options.jenkinsChangeId) explicitFields.push("jenkinsChangeId");
+  if (options.jenkinsChangeUrl) explicitFields.push("jenkinsChangeUrl");
+  if (options.jenkinsChangeTitle) explicitFields.push("jenkinsChangeTitle");
+  if (options.jenkinsChangeAuthor) explicitFields.push("jenkinsChangeAuthor");
+  if (options.jenkinsChangeAuthorDisplayName) explicitFields.push("jenkinsChangeAuthorDisplayName");
+  if (options.jenkinsChangeAuthorEmail) explicitFields.push("jenkinsChangeAuthorEmail");
+  if (options.jenkinsChangeTarget) explicitFields.push("jenkinsChangeTarget");
+  if (options.jenkinsChangeBranch) explicitFields.push("jenkinsChangeBranch");
+  if (options.jenkinsChangeFork) explicitFields.push("jenkinsChangeFork");
+  if (options.jenkinsTagName) explicitFields.push("jenkinsTagName");
+  if (options.jenkinsGitCommit) explicitFields.push("jenkinsGitCommit");
+  if (options.jenkinsGitPreviousCommit) explicitFields.push("jenkinsGitPreviousCommit");
+  if (options.jenkinsGitPreviousSuccessfulCommit) explicitFields.push("jenkinsGitPreviousSuccessfulCommit");
+  if (options.jenkinsGitBranch) explicitFields.push("jenkinsGitBranch");
+  if (options.jenkinsGitLocalBranch) explicitFields.push("jenkinsGitLocalBranch");
+  if (options.jenkinsGitUrl) explicitFields.push("jenkinsGitUrl");
+  if (options.jenkinsGitAuthorName) explicitFields.push("jenkinsGitAuthorName");
+  if (options.jenkinsGitAuthorEmail) explicitFields.push("jenkinsGitAuthorEmail");
+  if (options.jenkinsGitCommitterName) explicitFields.push("jenkinsGitCommitterName");
+  if (options.jenkinsGitCommitterEmail) explicitFields.push("jenkinsGitCommitterEmail");
+  if (options.jenkinsRunDisplayUrl) explicitFields.push("jenkinsRunDisplayUrl");
+  if (options.jenkinsJobDisplayUrl) explicitFields.push("jenkinsJobDisplayUrl");
+  if (options.jenkinsBuildCause) explicitFields.push("jenkinsBuildCause");
+  if (options.jenkinsRootBuildCause) explicitFields.push("jenkinsRootBuildCause");
+  if (options.jenkinsBuildUser) explicitFields.push("jenkinsBuildUser");
+  if (options.jenkinsBuildUserId) explicitFields.push("jenkinsBuildUserId");
+  if (options.jenkinsBuildUserEmail) explicitFields.push("jenkinsBuildUserEmail");
+  if (options.jenkinsStartedBy) explicitFields.push("jenkinsStartedBy");
+  if (options.jenkinsStageName) explicitFields.push("jenkinsStageName");
   if (options.environmentId) explicitFields.push("environmentId");
   if (options.environmentTier) explicitFields.push("environmentTier");
   if (options.environmentUrl) explicitFields.push("environmentUrl");
@@ -1893,6 +2095,9 @@ export async function createFailureEvent(
   } else if (ccBuildUrl) {
     executionUrl = executionUrl || ccBuildUrl;
     definitionUrl = ccBuildUrl.replace(/\/\d+$/, "") || "https://circleci.com";
+  } else if (jenkinsBuildUrl || jenkinsRunDisplayUrl || (source === "jenkins" || Boolean(process.env.JENKINS_URL))) {
+    executionUrl = executionUrl || jenkinsRunDisplayUrl || jenkinsBuildUrl;
+    definitionUrl = jenkinsJobDisplayUrl || jenkinsJobUrl || (jenkinsUrl && jenkinsJobName ? `${jenkinsUrl.replace(/\/$/, "")}/job/${jenkinsJobName}` : undefined) || "https://jenkins.io";
   }
 
   // Repository URL logic
@@ -1905,6 +2110,8 @@ export async function createFailureEvent(
     repositoryUrl = `https://bitbucket.org/${bbRepoFullName}`;
   } else if (ccRepositoryUrl) {
     repositoryUrl = ccRepositoryUrl;
+  } else if (jenkinsGitUrl) {
+    repositoryUrl = jenkinsGitUrl;
   } else if (options.repositoryGitUrl) {
     repositoryUrl = options.repositoryGitUrl;
   }
@@ -2160,15 +2367,71 @@ export async function createFailureEvent(
         circleciUsername: ccUsername,
         circleciOidcToken: ccOidcToken,
         circleciOidcTokenV2: ccOidcTokenV2,
+        // Jenkins predefined variables mapping
+        jenkinsBuildNumber: jenkinsBuildNumber,
+        jenkinsBuildId: jenkinsBuildId,
+        jenkinsBuildDisplayName: jenkinsBuildDisplayName,
+        jenkinsBuildTag: jenkinsBuildTag,
+        jenkinsJobName: jenkinsJobName,
+        jenkinsJobBaseName: jenkinsJobBaseName,
+        jenkinsBuildUrl: jenkinsBuildUrl,
+        jenkinsJobUrl: jenkinsJobUrl,
+        jenkinsUrl: jenkinsUrl,
+        jenkinsHome: jenkinsHome,
+        jenkinsNodeName: jenkinsNodeName,
+        jenkinsNodeLabels: jenkinsNodeLabels,
+        jenkinsExecutorNumber: jenkinsExecutorNumber,
+        jenkinsWorkspace: jenkinsWorkspace,
+        jenkinsWorkspaceTmp: jenkinsWorkspaceTmp,
+        jenkinsNodeCookie: jenkinsNodeCookie,
+        jenkinsBranchName: jenkinsBranchName,
+        jenkinsBranchIsPrimary: jenkinsBranchIsPrimary,
+        jenkinsChangeId: jenkinsChangeId,
+        jenkinsChangeUrl: jenkinsChangeUrl,
+        jenkinsChangeTitle: jenkinsChangeTitle,
+        jenkinsChangeAuthor: jenkinsChangeAuthor,
+        jenkinsChangeAuthorDisplayName: jenkinsChangeAuthorDisplayName,
+        jenkinsChangeAuthorEmail: jenkinsChangeAuthorEmail,
+        jenkinsChangeTarget: jenkinsChangeTarget,
+        jenkinsChangeBranch: jenkinsChangeBranch,
+        jenkinsChangeFork: jenkinsChangeFork,
+        jenkinsTagName: jenkinsTagName,
+        jenkinsTagTimestamp: jenkinsTagTimestamp,
+        jenkinsTagUnixTime: jenkinsTagUnixTime,
+        jenkinsTagDate: jenkinsTagDate,
+        jenkinsGitCommit: jenkinsGitCommit,
+        jenkinsGitPreviousCommit: jenkinsGitPreviousCommit,
+        jenkinsGitPreviousSuccessfulCommit: jenkinsGitPreviousSuccessfulCommit,
+        jenkinsGitBranch: jenkinsGitBranch,
+        jenkinsGitLocalBranch: jenkinsGitLocalBranch,
+        jenkinsGitUrl: jenkinsGitUrl,
+        jenkinsGitAuthorName: jenkinsGitAuthorName,
+        jenkinsGitAuthorEmail: jenkinsGitAuthorEmail,
+        jenkinsGitCommitterName: jenkinsGitCommitterName,
+        jenkinsGitCommitterEmail: jenkinsGitCommitterEmail,
+        jenkinsRunDisplayUrl: jenkinsRunDisplayUrl,
+        jenkinsRunChangesDisplayUrl: jenkinsRunChangesDisplayUrl,
+        jenkinsRunArtifactsDisplayUrl: jenkinsRunArtifactsDisplayUrl,
+        jenkinsRunTestsDisplayUrl: jenkinsRunTestsDisplayUrl,
+        jenkinsJobDisplayUrl: jenkinsJobDisplayUrl,
+        jenkinsBuildCause: jenkinsBuildCause,
+        jenkinsRootBuildCause: jenkinsRootBuildCause,
+        jenkinsBuildUser: jenkinsBuildUser,
+        jenkinsBuildUserId: jenkinsBuildUserId,
+        jenkinsBuildUserEmail: jenkinsBuildUserEmail,
+        jenkinsBuildUserFirstName: jenkinsBuildUserFirstName,
+        jenkinsBuildUserLastName: jenkinsBuildUserLastName,
+        jenkinsStartedBy: jenkinsStartedBy,
+        jenkinsStageName: jenkinsStageName,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || (jenkinsRepo && jenkinsRepo.includes("/") ? jenkinsRepo.split("/")[0] : undefined) || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || repository || "unknown-repo",
         url: repositoryUrl,
         defaultBranch: "main",
         id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
         ownerId: githubRepositoryOwnerId || bbWorkspaceUuid,
-        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (githubServerUrl ? "github" : undefined)))),
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (source === "jenkins" || Boolean(process.env.JENKINS_URL) ? "jenkins" : (githubServerUrl ? "github" : undefined))))),
       },
       commit: {
         sha: commit,
@@ -2177,11 +2440,13 @@ export async function createFailureEvent(
               ? `https://bitbucket.org/${bbRepoFullName || repository}/commits/${commit}`
               : (source === "circleci" || Boolean(process.env.CIRCLECI)
                   ? (ccRepositoryUrl ? `${ccRepositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`)
-                  : (githubServerUrl
-                      ? `${githubServerUrl}/${repository}/commit/${commit}`
-                      : (glProjectUrl
-                          ? `${glProjectUrl}/-/commit/${commit}`
-                          : repositoryUrl + `/commit/${commit}`))))
+                  : (source === "jenkins" || Boolean(process.env.JENKINS_URL)
+                      ? (jenkinsGitUrl ? `${jenkinsGitUrl.replace(/\.git$/, "")}/commit/${commit}` : (repositoryUrl ? `${repositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`))
+                      : (githubServerUrl
+                          ? `${githubServerUrl}/${repository}/commit/${commit}`
+                          : (glProjectUrl
+                              ? `${glProjectUrl}/-/commit/${commit}`
+                              : repositoryUrl + `/commit/${commit}`)))))
           : "https://github.com/cli-user/unknown-repo/commit/unknown",
         message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
         author: options.actor || glCommitAuthor || triggeredBy,
@@ -2208,7 +2473,9 @@ export async function createFailureEvent(
     // Add pull request information if available
     if (isPullRequest && pullRequestNumber) {
       let prUrl: string;
-      if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
+      if (source === "jenkins" || Boolean(process.env.JENKINS_URL)) {
+        prUrl = jenkinsChangeUrl || (jenkinsGitUrl ? `${jenkinsGitUrl.replace(/\.git$/, "")}/pull/${pullRequestNumber}` : (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`));
+      } else if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
         prUrl = ccPullRequest || (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`);
       } else if (githubServerUrl && repository) {
         prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;
@@ -2438,15 +2705,71 @@ export async function createFailureEvent(
         circleciUsername: ccUsername,
         circleciOidcToken: ccOidcToken,
         circleciOidcTokenV2: ccOidcTokenV2,
+        // Jenkins predefined variables mapping
+        jenkinsBuildNumber: jenkinsBuildNumber,
+        jenkinsBuildId: jenkinsBuildId,
+        jenkinsBuildDisplayName: jenkinsBuildDisplayName,
+        jenkinsBuildTag: jenkinsBuildTag,
+        jenkinsJobName: jenkinsJobName,
+        jenkinsJobBaseName: jenkinsJobBaseName,
+        jenkinsBuildUrl: jenkinsBuildUrl,
+        jenkinsJobUrl: jenkinsJobUrl,
+        jenkinsUrl: jenkinsUrl,
+        jenkinsHome: jenkinsHome,
+        jenkinsNodeName: jenkinsNodeName,
+        jenkinsNodeLabels: jenkinsNodeLabels,
+        jenkinsExecutorNumber: jenkinsExecutorNumber,
+        jenkinsWorkspace: jenkinsWorkspace,
+        jenkinsWorkspaceTmp: jenkinsWorkspaceTmp,
+        jenkinsNodeCookie: jenkinsNodeCookie,
+        jenkinsBranchName: jenkinsBranchName,
+        jenkinsBranchIsPrimary: jenkinsBranchIsPrimary,
+        jenkinsChangeId: jenkinsChangeId,
+        jenkinsChangeUrl: jenkinsChangeUrl,
+        jenkinsChangeTitle: jenkinsChangeTitle,
+        jenkinsChangeAuthor: jenkinsChangeAuthor,
+        jenkinsChangeAuthorDisplayName: jenkinsChangeAuthorDisplayName,
+        jenkinsChangeAuthorEmail: jenkinsChangeAuthorEmail,
+        jenkinsChangeTarget: jenkinsChangeTarget,
+        jenkinsChangeBranch: jenkinsChangeBranch,
+        jenkinsChangeFork: jenkinsChangeFork,
+        jenkinsTagName: jenkinsTagName,
+        jenkinsTagTimestamp: jenkinsTagTimestamp,
+        jenkinsTagUnixTime: jenkinsTagUnixTime,
+        jenkinsTagDate: jenkinsTagDate,
+        jenkinsGitCommit: jenkinsGitCommit,
+        jenkinsGitPreviousCommit: jenkinsGitPreviousCommit,
+        jenkinsGitPreviousSuccessfulCommit: jenkinsGitPreviousSuccessfulCommit,
+        jenkinsGitBranch: jenkinsGitBranch,
+        jenkinsGitLocalBranch: jenkinsGitLocalBranch,
+        jenkinsGitUrl: jenkinsGitUrl,
+        jenkinsGitAuthorName: jenkinsGitAuthorName,
+        jenkinsGitAuthorEmail: jenkinsGitAuthorEmail,
+        jenkinsGitCommitterName: jenkinsGitCommitterName,
+        jenkinsGitCommitterEmail: jenkinsGitCommitterEmail,
+        jenkinsRunDisplayUrl: jenkinsRunDisplayUrl,
+        jenkinsRunChangesDisplayUrl: jenkinsRunChangesDisplayUrl,
+        jenkinsRunArtifactsDisplayUrl: jenkinsRunArtifactsDisplayUrl,
+        jenkinsRunTestsDisplayUrl: jenkinsRunTestsDisplayUrl,
+        jenkinsJobDisplayUrl: jenkinsJobDisplayUrl,
+        jenkinsBuildCause: jenkinsBuildCause,
+        jenkinsRootBuildCause: jenkinsRootBuildCause,
+        jenkinsBuildUser: jenkinsBuildUser,
+        jenkinsBuildUserId: jenkinsBuildUserId,
+        jenkinsBuildUserEmail: jenkinsBuildUserEmail,
+        jenkinsBuildUserFirstName: jenkinsBuildUserFirstName,
+        jenkinsBuildUserLastName: jenkinsBuildUserLastName,
+        jenkinsStartedBy: jenkinsStartedBy,
+        jenkinsStageName: jenkinsStageName,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || (jenkinsRepo && jenkinsRepo.includes("/") ? jenkinsRepo.split("/")[0] : undefined) || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || answers.repositoryName,
         url: repositoryUrl,
         defaultBranch: "main",
         id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
         ownerId: githubRepositoryOwnerId || bbRepoOwnerUuid || bbWorkspaceUuid,
-        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (githubServerUrl ? "github" : undefined)))),
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (source === "jenkins" || Boolean(process.env.JENKINS_URL) ? "jenkins" : (githubServerUrl ? "github" : undefined))))),
       },
     commit: {
       sha: commit || answers.commitSha,
@@ -2455,11 +2778,13 @@ export async function createFailureEvent(
             ? `https://bitbucket.org/${bbRepoFullName || repository}/commits/${commit}`
             : (source === "circleci" || Boolean(process.env.CIRCLECI)
                 ? (ccRepositoryUrl ? `${ccRepositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`)
-                : (githubServerUrl
-                    ? `${githubServerUrl}/${repository}/commit/${commit}`
-                    : (glProjectUrl
-                        ? `${glProjectUrl}/-/commit/${commit}`
-                        : repositoryUrl + `/commit/${commit}`))))
+                : (source === "jenkins" || Boolean(process.env.JENKINS_URL)
+                    ? (jenkinsGitUrl ? `${jenkinsGitUrl.replace(/\.git$/, "")}/commit/${commit}` : (repositoryUrl ? `${repositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`))
+                    : (githubServerUrl
+                        ? `${githubServerUrl}/${repository}/commit/${commit}`
+                        : (glProjectUrl
+                            ? `${glProjectUrl}/-/commit/${commit}`
+                            : repositoryUrl + `/commit/${commit}`)))))
         : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
       message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
       author: options.actor || glCommitAuthor || triggeredBy,
@@ -2484,16 +2809,18 @@ export async function createFailureEvent(
   // Add pull request information if available
   if (isPullRequest && pullRequestNumber) {
     let prUrl: string;
-    if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
+    if (source === "jenkins" || Boolean(process.env.JENKINS_URL)) {
+      prUrl = jenkinsChangeUrl || (jenkinsGitUrl ? `${jenkinsGitUrl.replace(/\.git$/, "")}/pull/${pullRequestNumber}` : (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`));
+    } else if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
       prUrl = ccPullRequest || (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`);
-    } else if (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)) {
-      prUrl = `https://bitbucket.org/${bbRepoFullName || repository}/pull-requests/${pullRequestNumber}`;
     } else if (githubServerUrl && repository) {
       prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;
     } else if (glProjectUrl) {
       prUrl = `${glProjectUrl}/-/merge_requests/${pullRequestNumber}`;
     } else if (glServerUrl && repository) {
       prUrl = `${glServerUrl}/${repository}/-/merge_requests/${pullRequestNumber}`;
+    } else if (bbRepoFullName) {
+      prUrl = `https://bitbucket.org/${bbRepoFullName}/pull-requests/${pullRequestNumber}`;
     } else if (adoCollectionUri || adoTeamProject) {
       prUrl = `${repositoryUrl}/pullrequest/${pullRequestNumber}`;
     } else {

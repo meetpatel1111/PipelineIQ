@@ -1,7 +1,7 @@
 {
   "name": "pipelineiq",
-  "version": "0.27.0",
-  "description": "AI-powered CI/CD failure intelligence for GitHub, Azure DevOps, GitLab CI, Bitbucket Cloud, CircleCI & Jira",
+  "version": "0.28.0",
+  "description": "AI-powered CI/CD failure intelligence for GitHub, Azure DevOps, GitLab CI, Bitbucket Cloud, CircleCI, Jenkins & Jira",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",

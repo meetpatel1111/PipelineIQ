@@ -29,6 +29,9 @@ const ERROR_ANCHOR_PATTERNS: RegExp[] = [
   /^\s*##\[error\]/i,
   /exit\s+code\s+[1-9]\d*/i,
   /process\s+exited\s+with\s+code\s+[1-9]\d*/i,
+  /script\s+returned\s+exit\s+code\s+[1-9]\d*/i,
+  /hudson\.AbortException/i,
+  /Finished:\s*(FAILURE|ABORTED)/i,
   /\b(FAIL|FAILED|ERROR)\b/,
   /exception\s+in\s+thread/i,
   /traceback\s+\(most\s+recent\s+call\s+last\)/i,
@@ -43,6 +46,7 @@ const ERROR_ANCHOR_PATTERNS: RegExp[] = [
 export function parseSteps(lines: string[], source: string): StepInfo[] {
   if (source === "github") return parseGitHubSteps(lines);
   if (source === "azure-devops") return parseAzureSteps(lines);
+  if (source === "jenkins") return parseJenkinsSteps(lines);
   return [];
 }
 
@@ -97,6 +101,52 @@ function parseAzureSteps(lines: string[]): StepInfo[] {
 
     if (startMatch) {
       current = { name: startMatch[1]!.trim(), startLine: i + 1 };
+    } else if (endMatch && current) {
+      const contentLines = lines.slice(current.startLine, i);
+      steps.push({
+        name: current.name,
+        status: hasError(contentLines) ? "failed" : "passed",
+        startLine: current.startLine,
+        endLine: i - 1,
+      });
+      current = null;
+    }
+  }
+
+  if (current) {
+    steps.push({
+      name: current.name,
+      status: "failed",
+      startLine: current.startLine,
+      endLine: lines.length - 1,
+    });
+  }
+
+  return markSkippedSteps(steps);
+}
+
+function parseJenkinsSteps(lines: string[]): StepInfo[] {
+  const steps: StepInfo[] = [];
+  let current: { name: string; startLine: number } | null = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    // Match [Pipeline] { (StageName) or [Pipeline] stage (StageName)
+    const stageMatch = line.match(/\[Pipeline\]\s*(?:\{\s*\(([^)]+)\)|stage\s*\(([^)]+)\))/i);
+    const endMatch = line.match(/\[Pipeline\]\s*\}\s*(?:\/\/.*stage)?/i);
+
+    if (stageMatch) {
+      const stageName = (stageMatch[1] || stageMatch[2])!.trim();
+      if (current) {
+        const contentLines = lines.slice(current.startLine, i);
+        steps.push({
+          name: current.name,
+          status: hasError(contentLines) ? "failed" : "passed",
+          startLine: current.startLine,
+          endLine: i - 1,
+        });
+      }
+      current = { name: stageName, startLine: i + 1 };
     } else if (endMatch && current) {
       const contentLines = lines.slice(current.startLine, i);
       steps.push({

@@ -27,6 +27,10 @@ export function extractErrorMessages(logs: string): string[] {
     /Fatal[:\s]+(.+?)(?=\n|$)/gi,
     /FAIL\b.+?(?=\n|$)/g,
     /exited with code (?:exit status )?\d+/gi,
+    /hudson\.AbortException[:\s]+(.+?)(?=\n|$)/gi,
+    /script returned exit code \d+/gi,
+    /Build step '.*' marked build as failure/gi,
+    /Finished: FAILURE/gi,
   ];
 
   for (const pattern of errorPatterns) {
@@ -48,7 +52,10 @@ export function extractErrorMessages(logs: string): string[] {
         l.includes('context deadline exceeded') ||
         l.includes('too long with no output') ||
         l.includes('oomkilled') ||
-        l.includes('assertionerror')) {
+        l.includes('assertionerror') ||
+        l.includes('hudson.abortexception') ||
+        l.includes('marked build as failure') ||
+        l.includes('finished: failure')) {
       // Avoid duplicates
       const trimmed = line.trim();
       if (trimmed && !errorMessages.some(existing => existing.includes(trimmed))) {
@@ -161,6 +168,7 @@ export function extractExitCodes(logs: string): number[] {
     /failed with exit code[:\s]*(\d+)/gi,
     /build failed with exit code[:\s]*(\d+)/gi,
     /test failed with exit code[:\s]*(\d+)/gi,
+    /(?:ERROR:\s*)?script returned exit code\s*(\d+)/gi,
   ];
 
   for (const pattern of exitCodePatterns) {
