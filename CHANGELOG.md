@@ -4,6 +4,17 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.29.0] - 2026-09-14
+
+### Added
+- **Smart Metadata Aliases (`--display-meta`)**: Full support for intuitive shorthand, snake_case, and kebab-case field names in metadata whitelists. You can now use `--display-meta repo,commit_id,run_number`, `--display-meta sha,build_number`, or `--display-meta repo_name,url` without needing to remember exact camelCase internal keys.
+- **Dedicated Standalone `repoName` Field**: Added a dedicated `repoName` property to display the pure repository name (e.g. `my-app`) without organization/owner prefixes for teams who prefer minimal Jira tickets.
+- **Native GitHub Action `display-meta` Support**: Added the `display-meta` input to `action.yml`, allowing GitHub Actions workflows using `pipelineiq/action@v1` to customize and whitelist metadata rows directly in workflow YAML.
+- **Native Azure DevOps `displayMeta` Support**: Added the `displayMeta` input to the Azure DevOps Pipeline task (`task.json`), bringing complete metadata filtering parity to Azure DevOps pipelines.
+- **Whitespace & Casing Resiliency**: Whitelist field resolution is now fully case-insensitive and trims surrounding spaces, preventing accidental typos from dropping metadata rows.
+
+---
+
 ## [0.28.0] - 2026-09-13
 
 ### Added

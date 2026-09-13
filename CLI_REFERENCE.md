@@ -726,11 +726,14 @@ pipelineiq analyze \
 
 Pass these keys to `--display-meta` to control exactly which rows appear in the Jira ticket metadata table.
 
+> **Smart Aliases Supported:** Common shorthand, snake_case, and kebab-case aliases are resolved automatically (e.g. `repo` → `repository`, `repo_name` / `reponame` → `repoName`, `commit_id` / `sha` → `commit`, `run_number` / `build_number` → `runNumber`, `run_url` / `url` → `runUrl`).
+
 | Key                                  | Label in ticket          | Source                                                      |
 | --------------------------------------| --------------------------| -------------------------------------------------------------|
 | `source`                             | Source                   | Platform (`github` / `azure-devops`)                        |
 | `pipeline`                           | Pipeline                 | Name + URL                                                  |
 | `repository`                         | Repository               | Owner/repo + URL                                            |
+| `repoName`                           | Repository Name          | Repository name alone without owner                         |
 | `branch`                             | Branch                   | Branch name                                                 |
 | `commit`                             | Commit                   | Short SHA + URL                                             |
 | `commitMessage`                      | Commit Message           | First 80 chars of commit message                            |

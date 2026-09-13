@@ -1,6 +1,6 @@
 name: PipelineIQ
 description: AI-powered CI/CD failure intelligence for GitHub & Jira
-version: '0.28.0'
+version: '0.29.0'
 author: Meetkumar Patel <pmeet464@gmail.com>
 branding:
   icon: alert-triangle
@@ -83,6 +83,9 @@ inputs:
     default: "true"
   user-mapping:
     description: JSON mapping of GitHub usernames to Jira account IDs or emails
+    required: false
+  display-meta:
+    description: Comma-separated list of metadata fields to display in the Jira ticket (whitelist mode, e.g. repository,commit,runNumber)
     required: false
 
   # Self-Healing (Autonomous Fix + PR)

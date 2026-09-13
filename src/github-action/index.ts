@@ -364,6 +364,14 @@ function readConfig(): PipelineIQConfig {
       enabled: true,
       windowHours: Number.parseInt(core.getInput("dedup-window-hours") || "24", 10),
     },
+    ...((core.getInput("display-meta") || core.getInput("display-metadata"))
+      ? {
+          displayMetadata: (core.getInput("display-meta") || core.getInput("display-metadata"))
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter(Boolean),
+        }
+      : {}),
     // Self-healing configuration
     ...(core.getInput("self-healing") === "true" ? {
       selfHealing: {

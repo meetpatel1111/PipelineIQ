@@ -24,6 +24,84 @@ export function getExitCodeDescription(code?: number): string | null {
 }
 
 /**
+ * Canonical alias lookup table for metadata field keys.
+ * Maps user-friendly shorthand, snake_case, and kebab-case aliases
+ * to their internal allFields key.
+ */
+export const METADATA_FIELD_ALIASES: Record<string, string> = {
+  // Repository
+  repo: "repository",
+  reponame: "repoName",
+  repo_name: "repoName",
+  "repo-name": "repoName",
+  repository_name: "repoName",
+  "repository-name": "repoName",
+  project_name: "repoName",
+  // Commit
+  sha: "commit",
+  commit_id: "commit",
+  commitid: "commit",
+  "commit-id": "commit",
+  commit_sha: "commit",
+  commitsha: "commit",
+  "commit-sha": "commit",
+  hash: "commit",
+  git_commit: "commit",
+  // Run Number
+  run_number: "runNumber",
+  runnumber: "runNumber",
+  "run-number": "runNumber",
+  run_id: "runNumber",
+  runid: "runNumber",
+  "run-id": "runNumber",
+  build_number: "runNumber",
+  buildnumber: "runNumber",
+  "build-number": "runNumber",
+  build_id: "runNumber",
+  buildid: "runNumber",
+  pipeline_number: "runNumber",
+  // Pipeline / Workflow
+  pipeline_name: "pipeline",
+  workflow: "pipeline",
+  workflow_name: "pipeline",
+  job: "job",
+  job_name: "jobName",
+  // URLs
+  url: "runUrl",
+  run_url: "runUrl",
+  runurl: "runUrl",
+  "run-url": "runUrl",
+  build_url: "runUrl",
+  buildurl: "runUrl",
+  // Steps & Stages
+  step_name: "step",
+  failed_step: "step",
+  "failed-step": "step",
+  stage_name: "stage",
+  failed_stage: "stage",
+  "failed-stage": "stage",
+  // Exit code
+  exit_code: "exitCode",
+  exitcode: "exitCode",
+  "exit-code": "exitCode",
+  // Triggered by / Actor
+  actor: "triggeredBy",
+  author: "triggeredBy",
+  user: "triggeredBy",
+  triggered_by: "triggeredBy",
+  "triggered-by": "triggeredBy",
+  // Branch & PR
+  branch_name: "branch",
+  pr: "pullRequest",
+  pr_number: "pullRequest",
+  pull_request: "pullRequest",
+  // Duration
+  duration_ms: "duration",
+  elapsed: "duration",
+  runtime: "duration",
+};
+
+/**
  * Build the markdown ticket description from the event + already-populated fields.
  * Called late in the pipeline, after all enrichers have run.
  */
@@ -157,6 +235,11 @@ export function renderDescription(
       value: event.repository.url
         ? `[${event.repository.owner}/${event.repository.name}](${event.repository.url})`
         : `${event.repository.owner}/${event.repository.name}`,
+    },
+    {
+      key: "repoName",
+      label: "Repository Name",
+      value: event.repository.name,
     },
     {
       key: "pullRequest",
@@ -540,7 +623,14 @@ export function renderDescription(
 
   if (displayMetadata && displayMetadata.length > 0) {
     // Whitelist mode: show ONLY what the user explicitly asked for in displayMetadata
-    const whitelist = new Set(displayMetadata.map((k) => k.toLowerCase()));
+    // Resolve aliases (e.g. repo -> repository, commit_id -> commit, run_number -> runNumber)
+    const whitelist = new Set(
+      displayMetadata.map((raw) => {
+        const cleaned = raw.trim().toLowerCase();
+        const resolved = METADATA_FIELD_ALIASES[cleaned] || cleaned;
+        return resolved.toLowerCase();
+      })
+    );
     fieldsToDisplay = allFields.filter((f) => whitelist.has(f.key.toLowerCase()));
   } else {
     // Smart Default mode:

@@ -12,7 +12,7 @@
   ],
   "version": {
     "Major": 0,
-    "Minor": 28,
+    "Minor": 29,
     "Patch": 0
   },
   "instanceNameFormat": "PipelineIQ: $(jiraProject)",
@@ -80,6 +80,14 @@
       "type": "string",
       "label": "Environment",
       "required": false
+    },
+    {
+      "name": "displayMeta",
+      "type": "string",
+      "label": "Display Metadata (Whitelist)",
+      "defaultValue": "",
+      "required": false,
+      "helpMarkDown": "Comma-separated list of metadata fields to display in the Jira ticket (whitelist mode, e.g. repository,commit,runNumber)."
     },
     {
       "name": "aiMode",

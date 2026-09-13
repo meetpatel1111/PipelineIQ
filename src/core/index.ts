@@ -6,7 +6,7 @@ export { setField } from "./enrichers/types.js";
 export { deterministicEnricher } from "./enrichers/deterministic.js";
 export { computedEnricher } from "./enrichers/computed.js";
 export { aiEnricher } from "./enrichers/ai.js";
-export { renderDescription } from "./renderer.js";
+export { renderDescription, METADATA_FIELD_ALIASES } from "./renderer.js";
 export { computeDedupSignature, computeFailureFingerprint } from "./dedup.js";
 export { matchSignature, SIGNATURES } from "./signatures.js";
 export type { SignaturePattern, SignatureMatch } from "./signatures.js";

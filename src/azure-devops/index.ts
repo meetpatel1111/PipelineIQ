@@ -101,6 +101,14 @@ function readConfig(PipelineIQConfigSchema: { parse: (raw: unknown) => PipelineI
       autoResolveOnSuccess: tl.getBoolInput("autoResolveOnSuccess"),
       resolveTransition: tl.getInput("resolveTransition") || "Done",
     },
+    ...(tl.getInput("displayMeta")
+      ? {
+          displayMetadata: tl.getInput("displayMeta")!
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }
+      : {}),
     // Self-healing configuration
     ...(tl.getBoolInput("selfHealing") ? {
       selfHealing: {
