@@ -28,6 +28,7 @@ export const LogFormatSchema = z.enum([
   "azure-devops",
   "gitlab",
   "bitbucket",
+  "circleci",
   "terraform",
   "kubernetes",
   "docker",

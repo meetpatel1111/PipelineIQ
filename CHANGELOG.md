@@ -4,6 +4,17 @@ All notable changes to PipelineIQ will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.27.0] - 2026-09-13
+
+### Added
+- **Native CircleCI Pipeline Intelligence**: Complete, zero-configuration ingestion for CircleCI jobs and workflows. Automatically captures pipelines, parallel nodes, project usernames/reponames, and commit details directly into Jira tickets.
+- **CircleCI Runner Log Parser**: Tailored parser that understands CircleCI step executions, strips ANSI styling, extracts exit codes (including timeouts and context deadline exceeded), and highlights root cause errors.
+- **CircleCI Secret Masking**: Real-time redaction of CircleCI Personal API Tokens (`CCIPAT_*`) and project API tokens to protect sensitive credentials from appearing in Jira or notifications.
+- **Full CLI Flag Overrides**: Every CircleCI metadata field (such as `--circleci-build-num`, `--circleci-job`, `--circleci-branch`, `--circleci-node-index`, `--circleci-pr-number`, etc.) can be overridden via command-line flags, giving teams complete control in custom scripts and edge cases.
+- **Direct Jira Development Integration**: Automatically links CircleCI build URLs and pull requests directly in Jira issue descriptions and Development panels.
+
+---
+
 ## [0.26.0] - 2026-09-13
 
 ### Added

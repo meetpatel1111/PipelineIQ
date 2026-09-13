@@ -41,7 +41,7 @@ program
   .option("-p, --preset <preset>", "CI/CD platform preset to auto-populate environment and runner metadata (github, azure-devops, gitlab, bitbucket, circleci, jenkins, auto, none)", "auto")
   .option("-l, --logs <path>", "Path to log file or directory")
   .option("--stdin", "Read failure logs from standard input", false)
-  .option("-f, --format <format>", "Log format (github-actions, azure-devops, terraform, kubernetes, docker, junit, generic)", "generic")
+  .option("-f, --format <format>", "Log format (github-actions, azure-devops, gitlab, bitbucket, circleci, jenkins, terraform, kubernetes, docker, junit, generic)", "generic")
   .option("-s, --source <source>", "Failure source (github, azure-devops, gitlab, bitbucket, circleci, jenkins, generic)", "github")
   .option("-c, --config <path>", "Path to config file", "./pipelineiq.json")
   .option("--dry-run", "Show what would be done without creating Jira issues", false)
@@ -72,6 +72,31 @@ program
   .option("--step-run-number <number>", "Step run attempt number")
   .option("--parallel-step <index>", "Parallel step index")
   .option("--parallel-step-count <count>", "Total parallel steps count")
+  .option("--circleci-build-num <num>", "CircleCI build number")
+  .option("--circleci-build-url <url>", "CircleCI build URL")
+  .option("--circleci-job <job>", "CircleCI job name")
+  .option("--circleci-branch <branch>", "CircleCI branch name")
+  .option("--circleci-tag <tag>", "CircleCI tag name")
+  .option("--circleci-sha1 <sha>", "CircleCI commit SHA")
+  .option("--circleci-repository-url <url>", "CircleCI repository URL")
+  .option("--circleci-project-username <user>", "CircleCI project username")
+  .option("--circleci-project-reponame <repo>", "CircleCI project repo name")
+  .option("--circleci-project-id <id>", "CircleCI project ID")
+  .option("--circleci-organization-id <id>", "CircleCI organization ID")
+  .option("--circleci-pipeline-id <id>", "CircleCI pipeline ID")
+  .option("--circleci-pipeline-number <num>", "CircleCI pipeline number")
+  .option("--circleci-workflow-id <id>", "CircleCI workflow ID")
+  .option("--circleci-workflow-job-id <id>", "CircleCI workflow job ID")
+  .option("--circleci-workflow-workspace-id <id>", "CircleCI workflow workspace ID")
+  .option("--circleci-working-directory <path>", "CircleCI working directory")
+  .option("--circleci-node-index <index>", "CircleCI node index")
+  .option("--circleci-node-total <total>", "CircleCI node total")
+  .option("--circleci-pr-number <num>", "CircleCI pull request number")
+  .option("--circleci-pr-reponame <repo>", "CircleCI pull request repo name")
+  .option("--circleci-pr-username <user>", "CircleCI pull request username")
+  .option("--circleci-pull-request <url>", "CircleCI pull request URL")
+  .option("--circleci-pull-requests <urls>", "CircleCI pull request URLs")
+  .option("--circleci-username <user>", "CircleCI username")
   .option("--environment-id <id>", "Deployment environment ID")
   .option("--environment-tier <tier>", "Deployment environment tier (dev/staging/production)")
   .option("--environment-url <url>", "Deployment environment URL")
@@ -1015,16 +1040,41 @@ export function applyCIPreset(rawOptions: any = {}): any {
     if (!options.format || options.format === "generic") {
       options.format = "circleci";
     }
-    options.repository ??= (process.env.CIRCLE_PROJECT_USERNAME && process.env.CIRCLE_PROJECT_REPONAME)
+    const repoFullName = (process.env.CIRCLE_PROJECT_USERNAME && process.env.CIRCLE_PROJECT_REPONAME)
       ? `${process.env.CIRCLE_PROJECT_USERNAME}/${process.env.CIRCLE_PROJECT_REPONAME}`
       : undefined;
-    options.branch ??= process.env.CIRCLE_BRANCH;
+    options.repository ??= repoFullName;
+    options.repositoryOwner ??= process.env.CIRCLE_PROJECT_USERNAME;
+    options.repositoryGitUrl ??= process.env.CIRCLE_REPOSITORY_URL;
+    options.branch ??= process.env.CIRCLE_BRANCH || process.env.CIRCLE_TAG;
+    options.tag ??= process.env.CIRCLE_TAG;
     options.commit ??= process.env.CIRCLE_SHA1;
-    options.pipeline ??= process.env.CIRCLE_JOB || "CircleCI Job";
-    options.runId ??= process.env.CIRCLE_BUILD_NUM;
-    options.runNumber ??= process.env.CIRCLE_BUILD_NUM;
+    options.pipeline ??= (process.env.CIRCLE_JOB && process.env.CIRCLE_PIPELINE_NUMBER)
+      ? `${process.env.CIRCLE_JOB} #${process.env.CIRCLE_PIPELINE_NUMBER}`
+      : (process.env.CIRCLE_JOB || "CircleCI Job");
+    options.runId ??= process.env.CIRCLE_BUILD_NUM || process.env.CIRCLE_PIPELINE_ID || process.env.CIRCLE_WORKFLOW_ID;
+    options.runNumber ??= process.env.CIRCLE_PIPELINE_NUMBER || process.env.CIRCLE_BUILD_NUM;
     options.actor ??= process.env.CIRCLE_USERNAME;
     options.runUrl ??= process.env.CIRCLE_BUILD_URL;
+    options.jobName ??= process.env.CIRCLE_JOB;
+    options.workspace ??= process.env.CIRCLE_WORKING_DIRECTORY;
+    options.project ??= process.env.CIRCLE_PROJECT_REPONAME;
+    options.projectId ??= process.env.CIRCLE_PROJECT_ID;
+    options.parallelStep ??= process.env.CIRCLE_NODE_INDEX;
+    options.parallelStepCount ??= process.env.CIRCLE_NODE_TOTAL;
+    options.environment ??= process.env.CIRCLE_BRANCH;
+
+    // Pull request variables
+    const prNumberMatch = process.env.CIRCLE_PR_NUMBER || 
+      process.env.CIRCLE_PULL_REQUEST?.match(/\/pull(?:-requests)?\/(\d+)/)?.[1] ||
+      process.env.CIRCLE_PULL_REQUESTS?.split(",")?.[0]?.match(/\/pull(?:-requests)?\/(\d+)/)?.[1];
+    if (prNumberMatch) {
+      options.prNumber ??= prNumberMatch;
+      options.prUrl ??= process.env.CIRCLE_PULL_REQUEST || process.env.CIRCLE_PULL_REQUESTS?.split(",")?.[0];
+      options.prRepoName ??= process.env.CIRCLE_PR_REPONAME;
+      options.prUsername ??= process.env.CIRCLE_PR_USERNAME;
+      options.prSourceBranch ??= process.env.CIRCLE_BRANCH;
+    }
   } else if (isJenkins) {
     options.source ??= "jenkins";
     if (!options.format || options.format === "generic") {
@@ -1576,19 +1626,50 @@ export async function createFailureEvent(
   const bbTriggerTestCaseFqdn = options.bitbucketTriggerTestCaseFqdn || process.env.BITBUCKET_TRIGGER_TEST_CASE_FQDN;
   const bbTriggerTestCaseUuid = options.bitbucketTriggerTestCaseUuid || process.env.BITBUCKET_TRIGGER_TEST_CASE_UUID;
   
+  // CircleCI built-in variables (CLI options override ambient env vars)
+  const ccBuildNum = options.circleciBuildNum || options.runNumber || options.runId || process.env.CIRCLE_BUILD_NUM;
+  const ccBuildUrl = options.circleciBuildUrl || options.runUrl || process.env.CIRCLE_BUILD_URL;
+  const ccJob = options.circleciJob || options.jobName || process.env.CIRCLE_JOB;
+  const ccBranch = options.circleciBranch || options.branch || process.env.CIRCLE_BRANCH;
+  const ccTag = options.circleciTag || options.tag || process.env.CIRCLE_TAG;
+  const ccSha1 = options.circleciSha1 || options.commit || process.env.CIRCLE_SHA1;
+  const ccRepositoryUrl = options.circleciRepositoryUrl || options.repositoryGitUrl || process.env.CIRCLE_REPOSITORY_URL;
+  const ccProjectUsername = options.circleciProjectUsername || options.repositoryOwner || process.env.CIRCLE_PROJECT_USERNAME;
+  const ccProjectReponame = options.circleciProjectReponame || process.env.CIRCLE_PROJECT_REPONAME;
+  const ccProjectId = options.circleciProjectId || options.projectId || process.env.CIRCLE_PROJECT_ID;
+  const ccOrganizationId = options.circleciOrganizationId || options.organizationId || process.env.CIRCLE_ORGANIZATION_ID;
+  const ccPipelineId = options.circleciPipelineId || options.pipelineId || process.env.CIRCLE_PIPELINE_ID;
+  const ccPipelineNumber = options.circleciPipelineNumber !== undefined ? (typeof options.circleciPipelineNumber === 'number' ? options.circleciPipelineNumber : parseInt(options.circleciPipelineNumber, 10)) : (process.env.CIRCLE_PIPELINE_NUMBER !== undefined ? parseInt(process.env.CIRCLE_PIPELINE_NUMBER, 10) : undefined);
+  const ccWorkflowId = options.circleciWorkflowId || options.workflowId || process.env.CIRCLE_WORKFLOW_ID;
+  const ccWorkflowJobId = options.circleciWorkflowJobId || options.workflowJobId || process.env.CIRCLE_WORKFLOW_JOB_ID;
+  const ccWorkflowWorkspaceId = options.circleciWorkflowWorkspaceId || options.workflowWorkspaceId || process.env.CIRCLE_WORKFLOW_WORKSPACE_ID;
+  const ccWorkingDirectory = options.circleciWorkingDirectory || options.workspace || process.env.CIRCLE_WORKING_DIRECTORY;
+  const ccNodeIndex = options.circleciNodeIndex !== undefined ? (typeof options.circleciNodeIndex === 'number' ? options.circleciNodeIndex : parseInt(options.circleciNodeIndex, 10)) : (options.parallelStep !== undefined ? parseInt(options.parallelStep, 10) : (process.env.CIRCLE_NODE_INDEX !== undefined ? parseInt(process.env.CIRCLE_NODE_INDEX, 10) : undefined));
+  const ccNodeTotal = options.circleciNodeTotal !== undefined ? (typeof options.circleciNodeTotal === 'number' ? options.circleciNodeTotal : parseInt(options.circleciNodeTotal, 10)) : (options.parallelStepCount !== undefined ? parseInt(options.parallelStepCount, 10) : (process.env.CIRCLE_NODE_TOTAL !== undefined ? parseInt(process.env.CIRCLE_NODE_TOTAL, 10) : undefined));
+  const ccPrNumberRaw = options.circleciPrNumber || options.prNumber || process.env.CIRCLE_PR_NUMBER || process.env.CIRCLE_PULL_REQUEST?.match(/\/pull(?:-requests)?\/(\d+)/)?.[1] || process.env.CIRCLE_PULL_REQUESTS?.split(",")?.[0]?.match(/\/pull(?:-requests)?\/(\d+)/)?.[1];
+  const ccPrNumber = ccPrNumberRaw !== undefined ? String(ccPrNumberRaw) : undefined;
+  const ccPrReponame = options.circleciPrReponame || options.prRepoName || process.env.CIRCLE_PR_REPONAME;
+  const ccPrUsername = options.circleciPrUsername || options.prUsername || process.env.CIRCLE_PR_USERNAME;
+  const ccPullRequest = options.circleciPullRequest || options.prUrl || process.env.CIRCLE_PULL_REQUEST;
+  const ccPullRequests = options.circleciPullRequests || process.env.CIRCLE_PULL_REQUESTS;
+  const ccUsername = options.circleciUsername || options.actor || process.env.CIRCLE_USERNAME;
+  const ccOidcToken = options.circleciOidcToken || process.env.CIRCLE_OIDC_TOKEN;
+  const ccOidcTokenV2 = options.circleciOidcTokenV2 || process.env.CIRCLE_OIDC_TOKEN_V2;
+  const ccRepoFullName = (ccProjectUsername && ccProjectReponame) ? `${ccProjectUsername}/${ccProjectReponame}` : undefined;
+
   // CLI options take highest priority over ambient CI environment variables
-  const repository = options.repository || githubRepo || adoRepo || glProjectPath || bbRepoFullName;
-  const branch = options.branch || githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark;
-  const commit = options.commit || githubSha || adoSourceVersion || glCommitSha || bbCommit;
-  const pipeline = options.pipeline || githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined);
-  const runId = options.runId || githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber;
-  const runNumber = options.runNumber || options.runId || githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber;
-  const triggeredBy = options.actor || githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || process.env.BUILD_QUEUEDBY || "cli-user";
+  const repository = options.repository || githubRepo || adoRepo || glProjectPath || bbRepoFullName || ccRepoFullName;
+  const branch = options.branch || githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark || ccBranch || ccTag;
+  const commit = options.commit || githubSha || adoSourceVersion || glCommitSha || bbCommit || ccSha1;
+  const pipeline = options.pipeline || githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined) || (ccJob && ccBuildNum ? `${ccJob} #${ccBuildNum}` : undefined) || ccJob;
+  const runId = options.runId || githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber || ccBuildNum || ccPipelineId;
+  const runNumber = options.runNumber || options.runId || githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber || (ccPipelineNumber !== undefined ? String(ccPipelineNumber) : undefined) || ccBuildNum;
+  const triggeredBy = options.actor || githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || ccUsername || process.env.BUILD_QUEUEDBY || "cli-user";
   
   // Pull request information
-  const pullRequestNumber = options.prNumber || options.prId || githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId;
-  const isPullRequest = !!(options.prNumber || options.prId || githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId);
-  const pullRequestBranch = options.prSourceBranch || adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch;
+  const pullRequestNumber = options.prNumber || options.prId || githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId || (ccPrNumber !== undefined ? String(ccPrNumber) : undefined);
+  const isPullRequest = !!(options.prNumber || options.prId || githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId || ccPrNumber || ccPullRequest);
+  const pullRequestBranch = options.prSourceBranch || adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch || (ccPullRequest ? ccBranch : undefined);
   
   // Rich data mapping for Azure DevOps and GitLab CI
   const adoJobName = process.env.SYSTEM_JOBNAME || process.env.SYSTEM_PHASENAME || process.env.SYSTEM_STAGENAME || adoAgentJobName;
@@ -1598,28 +1679,28 @@ export async function createFailureEvent(
   const adoApiUrl = process.env.SYSTEM_COLLECTIONURI;
   const glRunAttempt = process.env.CI_JOB_RETRY_COUNT ? String(parseInt(process.env.CI_JOB_RETRY_COUNT, 10) + 1) : undefined;
   
-  const finalJobName = options.jobName || githubJob || adoJobName || glJobName;
+  const finalJobName = options.jobName || githubJob || adoJobName || glJobName || ccJob;
   const finalRunAttempt = options.runAttempt || githubRunAttempt || adoRunAttempt || glRunAttempt;
   const finalEventName = options.eventName || githubEventName || adoBuildReason || glPipelineSource;
   const finalApiUrl = options.apiUrl || githubApiUrl || adoCollectionUri || process.env.CI_API_V4_URL;
   const finalDefinitionId = adoSystemDefinitionId;
   const finalDefinitionVersion = adoDefinitionVersion;
-  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace || process.env.CI_PROJECT_DIR || bbCloneDir;
+  const finalSourcesDirectory = adoSourcesDirectory || githubWorkspace || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory;
   const finalBinariesDirectory = adoBinariesDirectory;
   const finalArtifactStagingDirectory = adoArtifactStagingDirectory;
   const finalContainerId = adoContainerId;
-  const finalRepositoryLocalPath = adoRepositoryLocalPath || process.env.CI_PROJECT_DIR || bbCloneDir;
+  const finalRepositoryLocalPath = adoRepositoryLocalPath || process.env.CI_PROJECT_DIR || bbCloneDir || ccWorkingDirectory;
   const finalRetentionDays = githubRetentionDays ? parseInt(githubRetentionDays) : undefined;
   const finalRunnerEnvironment = runnerEnvironment;
   const finalRunnerDebug = runnerDebug === "1";
   const finalWorkflowRef = githubWorkflowRef;
   const finalWorkflowSha = githubWorkflowSha;
   const finalActorId = githubActorId || glUserId;
-  const finalTriggeringActor = githubTriggeringActor || glUserLogin || glUserName || bbStepTriggererUuid;
-  const finalRefType = githubRefType || (process.env.CI_COMMIT_TAG || bbTag ? "tag" : (process.env.CI_COMMIT_BRANCH || bbBranch ? "branch" : undefined));
+  const finalTriggeringActor = githubTriggeringActor || glUserLogin || glUserName || bbStepTriggererUuid || ccUsername;
+  const finalRefType = githubRefType || (process.env.CI_COMMIT_TAG || bbTag || ccTag ? "tag" : (process.env.CI_COMMIT_BRANCH || bbBranch || ccBranch ? "branch" : undefined));
   const finalRefProtected = githubRefProtected === "true" || process.env.CI_COMMIT_REF_PROTECTED === "true";
   const finalPrNumber = pullRequestNumber;
-  const finalRepoOwner = githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner;
+  const finalRepoOwner = githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername;
   const glRunnerOs = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[0] : undefined;
   const glRunnerArch = process.env.CI_RUNNER_EXECUTABLE_ARCH ? process.env.CI_RUNNER_EXECUTABLE_ARCH.split("/")[1] : undefined;
   const finalRunnerOs = options.runnerOs || runnerOs || adoAgentOs || glRunnerOs;
@@ -1735,6 +1816,31 @@ export async function createFailureEvent(
   if (options.stepRunNumber) explicitFields.push("stepRunNumber");
   if (options.parallelStep) explicitFields.push("parallelStep");
   if (options.parallelStepCount) explicitFields.push("parallelStepCount");
+  if (options.circleciBuildNum) explicitFields.push("circleciBuildNum");
+  if (options.circleciBuildUrl) explicitFields.push("circleciBuildUrl");
+  if (options.circleciJob) explicitFields.push("circleciJob");
+  if (options.circleciBranch) explicitFields.push("circleciBranch");
+  if (options.circleciTag) explicitFields.push("circleciTag");
+  if (options.circleciSha1) explicitFields.push("circleciSha1");
+  if (options.circleciRepositoryUrl) explicitFields.push("circleciRepositoryUrl");
+  if (options.circleciProjectUsername) explicitFields.push("circleciProjectUsername");
+  if (options.circleciProjectReponame) explicitFields.push("circleciProjectReponame");
+  if (options.circleciProjectId) explicitFields.push("circleciProjectId");
+  if (options.circleciOrganizationId) explicitFields.push("circleciOrganizationId");
+  if (options.circleciPipelineId) explicitFields.push("circleciPipelineId");
+  if (options.circleciPipelineNumber) explicitFields.push("circleciPipelineNumber");
+  if (options.circleciWorkflowId) explicitFields.push("circleciWorkflowId");
+  if (options.circleciWorkflowJobId) explicitFields.push("circleciWorkflowJobId");
+  if (options.circleciWorkflowWorkspaceId) explicitFields.push("circleciWorkflowWorkspaceId");
+  if (options.circleciWorkingDirectory) explicitFields.push("circleciWorkingDirectory");
+  if (options.circleciNodeIndex !== undefined) explicitFields.push("circleciNodeIndex");
+  if (options.circleciNodeTotal !== undefined) explicitFields.push("circleciNodeTotal");
+  if (options.circleciPrNumber !== undefined) explicitFields.push("circleciPrNumber");
+  if (options.circleciPrReponame) explicitFields.push("circleciPrReponame");
+  if (options.circleciPrUsername) explicitFields.push("circleciPrUsername");
+  if (options.circleciPullRequest) explicitFields.push("circleciPullRequest");
+  if (options.circleciPullRequests) explicitFields.push("circleciPullRequests");
+  if (options.circleciUsername) explicitFields.push("circleciUsername");
   if (options.environmentId) explicitFields.push("environmentId");
   if (options.environmentTier) explicitFields.push("environmentTier");
   if (options.environmentUrl) explicitFields.push("environmentUrl");
@@ -1784,6 +1890,9 @@ export async function createFailureEvent(
   } else if (bbRepoFullName && bbBuildNumber) {
     executionUrl = executionUrl || `https://bitbucket.org/${bbRepoFullName}/pipelines/results/${bbBuildNumber}`;
     definitionUrl = `https://bitbucket.org/${bbRepoFullName}/pipelines`;
+  } else if (ccBuildUrl) {
+    executionUrl = executionUrl || ccBuildUrl;
+    definitionUrl = ccBuildUrl.replace(/\/\d+$/, "") || "https://circleci.com";
   }
 
   // Repository URL logic
@@ -1794,6 +1903,8 @@ export async function createFailureEvent(
     repositoryUrl = glProjectUrl;
   } else if (bbRepoFullName) {
     repositoryUrl = `https://bitbucket.org/${bbRepoFullName}`;
+  } else if (ccRepositoryUrl) {
+    repositoryUrl = ccRepositoryUrl;
   } else if (options.repositoryGitUrl) {
     repositoryUrl = options.repositoryGitUrl;
   }
@@ -2021,26 +2132,56 @@ export async function createFailureEvent(
         bitbucketTriggerFixFlakyTestSourceBranch: bbTriggerFixFlakyTestSourceBranch,
         bitbucketTriggerTestCaseFqdn: bbTriggerTestCaseFqdn,
         bitbucketTriggerTestCaseUuid: bbTriggerTestCaseUuid,
+        // CircleCI predefined variables mapping
+        circleciBuildNum: ccBuildNum,
+        circleciBuildUrl: ccBuildUrl,
+        circleciJob: ccJob,
+        circleciBranch: ccBranch,
+        circleciTag: ccTag,
+        circleciSha1: ccSha1,
+        circleciRepositoryUrl: ccRepositoryUrl,
+        circleciProjectUsername: ccProjectUsername,
+        circleciProjectReponame: ccProjectReponame,
+        circleciProjectId: ccProjectId,
+        circleciOrganizationId: ccOrganizationId,
+        circleciPipelineId: ccPipelineId,
+        circleciPipelineNumber: ccPipelineNumber,
+        circleciWorkflowId: ccWorkflowId,
+        circleciWorkflowJobId: ccWorkflowJobId,
+        circleciWorkflowWorkspaceId: ccWorkflowWorkspaceId,
+        circleciWorkingDirectory: ccWorkingDirectory,
+        circleciNodeIndex: ccNodeIndex,
+        circleciNodeTotal: ccNodeTotal,
+        circleciPrNumber: ccPrNumber,
+        circleciPrReponame: ccPrReponame,
+        circleciPrUsername: ccPrUsername,
+        circleciPullRequest: ccPullRequest,
+        circleciPullRequests: ccPullRequests,
+        circleciUsername: ccUsername,
+        circleciOidcToken: ccOidcToken,
+        circleciOidcTokenV2: ccOidcTokenV2,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || repository || "unknown-repo",
         url: repositoryUrl,
         defaultBranch: "main",
         id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
         ownerId: githubRepositoryOwnerId || bbWorkspaceUuid,
-        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (githubServerUrl ? "github" : undefined))),
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (githubServerUrl ? "github" : undefined)))),
       },
       commit: {
         sha: commit,
         url: (repository && commit)
-          ? (githubServerUrl
-              ? `${githubServerUrl}/${repository}/commit/${commit}`
-              : (glProjectUrl
-                  ? `${glProjectUrl}/-/commit/${commit}`
-                  : (bbRepoFullName
-                      ? `https://bitbucket.org/${bbRepoFullName}/commits/${commit}`
-                      : repositoryUrl + `/commit/${commit}`)))
+          ? (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)
+              ? `https://bitbucket.org/${bbRepoFullName || repository}/commits/${commit}`
+              : (source === "circleci" || Boolean(process.env.CIRCLECI)
+                  ? (ccRepositoryUrl ? `${ccRepositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`)
+                  : (githubServerUrl
+                      ? `${githubServerUrl}/${repository}/commit/${commit}`
+                      : (glProjectUrl
+                          ? `${glProjectUrl}/-/commit/${commit}`
+                          : repositoryUrl + `/commit/${commit}`))))
           : "https://github.com/cli-user/unknown-repo/commit/unknown",
         message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
         author: options.actor || glCommitAuthor || triggeredBy,
@@ -2067,7 +2208,9 @@ export async function createFailureEvent(
     // Add pull request information if available
     if (isPullRequest && pullRequestNumber) {
       let prUrl: string;
-      if (githubServerUrl && repository) {
+      if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
+        prUrl = ccPullRequest || (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`);
+      } else if (githubServerUrl && repository) {
         prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;
       } else if (glProjectUrl) {
         prUrl = `${glProjectUrl}/-/merge_requests/${pullRequestNumber}`;
@@ -2267,26 +2410,56 @@ export async function createFailureEvent(
         bitbucketTriggerFixFlakyTestSourceBranch: bbTriggerFixFlakyTestSourceBranch,
         bitbucketTriggerTestCaseFqdn: bbTriggerTestCaseFqdn,
         bitbucketTriggerTestCaseUuid: bbTriggerTestCaseUuid,
+        // CircleCI predefined variables mapping
+        circleciBuildNum: ccBuildNum,
+        circleciBuildUrl: ccBuildUrl,
+        circleciJob: ccJob,
+        circleciBranch: ccBranch,
+        circleciTag: ccTag,
+        circleciSha1: ccSha1,
+        circleciRepositoryUrl: ccRepositoryUrl,
+        circleciProjectUsername: ccProjectUsername,
+        circleciProjectReponame: ccProjectReponame,
+        circleciProjectId: ccProjectId,
+        circleciOrganizationId: ccOrganizationId,
+        circleciPipelineId: ccPipelineId,
+        circleciPipelineNumber: ccPipelineNumber,
+        circleciWorkflowId: ccWorkflowId,
+        circleciWorkflowJobId: ccWorkflowJobId,
+        circleciWorkflowWorkspaceId: ccWorkflowWorkspaceId,
+        circleciWorkingDirectory: ccWorkingDirectory,
+        circleciNodeIndex: ccNodeIndex,
+        circleciNodeTotal: ccNodeTotal,
+        circleciPrNumber: ccPrNumber,
+        circleciPrReponame: ccPrReponame,
+        circleciPrUsername: ccPrUsername,
+        circleciPullRequest: ccPullRequest,
+        circleciPullRequests: ccPullRequests,
+        circleciUsername: ccUsername,
+        circleciOidcToken: ccOidcToken,
+        circleciOidcTokenV2: ccOidcTokenV2,
       },
       repository: {
-        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
+        owner: options.repositoryOwner || githubRepositoryOwner || glProjectRootNamespace || glProjectNamespace || bbWorkspace || bbRepoOwner || ccProjectUsername || adoTeamProject || repository?.split("/")[0] || triggeredBy?.split("\\")[1] || "cli-user",
         name: repository?.split("/")[1] || answers.repositoryName,
         url: repositoryUrl,
         defaultBranch: "main",
         id: adoRepositoryId || githubRepositoryId || glProjectId || bbRepoUuid,
         ownerId: githubRepositoryOwnerId || bbRepoOwnerUuid || bbWorkspaceUuid,
-        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (githubServerUrl ? "github" : undefined))),
+        provider: adoRepositoryProvider || (source === "gitlab" || Boolean(process.env.GITLAB_CI) ? "gitlab" : (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER) ? "bitbucket" : (source === "circleci" || Boolean(process.env.CIRCLECI) ? "circleci" : (githubServerUrl ? "github" : undefined)))),
       },
     commit: {
       sha: commit || answers.commitSha,
       url: (repository && commit)
         ? (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)
             ? `https://bitbucket.org/${bbRepoFullName || repository}/commits/${commit}`
-            : (githubServerUrl
-                ? `${githubServerUrl}/${repository}/commit/${commit}`
-                : (glProjectUrl
-                    ? `${glProjectUrl}/-/commit/${commit}`
-                    : repositoryUrl + `/commit/${commit}`)))
+            : (source === "circleci" || Boolean(process.env.CIRCLECI)
+                ? (ccRepositoryUrl ? `${ccRepositoryUrl.replace(/\.git$/, "")}/commit/${commit}` : `https://github.com/${repository}/commit/${commit}`)
+                : (githubServerUrl
+                    ? `${githubServerUrl}/${repository}/commit/${commit}`
+                    : (glProjectUrl
+                        ? `${glProjectUrl}/-/commit/${commit}`
+                        : repositoryUrl + `/commit/${commit}`))))
         : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
       message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
       author: options.actor || glCommitAuthor || triggeredBy,
@@ -2311,7 +2484,9 @@ export async function createFailureEvent(
   // Add pull request information if available
   if (isPullRequest && pullRequestNumber) {
     let prUrl: string;
-    if (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)) {
+    if (source === "circleci" || Boolean(process.env.CIRCLECI)) {
+      prUrl = ccPullRequest || (repository ? `https://github.com/${repository}/pull/${pullRequestNumber}` : `${repositoryUrl}/pull/${pullRequestNumber}`);
+    } else if (source === "bitbucket" || Boolean(process.env.BITBUCKET_BUILD_NUMBER)) {
       prUrl = `https://bitbucket.org/${bbRepoFullName || repository}/pull-requests/${pullRequestNumber}`;
     } else if (githubServerUrl && repository) {
       prUrl = `${githubServerUrl}/${repository}/pull/${pullRequestNumber}`;

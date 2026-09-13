@@ -7,6 +7,7 @@
  */
 export function extractErrorMessages(logs: string): string[] {
   const errorMessages: string[] = [];
+  const cleanLogs = logs.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
   
   // Common error patterns
   const errorPatterns = [
@@ -24,25 +25,34 @@ export function extractErrorMessages(logs: string): string[] {
     /E[0-9]{3}:?\s*(.+?)(?=\n|$)/gi,
     /fatal[:\s]+(.+?)(?=\n|$)/gi,
     /Fatal[:\s]+(.+?)(?=\n|$)/gi,
+    /FAIL\b.+?(?=\n|$)/g,
+    /exited with code (?:exit status )?\d+/gi,
   ];
 
   for (const pattern of errorPatterns) {
-    const matches = logs.match(pattern);
+    const matches = cleanLogs.match(pattern);
     if (matches) {
       errorMessages.push(...matches.map(match => match.trim()));
     }
   }
 
   // Also extract lines that contain error indicators but don't match patterns
-  const lines = logs.split('\n');
+  const lines = cleanLogs.split('\n');
   for (const line of lines) {
-    if (line.toLowerCase().includes('error') || 
-        line.toLowerCase().includes('failed') || 
-        line.toLowerCase().includes('exception') ||
-        line.toLowerCase().includes('fatal')) {
+    const l = line.toLowerCase();
+    if (l.includes('error') || 
+        l.includes('fail') || 
+        l.includes('exception') ||
+        l.includes('fatal') ||
+        l.includes('exit status') ||
+        l.includes('context deadline exceeded') ||
+        l.includes('too long with no output') ||
+        l.includes('oomkilled') ||
+        l.includes('assertionerror')) {
       // Avoid duplicates
-      if (!errorMessages.some(existing => existing.includes(line.trim()))) {
-        errorMessages.push(line.trim());
+      const trimmed = line.trim();
+      if (trimmed && !errorMessages.some(existing => existing.includes(trimmed))) {
+        errorMessages.push(trimmed);
       }
     }
   }
@@ -136,6 +146,7 @@ export function extractExitCodes(logs: string): number[] {
   
   // Exit code patterns
   const exitCodePatterns = [
+    /exited with code (?:exit status )?(\d+)/gi,
     /exit code[:\s]*(\d+)/gi,
     /exit status[:\s]*(\d+)/gi,
     /returned[:\s]*(\d+)/gi,
@@ -160,6 +171,11 @@ export function extractExitCodes(logs: string): number[] {
         exitCodes.push(exitCode);
       }
     }
+  }
+
+  // Detect task timeout (SIGKILL/SIGTERM 124)
+  if (/context deadline exceeded|too long with no output|command timed out/i.test(logs)) {
+    exitCodes.push(124);
   }
 
   return [...new Set(exitCodes)]; // Remove duplicates

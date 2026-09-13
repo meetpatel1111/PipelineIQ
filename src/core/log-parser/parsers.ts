@@ -26,6 +26,8 @@ function getParser(format: LogFormat) {
       return parseGitLab;
     case "bitbucket":
       return parseBitbucket;
+    case "circleci":
+      return parseCircleCI;
     case "terraform":
       return parseTerraform;
     case "kubernetes":
@@ -251,6 +253,94 @@ export function parseBitbucket(rawLogs: string, options: Partial<ParseOptions> =
       level,
       message: line,
       source: "bitbucket",
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    };
+
+    entries.push(entry);
+
+    if (isRelevantEntry(line, parsedOptions.relevantKeywords)) {
+      relevantEntries.push(entry);
+    }
+  }
+
+  return extractStructuredData({
+    entries,
+    relevantEntries,
+    options: parsedOptions,
+    rawLogs,
+  });
+}
+
+/**
+ * CircleCI log parser
+ * Handles CircleCI bash step executions, exit code notices (e.g. "Exited with code exit status 1"),
+ * timeout errors, ANSI color sequences, and test suite failure diagnostics.
+ */
+export function parseCircleCI(rawLogs: string, options: Partial<ParseOptions> = {}): ParsedLog {
+  const parsedOptions = ParseOptionsSchema.parse({ ...options, format: "circleci" });
+  const lines = rawLogs.split("\n");
+  const entries: LogEntry[] = [];
+  const relevantEntries: LogEntry[] = [];
+  let pendingInterpreter = false;
+
+  for (const rawLine of lines) {
+    // Strip terminal ANSI escape sequences and carriage returns
+    const line = rawLine
+      .replace(/\r/g, "")
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+      .trimEnd();
+
+    if (!line) continue;
+
+    // Detect timestamps if present (e.g. ISO format or CircleCI timestamp)
+    const timestampMatch = line.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)/);
+    const timestamp = timestampMatch?.[1];
+
+    let level: LogEntry["level"] = "info";
+    const lower = line.toLowerCase();
+    if (
+      lower.includes("error:") ||
+      lower.includes("fail") ||
+      lower.includes("fatal:") ||
+      lower.includes("exited with code") ||
+      lower.includes("exit status") ||
+      lower.includes("too long with no output") ||
+      lower.includes("context deadline exceeded") ||
+      lower.includes("oomkilled") ||
+      lower.includes("assertionerror")
+    ) {
+      level = "error";
+    } else if (lower.includes("warning:") || lower.includes("warn:")) {
+      level = "warn";
+    } else if (lower.includes("debug:")) {
+      level = "debug";
+    }
+
+    const metadata: Record<string, any> = {};
+    if (line.startsWith("#!/bin/bash") || line.startsWith("#!/bin/sh")) {
+      metadata.stepInterpreter = line.trim();
+      pendingInterpreter = true;
+    } else if (line.startsWith("==> Command: ")) {
+      metadata.command = line.substring("==> Command: ".length).trim();
+    } else if (line.startsWith("==> Step: ")) {
+      metadata.step = line.substring("==> Step: ".length).trim();
+    } else if (line.startsWith("+ ")) {
+      metadata.command = line.substring(2).trim();
+    } else if (pendingInterpreter) {
+      metadata.command = line.trim();
+      pendingInterpreter = false;
+    } else if (line.match(/^Exited with code (?:exit status )?(\d+)/i)) {
+      const match = line.match(/^Exited with code (?:exit status )?(\d+)/i);
+      if (match?.[1]) {
+        metadata.exitCode = parseInt(match[1], 10);
+      }
+    }
+
+    const entry: LogEntry = {
+      timestamp,
+      level,
+      message: line,
+      source: "circleci",
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     };
 

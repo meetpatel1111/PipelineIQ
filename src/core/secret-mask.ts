@@ -14,6 +14,8 @@ const PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/\bgldt-[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_GITLAB_DEPLOY_TOKEN]"],
   [/\bglptt-[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_GITLAB_TRIGGER_TOKEN]"],
   [/\b(?:bpat|bbpat)-[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_BITBUCKET_TOKEN]"],
+  [/\bCCIPAT_[A-Za-z0-9_\-]{20,}\b/g, "[REDACTED_CIRCLECI_PAT]"],
+  [/\b(?:circle-token|Circle-Token)[\s:=]+["']?[A-Za-z0-9_\-]{20,}["']?/gi, "circle-token: [REDACTED_CIRCLECI_TOKEN]"],
   [/\bsk-ant-api[A-Za-z0-9_\-]{80,}\b/g, "[REDACTED_ANTHROPIC_KEY]"],
   [/\bsk-[A-Za-z0-9]{20,}\b/g, "[REDACTED_OPENAI_KEY]"],
   [/\bhf_[A-Za-z0-9]{34}\b/g, "[REDACTED_HUGGINGFACE_TOKEN]"],
