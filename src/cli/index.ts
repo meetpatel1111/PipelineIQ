@@ -56,6 +56,33 @@ program
   .option("--run-number <number>", "Run number")
   .option("--run-url <url>", "Run URL or pipeline URL")
   .option("--event-name <name>", "Event name (push, pull_request, etc.)")
+  .option("--step <name>", "Failed step name override")
+  .option("--stage <name>", "Failed stage name override")
+  .option("--exit-code <code>", "Process exit code override")
+  .option("--error-message <msg>", "Error message override")
+  .option("--pr-number <number>", "Pull request or merge request number")
+  .option("--pr-id <id>", "Pull request or merge request ID")
+  .option("--pr-title <title>", "Pull request title")
+  .option("--pr-source-branch <branch>", "Pull request source branch")
+  .option("--pr-target-branch <branch>", "Pull request target branch")
+  .option("--pr-source-commit <sha>", "Pull request source commit SHA")
+  .option("--pr-destination-commit <sha>", "Pull request destination commit SHA")
+  .option("--step-uuid <uuid>", "Step UUID override")
+  .option("--pipeline-uuid <uuid>", "Pipeline UUID override")
+  .option("--step-run-number <number>", "Step run attempt number")
+  .option("--parallel-step <index>", "Parallel step index")
+  .option("--parallel-step-count <count>", "Total parallel steps count")
+  .option("--environment-id <id>", "Deployment environment ID")
+  .option("--environment-tier <tier>", "Deployment environment tier (dev/staging/production)")
+  .option("--environment-url <url>", "Deployment environment URL")
+  .option("--environment-action <action>", "Deployment environment action")
+  .option("--runner-id <id>", "Runner unique ID")
+  .option("--runner-tags <tags>", "Runner tags (comma-separated)")
+  .option("--runner-version <version>", "Runner version")
+  .option("--actor-id <id>", "Triggering actor user ID")
+  .option("--actor-email <email>", "Triggering actor email")
+  .option("--project <key>", "Project key or namespace")
+  .option("--tag <tag>", "Git tag name")
   .option("--run-attempt <count>", "Run attempt count")
   .option("--runner-os <os>", "Runner operating system")
   .option("--runner-arch <arch>", "Runner architecture")
@@ -1274,7 +1301,7 @@ async function readLogs(logPath: string): Promise<string> {
   }
 }
 
-async function createFailureEvent(
+export async function createFailureEvent(
   source: FailureSource,
   parsedLogs: any,
   options: any
@@ -1284,12 +1311,12 @@ async function createFailureEvent(
   const environment = options.environment || process.env.ENVIRONMENT || process.env.DEPLOYMENT_ENVIRONMENT || process.env.ENVIRONMENT_NAME;
   
   // GitHub Actions built-in variables
-    const githubRepo = process.env.GITHUB_REPOSITORY || options.repository;
-  const githubRef = process.env.GITHUB_REF || options.branch;
-  const githubSha = process.env.GITHUB_SHA || options.commit;
-  const githubRunId = process.env.GITHUB_RUN_ID || options.runId;
-  const githubRunNumber = process.env.GITHUB_RUN_NUMBER || options.runId;
-  const githubWorkflow = process.env.GITHUB_WORKFLOW || options.pipeline;
+  const githubRepo = options.repository || process.env.GITHUB_REPOSITORY;
+  const githubRef = options.branch || process.env.GITHUB_REF;
+  const githubSha = options.commit || process.env.GITHUB_SHA;
+  const githubRunId = options.runId || process.env.GITHUB_RUN_ID;
+  const githubRunNumber = options.runNumber || options.runId || process.env.GITHUB_RUN_NUMBER;
+  const githubWorkflow = options.pipeline || process.env.GITHUB_WORKFLOW;
   const githubActor = options.actor || process.env.GITHUB_ACTOR;
   const githubServerUrl = process.env.GITHUB_SERVER_URL;
   const githubActorId = process.env.GITHUB_ACTOR_ID;
@@ -1335,12 +1362,12 @@ async function createFailureEvent(
   const adoAgentJobStatus = process.env.AGENT_JOBSTATUS || options.jobStatus;
   
   // Azure DevOps built-in variables
-  const adoRepo = process.env.BUILD_REPOSITORY_NAME || options.repository;
-  const adoSourceBranch = process.env.BUILD_SOURCEBRANCH || options.branch;
-  const adoSourceVersion = process.env.BUILD_SOURCEVERSION || options.commit;
-  const adoBuildId = process.env.BUILD_BUILDID || options.runId;
-  const adoBuildNumber = process.env.BUILD_BUILDNUMBER || options.runId;
-  const adoPipeline = process.env.BUILD_DEFINITIONNAME || options.pipeline;
+  const adoRepo = options.repository || process.env.BUILD_REPOSITORY_NAME;
+  const adoSourceBranch = options.branch || process.env.BUILD_SOURCEBRANCH;
+  const adoSourceVersion = options.commit || process.env.BUILD_SOURCEVERSION;
+  const adoBuildId = options.runId || process.env.BUILD_BUILDID;
+  const adoBuildNumber = options.runNumber || options.runId || process.env.BUILD_BUILDNUMBER;
+  const adoPipeline = options.pipeline || process.env.BUILD_DEFINITIONNAME;
   const adoRepositoryClean = process.env.BUILD_REPOSITORY_CLEAN;
   const adoRepositoryGitSubmoduleCheckout = process.env.BUILD_REPOSITORY_GIT_SUBMODULECHECKOUT;
   const adoCronScheduleDisplayName = process.env.BUILD_CRONSCHEDULE_DISPLAYNAME;
@@ -1442,126 +1469,126 @@ async function createFailureEvent(
   const adoPrSourceCommit = process.env.SYSTEM_PULLREQUEST_SOURCECOMMITID;
   const adoPrSourceRepoUri = process.env.SYSTEM_PULLREQUEST_SOURCEREPOSITORYURI;
 
-  // GitLab CI built-in variables
-  const glServerUrl = process.env.CI_SERVER_URL;
-  const glServerVersion = process.env.CI_SERVER_VERSION;
-  const glProjectPath = process.env.CI_PROJECT_PATH;
-  const glProjectId = process.env.CI_PROJECT_ID;
-  const glProjectUrl = process.env.CI_PROJECT_URL;
-  const glProjectTitle = process.env.CI_PROJECT_TITLE;
-  const glProjectDescription = process.env.CI_PROJECT_DESCRIPTION;
-  const glProjectVisibility = process.env.CI_PROJECT_VISIBILITY;
-  const glProjectNamespace = process.env.CI_PROJECT_NAMESPACE;
-  const glProjectRootNamespace = process.env.CI_PROJECT_ROOT_NAMESPACE;
-  const glPipelineId = process.env.CI_PIPELINE_ID;
-  const glPipelineIid = process.env.CI_PIPELINE_IID;
-  const glPipelineUrl = process.env.CI_PIPELINE_URL;
-  const glPipelineSource = process.env.CI_PIPELINE_SOURCE;
-  const glPipelineName = process.env.CI_PIPELINE_NAME;
-  const glPipelineCreatedAt = process.env.CI_PIPELINE_CREATED_AT;
-  const glJobId = process.env.CI_JOB_ID;
-  const glJobName = process.env.CI_JOB_NAME;
-  const glJobStage = process.env.CI_JOB_STAGE;
-  const glJobStatus = process.env.CI_JOB_STATUS;
-  const glJobStartedAt = process.env.CI_JOB_STARTED_AT;
-  const glJobImage = process.env.CI_JOB_IMAGE;
-  const glJobTimeout = process.env.CI_JOB_TIMEOUT;
-  const glJobTags = process.env.CI_JOB_TAGS;
-  const glJobUrl = process.env.CI_JOB_URL;
-  const glCommitSha = process.env.CI_COMMIT_SHA;
-  const glCommitBeforeSha = process.env.CI_COMMIT_BEFORE_SHA;
-  const glCommitRefName = process.env.CI_COMMIT_REF_NAME;
-  const glCommitBranch = process.env.CI_COMMIT_BRANCH;
-  const glCommitMessage = process.env.CI_COMMIT_MESSAGE;
-  const glCommitTitle = process.env.CI_COMMIT_TITLE;
-  const glCommitDescription = process.env.CI_COMMIT_DESCRIPTION;
-  const glCommitAuthor = process.env.CI_COMMIT_AUTHOR;
-  const glCommitTimestamp = process.env.CI_COMMIT_TIMESTAMP;
-  const glEnvironmentTier = process.env.CI_ENVIRONMENT_TIER;
-  const glEnvironmentUrl = process.env.CI_ENVIRONMENT_URL;
-  const glEnvironmentAction = process.env.CI_ENVIRONMENT_ACTION;
-  const glMrIid = process.env.CI_MERGE_REQUEST_IID;
-  const glMrId = process.env.CI_MERGE_REQUEST_ID;
-  const glMrTitle = process.env.CI_MERGE_REQUEST_TITLE;
-  const glMrEvent = process.env.CI_MERGE_REQUEST_EVENT_TYPE;
-  const glMrSourceBranch = process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
-  const glMrTargetBranch = process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
-  const glMrAssignees = process.env.CI_MERGE_REQUEST_ASSIGNEES;
-  const glMrLabels = process.env.CI_MERGE_REQUEST_LABELS;
-  const glMrMilestone = process.env.CI_MERGE_REQUEST_MILESTONE;
-  const glRunnerId = process.env.CI_RUNNER_ID;
-  const glRunnerDesc = process.env.CI_RUNNER_DESCRIPTION;
-  const glRunnerTags = process.env.CI_RUNNER_TAGS;
-  const glRunnerVersion = process.env.CI_RUNNER_VERSION;
-  const glUserLogin = process.env.GITLAB_USER_LOGIN;
-  const glUserName = process.env.GITLAB_USER_NAME;
-  const glUserEmail = process.env.GITLAB_USER_EMAIL;
-  const glUserId = process.env.GITLAB_USER_ID;
+  // GitLab CI built-in variables (CLI options override ambient env vars)
+  const glServerUrl = options.gitlabServerUrl || process.env.CI_SERVER_URL;
+  const glServerVersion = options.gitlabServerVersion || process.env.CI_SERVER_VERSION;
+  const glProjectPath = options.gitlabProjectPath || options.repository || process.env.CI_PROJECT_PATH;
+  const glProjectId = options.gitlabProjectId || options.projectId || process.env.CI_PROJECT_ID;
+  const glProjectUrl = options.gitlabProjectUrl || options.projectUrl || process.env.CI_PROJECT_URL;
+  const glProjectTitle = options.gitlabProjectTitle || process.env.CI_PROJECT_TITLE;
+  const glProjectDescription = options.gitlabProjectDescription || process.env.CI_PROJECT_DESCRIPTION;
+  const glProjectVisibility = options.gitlabProjectVisibility || process.env.CI_PROJECT_VISIBILITY;
+  const glProjectNamespace = options.gitlabProjectNamespace || process.env.CI_PROJECT_NAMESPACE;
+  const glProjectRootNamespace = options.gitlabProjectRootNamespace || process.env.CI_PROJECT_ROOT_NAMESPACE;
+  const glPipelineId = options.gitlabPipelineId || options.pipelineId || options.runId || process.env.CI_PIPELINE_ID;
+  const glPipelineIid = options.gitlabPipelineIid || options.runNumber || process.env.CI_PIPELINE_IID;
+  const glPipelineUrl = options.gitlabPipelineUrl || options.runUrl || process.env.CI_PIPELINE_URL;
+  const glPipelineSource = options.gitlabPipelineSource || options.eventName || process.env.CI_PIPELINE_SOURCE;
+  const glPipelineName = options.gitlabPipelineName || options.pipeline || process.env.CI_PIPELINE_NAME;
+  const glPipelineCreatedAt = options.gitlabPipelineCreatedAt || process.env.CI_PIPELINE_CREATED_AT;
+  const glJobId = options.gitlabJobId || options.jobId || options.runId || process.env.CI_JOB_ID;
+  const glJobName = options.gitlabJobName || options.jobName || process.env.CI_JOB_NAME;
+  const glJobStage = options.gitlabJobStage || options.stage || process.env.CI_JOB_STAGE;
+  const glJobStatus = options.gitlabJobStatus || options.jobStatus || process.env.CI_JOB_STATUS;
+  const glJobStartedAt = options.gitlabJobStartedAt || process.env.CI_JOB_STARTED_AT;
+  const glJobImage = options.gitlabJobImage || options.jobContainer || process.env.CI_JOB_IMAGE;
+  const glJobTimeout = options.gitlabJobTimeout || process.env.CI_JOB_TIMEOUT;
+  const glJobTags = options.gitlabJobTags || options.runnerTags || process.env.CI_JOB_TAGS;
+  const glJobUrl = options.gitlabJobUrl || options.runUrl || process.env.CI_JOB_URL;
+  const glCommitSha = options.commit || process.env.CI_COMMIT_SHA;
+  const glCommitBeforeSha = options.gitlabCommitBeforeSha || process.env.CI_COMMIT_BEFORE_SHA;
+  const glCommitRefName = options.branch || process.env.CI_COMMIT_REF_NAME;
+  const glCommitBranch = options.branch || process.env.CI_COMMIT_BRANCH;
+  const glCommitMessage = options.commitMessage || process.env.CI_COMMIT_MESSAGE;
+  const glCommitTitle = options.commitTitle || process.env.CI_COMMIT_TITLE;
+  const glCommitDescription = options.commitDescription || process.env.CI_COMMIT_DESCRIPTION;
+  const glCommitAuthor = options.actor || process.env.CI_COMMIT_AUTHOR;
+  const glCommitTimestamp = options.gitlabCommitTimestamp || process.env.CI_COMMIT_TIMESTAMP;
+  const glEnvironmentTier = options.environmentTier || process.env.CI_ENVIRONMENT_TIER;
+  const glEnvironmentUrl = options.environmentUrl || process.env.CI_ENVIRONMENT_URL;
+  const glEnvironmentAction = options.environmentAction || process.env.CI_ENVIRONMENT_ACTION;
+  const glMrIid = options.prNumber || process.env.CI_MERGE_REQUEST_IID;
+  const glMrId = options.prId || process.env.CI_MERGE_REQUEST_ID;
+  const glMrTitle = options.prTitle || process.env.CI_MERGE_REQUEST_TITLE;
+  const glMrEvent = options.prEventType || process.env.CI_MERGE_REQUEST_EVENT_TYPE;
+  const glMrSourceBranch = options.prSourceBranch || options.headRef || process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME;
+  const glMrTargetBranch = options.prTargetBranchName || options.baseRef || process.env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME;
+  const glMrAssignees = options.prAssignees || process.env.CI_MERGE_REQUEST_ASSIGNEES;
+  const glMrLabels = options.prLabels || process.env.CI_MERGE_REQUEST_LABELS;
+  const glMrMilestone = options.prMilestone || process.env.CI_MERGE_REQUEST_MILESTONE;
+  const glRunnerId = options.runnerId || process.env.CI_RUNNER_ID;
+  const glRunnerDesc = options.runnerName || process.env.CI_RUNNER_DESCRIPTION;
+  const glRunnerTags = options.runnerTags || process.env.CI_RUNNER_TAGS;
+  const glRunnerVersion = options.runnerVersion || process.env.CI_RUNNER_VERSION;
+  const glUserLogin = options.actor || process.env.GITLAB_USER_LOGIN;
+  const glUserName = options.actorName || process.env.GITLAB_USER_NAME;
+  const glUserEmail = options.actorEmail || process.env.GITLAB_USER_EMAIL;
+  const glUserId = options.actorId || process.env.GITLAB_USER_ID;
 
-  // Bitbucket Pipelines built-in variables
-  const bbBuildNumber = process.env.BITBUCKET_BUILD_NUMBER;
-  const bbCloneDir = process.env.BITBUCKET_CLONE_DIR;
-  const bbCommit = process.env.BITBUCKET_COMMIT;
-  const bbWorkspace = process.env.BITBUCKET_WORKSPACE;
-  const bbWorkspaceUuid = process.env.BITBUCKET_WORKSPACE_UUID;
-  const bbRepoOwner = process.env.BITBUCKET_REPO_OWNER;
-  const bbRepoOwnerUuid = process.env.BITBUCKET_REPO_OWNER_UUID;
-  const bbRepoSlug = process.env.BITBUCKET_REPO_SLUG;
-  const bbRepoUuid = process.env.BITBUCKET_REPO_UUID;
-  const bbRepoFullName = process.env.BITBUCKET_REPO_FULL_NAME || (bbWorkspace && bbRepoSlug ? `${bbWorkspace}/${bbRepoSlug}` : undefined);
-  const bbRepoIsPrivate = process.env.BITBUCKET_REPO_IS_PRIVATE !== undefined ? process.env.BITBUCKET_REPO_IS_PRIVATE === "true" : undefined;
-  const bbBranch = process.env.BITBUCKET_BRANCH;
-  const bbTag = process.env.BITBUCKET_TAG;
-  const bbBookmark = process.env.BITBUCKET_BOOKMARK;
-  const bbParallelStep = process.env.BITBUCKET_PARALLEL_STEP !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP, 10) : undefined;
-  const bbParallelStepCount = process.env.BITBUCKET_PARALLEL_STEP_COUNT !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP_COUNT, 10) : undefined;
-  const bbPrId = process.env.BITBUCKET_PR_ID;
-  const bbPrDestinationBranch = process.env.BITBUCKET_PR_DESTINATION_BRANCH;
-  const bbPrDestinationCommit = process.env.BITBUCKET_PR_DESTINATION_COMMIT;
-  const bbMergeQueuePrIds = process.env.BITBUCKET_MERGE_QUEUE_PR_IDS;
-  const bbGitHttpOrigin = process.env.BITBUCKET_GIT_HTTP_ORIGIN;
-  const bbGitSshOrigin = process.env.BITBUCKET_GIT_SSH_ORIGIN;
-  const bbExitCode = process.env.BITBUCKET_EXIT_CODE !== undefined ? parseInt(process.env.BITBUCKET_EXIT_CODE, 10) : undefined;
-  const bbStepUuid = process.env.BITBUCKET_STEP_UUID;
-  const bbPipelineUuid = process.env.BITBUCKET_PIPELINE_UUID;
-  const bbDeploymentEnvironment = process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT;
-  const bbDeploymentEnvironmentUuid = process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID;
-  const bbProjectKey = process.env.BITBUCKET_PROJECT_KEY;
-  const bbProjectUuid = process.env.BITBUCKET_PROJECT_UUID;
-  const bbStepTriggererUuid = process.env.BITBUCKET_STEP_TRIGGERER_UUID;
-  const bbStepRunNumber = process.env.BITBUCKET_STEP_RUN_NUMBER !== undefined ? parseInt(process.env.BITBUCKET_STEP_RUN_NUMBER, 10) : undefined;
-  const bbPackagesUsername = process.env.BITBUCKET_PACKAGES_USERNAME;
-  const bbDockerHost = process.env.DOCKER_HOST;
-  const bbTriggerPipelineUuid = process.env.BITBUCKET_TRIGGER_PIPELINE_UUID;
-  const bbTriggerPipelineRunUuid = process.env.BITBUCKET_TRIGGER_PIPELINE_RUN_UUID;
-  const bbTriggerStepUuid = process.env.BITBUCKET_TRIGGER_STEP_UUID;
-  const bbTriggerPipelineSelectorType = process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_TYPE;
-  const bbTriggerPipelineSelectorPattern = process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_PATTERN;
-  const bbTriggerPipelineStatus = process.env.BITBUCKET_TRIGGER_PIPELINE_STATUS;
-  const bbTriggerDeploymentUuid = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_UUID;
-  const bbTriggerDeploymentStatus = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_STATUS;
-  const bbTriggerDeploymentEnvironmentName = process.env.BITBUCKET_TRIGGER_DEPLOYMENT_ENVIRONMENT_NAME;
-  const bbTriggerPackagesPackageType = process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_TYPE;
-  const bbTriggerPackagesPackageName = process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_NAME;
-  const bbTriggerPackagesArtifactName = process.env.BITBUCKET_TRIGGER_PACKAGES_ARTIFACT_NAME;
-  const bbTriggerFixFlakyTestTargetBranch = process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_TARGET_BRANCH;
-  const bbTriggerFixFlakyTestSourceBranch = process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_SOURCE_BRANCH;
-  const bbTriggerTestCaseFqdn = process.env.BITBUCKET_TRIGGER_TEST_CASE_FQDN;
-  const bbTriggerTestCaseUuid = process.env.BITBUCKET_TRIGGER_TEST_CASE_UUID;
+  // Bitbucket Pipelines built-in variables (CLI options override ambient env vars)
+  const bbBuildNumber = options.bitbucketBuildNumber || options.runNumber || options.runId || process.env.BITBUCKET_BUILD_NUMBER;
+  const bbCloneDir = options.bitbucketCloneDir || options.workspace || process.env.BITBUCKET_CLONE_DIR;
+  const bbCommit = options.bitbucketCommit || options.commit || process.env.BITBUCKET_COMMIT;
+  const bbWorkspace = options.bitbucketWorkspace || options.workspace || process.env.BITBUCKET_WORKSPACE;
+  const bbWorkspaceUuid = options.bitbucketWorkspaceUuid || process.env.BITBUCKET_WORKSPACE_UUID;
+  const bbRepoOwner = options.bitbucketRepoOwner || options.repositoryOwner || process.env.BITBUCKET_REPO_OWNER;
+  const bbRepoOwnerUuid = options.bitbucketRepoOwnerUuid || process.env.BITBUCKET_REPO_OWNER_UUID;
+  const bbRepoSlug = options.bitbucketRepoSlug || process.env.BITBUCKET_REPO_SLUG;
+  const bbRepoUuid = options.bitbucketRepoUuid || process.env.BITBUCKET_REPO_UUID;
+  const bbRepoFullName = options.bitbucketRepoFullName || options.repository || (bbWorkspace && bbRepoSlug ? `${bbWorkspace}/${bbRepoSlug}` : undefined) || process.env.BITBUCKET_REPO_FULL_NAME;
+  const bbRepoIsPrivate = options.bitbucketRepoIsPrivate !== undefined ? options.bitbucketRepoIsPrivate : (process.env.BITBUCKET_REPO_IS_PRIVATE !== undefined ? process.env.BITBUCKET_REPO_IS_PRIVATE === "true" : undefined);
+  const bbBranch = options.bitbucketBranch || options.branch || process.env.BITBUCKET_BRANCH;
+  const bbTag = options.bitbucketTag || options.tag || process.env.BITBUCKET_TAG;
+  const bbBookmark = options.bitbucketBookmark || process.env.BITBUCKET_BOOKMARK;
+  const bbParallelStep = options.bitbucketParallelStep !== undefined ? parseInt(options.bitbucketParallelStep, 10) : (options.parallelStep !== undefined ? parseInt(options.parallelStep, 10) : (process.env.BITBUCKET_PARALLEL_STEP !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP, 10) : undefined));
+  const bbParallelStepCount = options.bitbucketParallelStepCount !== undefined ? parseInt(options.bitbucketParallelStepCount, 10) : (options.parallelStepCount !== undefined ? parseInt(options.parallelStepCount, 10) : (process.env.BITBUCKET_PARALLEL_STEP_COUNT !== undefined ? parseInt(process.env.BITBUCKET_PARALLEL_STEP_COUNT, 10) : undefined));
+  const bbPrId = options.bitbucketPrId || options.prNumber || options.prId || process.env.BITBUCKET_PR_ID;
+  const bbPrDestinationBranch = options.bitbucketPrDestinationBranch || options.prTargetBranchName || options.baseRef || process.env.BITBUCKET_PR_DESTINATION_BRANCH;
+  const bbPrDestinationCommit = options.bitbucketPrDestinationCommit || options.prDestinationCommit || process.env.BITBUCKET_PR_DESTINATION_COMMIT;
+  const bbMergeQueuePrIds = options.bitbucketMergeQueuePrIds || process.env.BITBUCKET_MERGE_QUEUE_PR_IDS;
+  const bbGitHttpOrigin = options.bitbucketGitHttpOrigin || options.repositoryGitUrl || process.env.BITBUCKET_GIT_HTTP_ORIGIN;
+  const bbGitSshOrigin = options.bitbucketGitSshOrigin || process.env.BITBUCKET_GIT_SSH_ORIGIN;
+  const bbExitCode = options.bitbucketExitCode !== undefined ? parseInt(options.bitbucketExitCode, 10) : (options.exitCode !== undefined ? parseInt(options.exitCode, 10) : (process.env.BITBUCKET_EXIT_CODE !== undefined ? parseInt(process.env.BITBUCKET_EXIT_CODE, 10) : undefined));
+  const bbStepUuid = options.bitbucketStepUuid || options.stepUuid || process.env.BITBUCKET_STEP_UUID;
+  const bbPipelineUuid = options.bitbucketPipelineUuid || options.pipelineUuid || process.env.BITBUCKET_PIPELINE_UUID;
+  const bbDeploymentEnvironment = options.bitbucketDeploymentEnvironment || options.environment || process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT;
+  const bbDeploymentEnvironmentUuid = options.bitbucketDeploymentEnvironmentUuid || options.environmentId || process.env.BITBUCKET_DEPLOYMENT_ENVIRONMENT_UUID;
+  const bbProjectKey = options.bitbucketProjectKey || options.project || process.env.BITBUCKET_PROJECT_KEY;
+  const bbProjectUuid = options.bitbucketProjectUuid || process.env.BITBUCKET_PROJECT_UUID;
+  const bbStepTriggererUuid = options.bitbucketStepTriggererUuid || options.actor || options.actorId || process.env.BITBUCKET_STEP_TRIGGERER_UUID;
+  const bbStepRunNumber = options.bitbucketStepRunNumber !== undefined ? parseInt(options.bitbucketStepRunNumber, 10) : (options.stepRunNumber !== undefined ? parseInt(options.stepRunNumber, 10) : (process.env.BITBUCKET_STEP_RUN_NUMBER !== undefined ? parseInt(process.env.BITBUCKET_STEP_RUN_NUMBER, 10) : undefined));
+  const bbPackagesUsername = options.bitbucketPackagesUsername || process.env.BITBUCKET_PACKAGES_USERNAME;
+  const bbDockerHost = options.bitbucketDockerHost || process.env.DOCKER_HOST;
+  const bbTriggerPipelineUuid = options.bitbucketTriggerPipelineUuid || process.env.BITBUCKET_TRIGGER_PIPELINE_UUID;
+  const bbTriggerPipelineRunUuid = options.bitbucketTriggerPipelineRunUuid || process.env.BITBUCKET_TRIGGER_PIPELINE_RUN_UUID;
+  const bbTriggerStepUuid = options.bitbucketTriggerStepUuid || process.env.BITBUCKET_TRIGGER_STEP_UUID;
+  const bbTriggerPipelineSelectorType = options.bitbucketTriggerPipelineSelectorType || process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_TYPE;
+  const bbTriggerPipelineSelectorPattern = options.bitbucketTriggerPipelineSelectorPattern || process.env.BITBUCKET_TRIGGER_PIPELINE_SELECTOR_PATTERN;
+  const bbTriggerPipelineStatus = options.bitbucketTriggerPipelineStatus || process.env.BITBUCKET_TRIGGER_PIPELINE_STATUS;
+  const bbTriggerDeploymentUuid = options.bitbucketTriggerDeploymentUuid || process.env.BITBUCKET_TRIGGER_DEPLOYMENT_UUID;
+  const bbTriggerDeploymentStatus = options.bitbucketTriggerDeploymentStatus || process.env.BITBUCKET_TRIGGER_DEPLOYMENT_STATUS;
+  const bbTriggerDeploymentEnvironmentName = options.bitbucketTriggerDeploymentEnvironmentName || process.env.BITBUCKET_TRIGGER_DEPLOYMENT_ENVIRONMENT_NAME;
+  const bbTriggerPackagesPackageType = options.bitbucketTriggerPackagesPackageType || process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_TYPE;
+  const bbTriggerPackagesPackageName = options.bitbucketTriggerPackagesPackageName || process.env.BITBUCKET_TRIGGER_PACKAGES_PACKAGE_NAME;
+  const bbTriggerPackagesArtifactName = options.bitbucketTriggerPackagesArtifactName || process.env.BITBUCKET_TRIGGER_PACKAGES_ARTIFACT_NAME;
+  const bbTriggerFixFlakyTestTargetBranch = options.bitbucketTriggerFixFlakyTestTargetBranch || process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_TARGET_BRANCH;
+  const bbTriggerFixFlakyTestSourceBranch = options.bitbucketTriggerFixFlakyTestSourceBranch || process.env.BITBUCKET_TRIGGER_FIX_FLAKY_TEST_SOURCE_BRANCH;
+  const bbTriggerTestCaseFqdn = options.bitbucketTriggerTestCaseFqdn || process.env.BITBUCKET_TRIGGER_TEST_CASE_FQDN;
+  const bbTriggerTestCaseUuid = options.bitbucketTriggerTestCaseUuid || process.env.BITBUCKET_TRIGGER_TEST_CASE_UUID;
   
-  // Use environment variables if available, otherwise use CLI options
-  const repository = githubRepo || adoRepo || glProjectPath || bbRepoFullName || options.repository;
-  const branch = githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark || options.branch;
-  const commit = githubSha || adoSourceVersion || glCommitSha || bbCommit || options.commit;
-  const pipeline = githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined) || options.pipeline;
-  const runId = githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber || options.runId;
-  const runNumber = githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber || options.runId;
-  const triggeredBy = githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || process.env.BUILD_QUEUEDBY || "cli-user";
+  // CLI options take highest priority over ambient CI environment variables
+  const repository = options.repository || githubRepo || adoRepo || glProjectPath || bbRepoFullName;
+  const branch = options.branch || githubRef?.replace('refs/heads/', '') || adoSourceBranch?.replace('refs/heads/', '') || adoSourceBranchName || glMrSourceBranch || glCommitBranch || glCommitRefName || bbBranch || bbTag || bbBookmark;
+  const commit = options.commit || githubSha || adoSourceVersion || glCommitSha || bbCommit;
+  const pipeline = options.pipeline || githubWorkflow || adoPipeline || glPipelineName || (glJobStage && glJobName ? `${glJobStage} / ${glJobName}` : undefined) || glJobName || (bbRepoSlug && bbBuildNumber ? `${bbRepoSlug} #${bbBuildNumber}` : undefined);
+  const runId = options.runId || githubRunId || adoBuildId || glJobId || glPipelineId || bbBuildNumber;
+  const runNumber = options.runNumber || options.runId || githubRunNumber || adoBuildNumber || glPipelineIid || glJobId || glPipelineId || bbBuildNumber;
+  const triggeredBy = options.actor || githubActor || adoRequestedFor || adoRequestedForEmail || adoQueuedBy || adoRequestedForId || adoQueuedById || glUserLogin || glUserName || glUserEmail || glUserId || bbStepTriggererUuid || process.env.BUILD_QUEUEDBY || "cli-user";
   
   // Pull request information
-  const pullRequestNumber = githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId || options.prNumber;
-  const isPullRequest = !!(githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId || options.prNumber);
-  const pullRequestBranch = adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch || options.prSourceBranch;
+  const pullRequestNumber = options.prNumber || options.prId || githubRef?.match(/refs\/pull\/(\d+)\//)?.[1] || adoPrNumber || adoPrId || glMrIid || bbPrId;
+  const isPullRequest = !!(options.prNumber || options.prId || githubRef?.includes('refs/pull/') || adoPrId || adoPrNumber || glMrIid || bbPrId);
+  const pullRequestBranch = options.prSourceBranch || adoPrSourceBranch?.replace('refs/heads/', '') || glMrSourceBranch || bbBranch;
   
   // Rich data mapping for Azure DevOps and GitLab CI
   const adoJobName = process.env.SYSTEM_JOBNAME || process.env.SYSTEM_PHASENAME || process.env.SYSTEM_STAGENAME || adoAgentJobName;
@@ -1692,6 +1719,33 @@ async function createFailureEvent(
   if (options.sourcesDirectory) explicitFields.push("sourcesDirectory");
   if (options.stagingDirectory) explicitFields.push("stagingDirectory");
   if (options.testResultsDirectory) explicitFields.push("testResultsDirectory");
+  if (options.step) explicitFields.push("step");
+  if (options.stage) explicitFields.push("stage");
+  if (options.exitCode) explicitFields.push("exitCode");
+  if (options.errorMessage) explicitFields.push("errorMessage");
+  if (options.prNumber) explicitFields.push("prNumber");
+  if (options.prId) explicitFields.push("prId");
+  if (options.prTitle) explicitFields.push("prTitle");
+  if (options.prSourceBranch) explicitFields.push("prSourceBranch");
+  if (options.prTargetBranchName) explicitFields.push("prTargetBranchName");
+  if (options.prSourceCommit) explicitFields.push("prSourceCommit");
+  if (options.prDestinationCommit) explicitFields.push("prDestinationCommit");
+  if (options.stepUuid) explicitFields.push("stepUuid");
+  if (options.pipelineUuid) explicitFields.push("pipelineUuid");
+  if (options.stepRunNumber) explicitFields.push("stepRunNumber");
+  if (options.parallelStep) explicitFields.push("parallelStep");
+  if (options.parallelStepCount) explicitFields.push("parallelStepCount");
+  if (options.environmentId) explicitFields.push("environmentId");
+  if (options.environmentTier) explicitFields.push("environmentTier");
+  if (options.environmentUrl) explicitFields.push("environmentUrl");
+  if (options.environmentAction) explicitFields.push("environmentAction");
+  if (options.runnerId) explicitFields.push("runnerId");
+  if (options.runnerTags) explicitFields.push("runnerTags");
+  if (options.runnerVersion) explicitFields.push("runnerVersion");
+  if (options.actorId) explicitFields.push("actorId");
+  if (options.actorEmail) explicitFields.push("actorEmail");
+  if (options.project) explicitFields.push("project");
+  if (options.tag) explicitFields.push("tag");
 
   // Use PR branch if available, otherwise use main branch
   const finalBranch = pullRequestBranch || branch;
@@ -1758,7 +1812,8 @@ async function createFailureEvent(
         runUrl: executionUrl,
         runId: runId || "cli-run",
         runNumber: parseInt(runNumber) || 1,
-        step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        step: options.step || parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        stage: options.stage || glJobStage,
         runAttempt: parseInt(finalRunAttempt as string) || 1,
         runnerOs: finalRunnerOs,
         runnerArch: finalRunnerArch,
@@ -1987,9 +2042,9 @@ async function createFailureEvent(
                       ? `https://bitbucket.org/${bbRepoFullName}/commits/${commit}`
                       : repositoryUrl + `/commit/${commit}`)))
           : "https://github.com/cli-user/unknown-repo/commit/unknown",
-        message: glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
-        author: glCommitAuthor || triggeredBy,
-        authorEmail: glUserEmail || adoRequestedForEmail,
+        message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
+        author: options.actor || glCommitAuthor || triggeredBy,
+        authorEmail: options.actorEmail || glUserEmail || adoRequestedForEmail,
       },
       branch: finalBranch,
       environment: environment,
@@ -2001,9 +2056,9 @@ async function createFailureEvent(
       metadata: metadata,
       explicitFields: explicitFields,
       failure: {
-        exitCode: parsedLogs.exitCodes[0],
-        errorMessage: parsedLogs.errorMessages[0],
-        failedStep: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        exitCode: options.exitCode !== undefined ? parseInt(options.exitCode, 10) : parsedLogs.exitCodes[0],
+        errorMessage: options.errorMessage || parsedLogs.errorMessages[0],
+        failedStep: options.step || parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
         logs: parsedLogs.entries.map((e: any) => `${e.timestamp || ""} [${e.level?.toUpperCase() || "INFO"}] ${e.message}`).join("\n"),
         logsTruncated: parsedLogs.truncated,
       },
@@ -2029,9 +2084,10 @@ async function createFailureEvent(
       (event as any).pullRequest = {
         number: parseInt(pullRequestNumber),
         url: prUrl,
-        ...(glMrTitle || options.prTitle ? { title: glMrTitle || options.prTitle } : {}),
-        ...(glMrSourceBranch || bbBranch || options.prSourceBranch ? { sourceBranch: glMrSourceBranch || bbBranch || options.prSourceBranch } : {}),
-        ...(glMrTargetBranch || bbPrDestinationBranch || options.prTargetBranchName ? { targetBranch: glMrTargetBranch || bbPrDestinationBranch || options.prTargetBranchName } : {}),
+        title: options.prTitle || glMrTitle || `PR #${pullRequestNumber}`,
+        author: options.actor || glCommitAuthor || triggeredBy || "unknown",
+        ...(options.prSourceBranch || glMrSourceBranch || bbBranch ? { sourceBranch: options.prSourceBranch || glMrSourceBranch || bbBranch } : {}),
+        ...(options.prTargetBranchName || glMrTargetBranch || bbPrDestinationBranch ? { targetBranch: options.prTargetBranchName || glMrTargetBranch || bbPrDestinationBranch } : {}),
       };
     }
     
@@ -2084,7 +2140,8 @@ async function createFailureEvent(
         runUrl: executionUrl,
         runId: runId || "cli-run",
         runNumber: parseInt(runNumber) || 1,
-        step: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        step: options.step || parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+        stage: options.stage || glJobStage,
         runAttempt: parseInt(finalRunAttempt as string) || 1,
         runnerOs: finalRunnerOs,
         runnerArch: finalRunnerArch,
@@ -2231,9 +2288,9 @@ async function createFailureEvent(
                     ? `${glProjectUrl}/-/commit/${commit}`
                     : repositoryUrl + `/commit/${commit}`)))
         : `https://github.com/cli-user/unknown-repo/commit/${answers.commitSha}`,
-      message: glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
-      author: glCommitAuthor || triggeredBy,
-      authorEmail: glUserEmail || adoRequestedForEmail,
+      message: options.commitMessage || glCommitMessage || glCommitTitle || adoSourceVersionMessage || "CLI analysis",
+      author: options.actor || glCommitAuthor || triggeredBy,
+      authorEmail: options.actorEmail || glUserEmail || adoRequestedForEmail,
     },
     branch: finalBranch || answers.branch,
     environment: environment || answers.environment,
@@ -2241,11 +2298,11 @@ async function createFailureEvent(
     eventName: finalEventName,
     apiUrl: finalApiUrl,
     metadata: parseMetadata(options.meta),
-    explicitFields: [],
+    explicitFields: explicitFields,
     failure: {
-      exitCode: parsedLogs.exitCodes[0],
-      errorMessage: parsedLogs.errorMessages[0],
-      failedStep: parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
+      exitCode: options.exitCode !== undefined ? parseInt(options.exitCode, 10) : parsedLogs.exitCodes[0],
+      errorMessage: options.errorMessage || parsedLogs.errorMessages[0],
+      failedStep: options.step || parsedLogs.entries.find((e: any) => e.level === "error")?.message?.split(":")[0] || "unknown",
       logs: parsedLogs.entries.map((e: any) => `${e.timestamp || ""} [${e.level?.toUpperCase() || "INFO"}] ${e.message}`).join("\n"),
       logsTruncated: parsedLogs.truncated,
     },
@@ -2271,9 +2328,10 @@ async function createFailureEvent(
     (event as any).pullRequest = {
       number: parseInt(pullRequestNumber),
       url: prUrl,
-      ...(glMrTitle || options.prTitle ? { title: glMrTitle || options.prTitle } : {}),
-      ...(glMrSourceBranch || options.prSourceBranch ? { sourceBranch: glMrSourceBranch || options.prSourceBranch } : {}),
-      ...(glMrTargetBranch || options.prTargetBranchName ? { targetBranch: glMrTargetBranch || options.prTargetBranchName } : {}),
+      title: options.prTitle || glMrTitle || `PR #${pullRequestNumber}`,
+      author: options.actor || glCommitAuthor || triggeredBy || "unknown",
+      ...(options.prSourceBranch || glMrSourceBranch || bbBranch ? { sourceBranch: options.prSourceBranch || glMrSourceBranch || bbBranch } : {}),
+      ...(options.prTargetBranchName || glMrTargetBranch || bbPrDestinationBranch ? { targetBranch: options.prTargetBranchName || glMrTargetBranch || bbPrDestinationBranch } : {}),
     };
   }
 

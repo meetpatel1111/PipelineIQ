@@ -42,6 +42,8 @@ export const PullRequestSchema = z.object({
   url: z.string().url(),
   title: z.string(),
   author: z.string(),
+  sourceBranch: z.string().optional(),
+  targetBranch: z.string().optional(),
 });
 export type PullRequest = z.infer<typeof PullRequestSchema>;
 
